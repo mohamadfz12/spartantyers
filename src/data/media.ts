@@ -167,6 +167,49 @@ export const applicationPhoto: Record<string, Media> = {
   'Mixed Service': photos.treadDetail,
 }
 
+/* ------------------------------------------------------------------ *
+ * Product gallery
+ * ------------------------------------------------------------------ */
+
+export interface GalleryShot extends Media {
+  /** Short label for the thumbnail. */
+  label: string
+  /**
+   * True when the photograph is generic stock rather than a shot of this
+   * exact SKU. Surfaced in the UI so a buyer is never misled about what they
+   * are looking at.
+   */
+  illustrative: boolean
+}
+
+/**
+ * The photographic half of a product gallery.
+ *
+ * Both shots came from the existing site and are the same two images for
+ * every SKU — there is no per-product photography yet. The tread close-up
+ * leads because it is brand-neutral and genuinely representative of a block
+ * pattern; the full-tyre render follows, and both are labelled as
+ * illustrative. The generated wheel remains in the gallery as the one view
+ * that is accurate to the specific product: correct brand, size and tread.
+ *
+ * Replacing these with real shots of Greforce and Lionshead stock is a change
+ * to this array alone.
+ */
+export const productGallery: GalleryShot[] = [
+  {
+    ...photos.treadDetail,
+    alt: 'Close detail of a commercial truck tyre tread, showing block depth and siping',
+    label: 'Tread',
+    illustrative: true,
+  },
+  {
+    ...photos.tyreProduct,
+    alt: 'A commercial truck tyre mounted on a steel rim, three-quarter view',
+    label: 'Fitted',
+    illustrative: true,
+  },
+]
+
 /** Imagery for the four customer segments on the home page, in order. */
 export const segmentPhotos: Media[] = [
   photos.warehouseRacks,

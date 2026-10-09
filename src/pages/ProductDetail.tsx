@@ -29,6 +29,7 @@ import { site } from '@/config/site'
 import { cn, formatDate, formatNumber, money, pluralise } from '@/lib/utils'
 import { useCart } from '@/store/cart'
 import { toast, useRecentlyViewed, useRenderQuality } from '@/store/ui'
+import { productGallery } from '@/data/media'
 import {
   Badge,
   Button,
@@ -68,6 +69,8 @@ function Detail({ product }: { product: Product }) {
   const setQuality = useRenderQuality((state) => state.setQuality)
 
   const [quantity, setQuantity] = useState(4)
+  /** Which gallery image is showing: the generated wheel, or a photo index. */
+  const [shot, setShot] = useState<'wheel' | number>('wheel')
 
   useEffect(() => record(product.id), [record, product.id])
 
@@ -188,53 +191,113 @@ function Detail({ product }: { product: Product }) {
         {/* Wheel */}
         <div>
           <div className="relative overflow-hidden rounded-lg border border-border bg-gradient-to-b from-muted/60 to-muted">
-            <ProductWheel
-              product={product}
-              className="h-[18rem] w-full sm:h-[24rem] lg:h-[30rem]"
-            />
-
-            {quality !== 'off' ? (
-              <p className="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-2 text-[0.68rem] font-bold uppercase tracking-brand text-muted-foreground">
-                <RotateCcw aria-hidden="true" className="h-3 w-3" />
-                Drag to rotate · scroll to zoom
-              </p>
-            ) : null}
+            {shot === 'wheel' ? (
+              <>
+                <ProductWheel
+                  product={product}
+                  className="h-[18rem] w-full sm:h-[24rem] lg:h-[30rem]"
+                />
+                {quality !== 'off' ? (
+                  <p className="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-2 text-[0.68rem] font-bold uppercase tracking-brand text-muted-foreground">
+                    <RotateCcw aria-hidden="true" className="h-3 w-3" />
+                    Drag to rotate · scroll to zoom
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <img
+                  key={productGallery[shot].src}
+                  src={productGallery[shot].src}
+                  alt={productGallery[shot].alt}
+                  width={productGallery[shot].width}
+                  height={productGallery[shot].height}
+                  decoding="async"
+                  className="h-[18rem] w-full animate-in fade-in object-cover duration-300 sm:h-[24rem] lg:h-[30rem]"
+                />
+                {/* A buyer should never have to guess whether a photo is of
+                    the exact item. These two shots are shared across the
+                    range, so say so rather than imply otherwise. */}
+                {productGallery[shot].illustrative ? (
+                  <p className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-charcoal/90 to-transparent px-4 pb-3 pt-8 text-center text-[0.68rem] text-white/75">
+                    Illustrative photograph. Switch to the 3D model for this
+                    tyre's actual {product.brand} {product.model} sidewall and{' '}
+                    {TREAD_SPECS[product.tread].label.toLowerCase()} pattern.
+                  </p>
+                ) : null}
+              </>
+            )}
           </div>
 
-          {/* Quality switch — the 3D wheel is optional, never compulsory. */}
+          {/* Gallery thumbnails. The generated wheel leads because it is the
+              only view accurate to this exact SKU. */}
           <div
             role="group"
-            aria-label="Wheel display"
+            aria-label="Product images"
             className="mt-3 flex items-center gap-2"
           >
-            <span className="font-heading text-[0.65rem] font-bold uppercase tracking-brand text-muted-foreground">
-              Wheel
-            </span>
-            {(
-              [
-                { value: 'high', label: '3D model' },
-                { value: 'off', label: 'Static image' },
-              ] as const
-            ).map((option) => {
-              const active =
-                option.value === 'off' ? quality === 'off' : quality !== 'off'
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setQuality(option.value)}
-                  className={cn(
-                    'rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                    active
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
-                  )}
-                >
-                  {option.label}
-                </button>
-              )
-            })}
+            <button
+              type="button"
+              aria-pressed={shot === 'wheel'}
+              onClick={() => setShot('wheel')}
+              title="Interactive 3D model of this tyre"
+              className={cn(
+                'relative h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 bg-muted p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                shot === 'wheel'
+                  ? 'border-primary'
+                  : 'border-border hover:border-primary/40',
+              )}
+            >
+              <StaticWheel tread={product.tread} />
+              <span className="sr-only">
+                3D model of the {product.brand} {product.model}
+              </span>
+              <span
+                aria-hidden="true"
+                className="absolute bottom-0 right-0 rounded-tl bg-primary px-1 font-heading text-[0.55rem] font-black text-primary-foreground"
+              >
+                3D
+              </span>
+            </button>
+
+            {productGallery.map((image, index) => (
+              <button
+                key={image.src}
+                type="button"
+                aria-pressed={shot === index}
+                onClick={() => setShot(index)}
+                title={`${image.label} photograph (illustrative)`}
+                className={cn(
+                  'h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  shot === index
+                    ? 'border-primary'
+                    : 'border-border hover:border-primary/40',
+                )}
+              >
+                <img
+                  src={image.src}
+                  alt=""
+                  width={image.width}
+                  height={image.height}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
+                <span className="sr-only">{image.label} photograph</span>
+              </button>
+            ))}
+
+            {/* The 3D renderer stays optional for anyone who would rather not
+                run WebGL at all. */}
+            {shot === 'wheel' ? (
+              <button
+                type="button"
+                onClick={() => setQuality(quality === 'off' ? 'high' : 'off')}
+                className="ml-auto rounded-md border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+              >
+                {quality === 'off' ? 'Enable 3D' : 'Turn off 3D'}
+              </button>
+            ) : null}
           </div>
         </div>
 

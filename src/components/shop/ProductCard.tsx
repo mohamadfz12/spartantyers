@@ -19,6 +19,7 @@ import { useCompare } from '@/store/ui'
 import { toast } from '@/store/ui'
 import { Badge, Button, Rating, Tooltip } from '@/components/ui'
 import { StaticWheel } from '@/components/three'
+import { productGallery } from '@/data/media'
 import { Tilt } from '@/components/motion'
 
 export interface ProductCardProps {
@@ -110,15 +111,31 @@ export function ProductCard({
       {/* Visual */}
       <Link
         to={`/product/${product.id}`}
-        className="relative block overflow-hidden bg-gradient-to-b from-muted/60 to-muted"
+        className="relative block overflow-hidden bg-muted"
         aria-label={`View ${product.brand} ${product.model} ${product.size}`}
       >
-        <Tilt max={7} className={cn('p-5', compact ? 'h-36' : 'h-48')}>
+        {/* Tread photography as the backdrop, with the generated wheel in
+            front. The photograph gives the card real texture; the wheel is
+            what stays accurate to this SKU's brand, size and pattern, so the
+            two are layered rather than one replacing the other. */}
+        <img
+          src={productGallery[0].src}
+          alt=""
+          aria-hidden="true"
+          width={productGallery[0].width}
+          height={productGallery[0].height}
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-[1px] transition-transform duration-700 group-hover:scale-125 dark:opacity-25"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/40 to-background/80" />
+
+        <Tilt max={7} className={cn('relative p-5', compact ? 'h-36' : 'h-48')}>
           <StaticWheel
             tread={product.tread}
             label={product.brand}
             size={product.size}
-            className="h-full w-full drop-shadow-xl transition-transform duration-500 group-hover:scale-[1.06]"
+            className="h-full w-full drop-shadow-[0_8px_24px_rgba(0,0,0,0.55)] transition-transform duration-500 group-hover:scale-[1.06]"
             title={`${product.brand} ${product.model} ${product.size}`}
           />
         </Tilt>
