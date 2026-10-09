@@ -5,9 +5,9 @@
  * by side, and two lambdas for one screen is two cold starts.
  */
 
-import { requireAdmin } from '../_lib/auth'
-import { methodGuard, ok, withGuard } from '../_lib/http'
-import { listEnquiries, listSubscribers } from '../_lib/store'
+import { requireAdmin } from '../auth'
+import { methodGuard, ok, withGuard } from '../http'
+import { listEnquiries, listSubscribers } from '../store'
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET'])) return

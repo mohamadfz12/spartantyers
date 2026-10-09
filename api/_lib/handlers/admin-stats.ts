@@ -9,10 +9,10 @@
  * the business actually banked.
  */
 
-import { requireAdmin } from '../_lib/auth'
-import { mergeCatalogue } from '../_lib/catalogue'
-import { methodGuard, ok, round2, withGuard } from '../_lib/http'
-import { getOverrides, listOrders } from '../_lib/store'
+import { requireAdmin } from '../auth'
+import { mergeCatalogue } from '../catalogue'
+import { methodGuard, ok, round2, withGuard } from '../http'
+import { getOverrides, listOrders } from '../store'
 
 const REVENUE_DAYS = 14
 const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD ?? 24)

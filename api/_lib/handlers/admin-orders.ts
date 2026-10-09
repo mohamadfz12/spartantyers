@@ -7,7 +7,7 @@
  * against Square.
  */
 
-import { requireAdmin } from '../_lib/auth'
+import { requireAdmin } from '../auth'
 import {
   asString,
   fail,
@@ -15,8 +15,8 @@ import {
   ok,
   readBody,
   withGuard,
-} from '../_lib/http'
-import { listOrders, updateOrderStatus, type StoredOrder } from '../_lib/store'
+} from '../http'
+import { listOrders, updateOrderStatus, type StoredOrder } from '../store'
 
 const STATUSES: StoredOrder['status'][] = [
   'pending',

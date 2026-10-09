@@ -22,7 +22,7 @@
  *    a paid order with stale stock is recoverable, a 500 after a charge is not.
  */
 
-import { site } from '../../src/config/site'
+import { site } from '../../../src/config/site'
 import {
   asEmail,
   asPhone,
@@ -33,12 +33,12 @@ import {
   readBody,
   safeMessage,
   withGuard,
-} from '../_lib/http'
-import { newOrderId, newOrderReference } from '../_lib/ids'
-import { priceOrder, toCents } from '../_lib/pricing'
-import { resolveProduct } from '../_lib/catalogue'
-import { createPayment, SquareError, getSquareConfig } from '../_lib/square'
-import { getOverrides, saveOrder, setOverride, type StoredOrder } from '../_lib/store'
+} from '../http'
+import { newOrderId, newOrderReference } from '../ids'
+import { priceOrder, toCents } from '../pricing'
+import { resolveProduct } from '../catalogue'
+import { createPayment, SquareError, getSquareConfig } from '../square'
+import { getOverrides, saveOrder, setOverride, type StoredOrder } from '../store'
 
 const AU_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT']
 

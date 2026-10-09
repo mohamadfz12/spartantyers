@@ -79,10 +79,11 @@ Full annotated list in [`.env.example`](./.env.example). Summary:
 ## Architecture
 
 ```
-api/                    Vercel serverless functions (Node)
+api/                    Vercel serverless functions (Node) — 9 routable files
   _lib/                 http, auth, pricing, promos, square, store, catalogue
-  square/               config, create-payment
-  admin/                login, stats, products, orders, enquiries
+    handlers/           the admin + square handlers, kept out of routing
+  square/[action].ts    -> /api/square/config, /api/square/create-payment
+  admin/[action].ts     -> /api/admin/{login,stats,products,orders,enquiries}
   inventory, contact, newsletter, chat, orders, promo/, services/
 src/
   config/site.ts        SINGLE SOURCE OF TRUTH for every business fact
@@ -118,6 +119,16 @@ double-charge.
 **Admin auth is stateless and fails closed.** A timing-safe password compare
 issues an HMAC-signed token with a 12-hour expiry. With `ADMIN_PASSWORD` unset,
 every admin endpoint 503s.
+
+**The admin and Square endpoints share one function each.** Vercel creates a
+serverless function per routable file under `api/`, and the Hobby plan allows
+twelve per deployment. Rather than drop features, the five admin endpoints and
+the two Square endpoints are served by `[action].ts` dynamic routes that
+dispatch to handlers in `api/_lib/handlers/` — a path segment starting with `_`
+is excluded from routing. **Every public URL is unchanged.** That puts the
+deployment at 9 functions. If you add more, keep an eye on the ceiling: the
+build will succeed and the *deploy* will fail, which is a confusing place to
+discover it.
 
 **Every data module is derived, not duplicated.** Product ids, max load in kg,
 max speed in km/h, size counts, brand SKU counts and the home page stats are all

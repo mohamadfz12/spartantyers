@@ -6,6 +6,26 @@ what the SPA already uses. Only `node:crypto` and global `fetch` are used.
 The contract is defined by [`src/lib/api.ts`](../src/lib/api.ts) — that file is
 authoritative. Every response shape below matches it exactly.
 
+## File layout vs URLs
+
+The URLs below are the contract; the files behind them are an implementation
+detail. Vercel turns every routable file under `api/` into its own serverless
+function, and the Hobby plan caps a deployment at twelve. So two groups are
+collapsed into dynamic routes:
+
+| File | Serves |
+| --- | --- |
+| `api/admin/[action].ts` | `/api/admin/{login,stats,products,orders,enquiries}` |
+| `api/square/[action].ts` | `/api/square/{config,create-payment}` |
+
+Each dispatches on `req.query.action` to a handler in `api/_lib/handlers/`.
+Anything under a path segment beginning with `_` is excluded from routing, so
+those handlers do not become functions of their own. **No public URL changes** —
+`/api/admin/stats` is still `/api/admin/stats`.
+
+Current count: **9 routable files**. Adding a tenth is fine; a thirteenth will
+build successfully and then fail at the deploy step.
+
 ## Conventions
 
 - **Request/response types** — `@vercel/node` is not installed, so
