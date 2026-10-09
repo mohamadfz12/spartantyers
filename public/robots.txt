@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# The admin panel and order confirmations must never be indexed.
+Disallow: /admin
+Disallow: /admin/
+Disallow: /order/
+Disallow: /checkout
+Disallow: /cart
+Disallow: /compare
+
+Sitemap: https://spartantrucktyres.com.au/sitemap.xml

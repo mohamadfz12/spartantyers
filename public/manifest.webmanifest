@@ -1,0 +1,26 @@
+{
+  "name": "Spartan Tyres — Commercial Truck Tyres Australia",
+  "short_name": "Spartan Tyres",
+  "description": "Commercial truck, bus and trailer tyres with bulk pricing and fast Australia-wide delivery from Sydney.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1f1f1f",
+  "theme_color": "#1f1f1f",
+  "lang": "en-AU",
+  "categories": ["shopping", "business"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

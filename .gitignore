@@ -1,0 +1,22 @@
+node_modules
+dist
+dist-ssr
+.vercel
+*.local
+.env
+.env.local
+.env.*.local
+
+# Build/editor noise
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Scratch space used while reverse-engineering the existing site
+_research
+_tools
+_smoke

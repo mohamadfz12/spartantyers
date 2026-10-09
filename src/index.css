@@ -1,0 +1,301 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 9%;
+    --border: 0 0% 89%;
+
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 9%;
+
+    --popover: 0 0% 99%;
+    --popover-foreground: 0 0% 9%;
+
+    --primary: 18 76% 51%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 9%;
+
+    --muted: 18 4% 95%;
+    --muted-foreground: 0 0% 38%;
+
+    --accent: 18 8% 93%;
+    --accent-foreground: 0 0% 9%;
+
+    --destructive: 0 84% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --charcoal: 0 0% 12%;
+    --charcoal-foreground: 0 0% 95%;
+
+    --input: 0 0% 82%;
+    --ring: 18 76% 51%;
+
+    --radius: 0.5rem;
+
+    /* Scroll-driven value published by useScrollProgress for CSS consumers. */
+    --scroll-progress: 0;
+  }
+
+  .dark {
+    --background: 0 0% 7%;
+    --foreground: 0 0% 96%;
+    --border: 0 0% 18%;
+
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 96%;
+
+    --popover: 0 0% 11%;
+    --popover-foreground: 0 0% 96%;
+
+    --primary: 18 84% 55%;
+    --primary-foreground: 0 0% 8%;
+
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 96%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 64%;
+
+    --accent: 18 10% 18%;
+    --accent-foreground: 0 0% 96%;
+
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --charcoal: 0 0% 9%;
+    --charcoal-foreground: 0 0% 95%;
+
+    --input: 0 0% 26%;
+    --ring: 18 84% 55%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+
+    /*
+     * Safety net against horizontal bleed — decorative glows, and reveal
+     * animations that start translated sideways before they scroll into view.
+     *
+     * This has to be `clip`, not `hidden`. On a phone, content wider than the
+     * screen expands the layout viewport, which in turn widens every
+     * `position: fixed` overlay — the mobile nav drawer ends up rendering
+     * partly off the right edge with its close button unreachable. `clip`
+     * stops that without establishing a scroll container, so the many `sticky`
+     * elements on the site (header, filter rails, the pinned anatomy section)
+     * keep working. `overflow: hidden` here would break every one of them.
+     */
+    overflow-x: clip;
+  }
+
+  /* Honour the OS setting everywhere, including our JS-driven motion. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+  }
+
+  /* Scrollbar ------------------------------------------------------- */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-muted;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-steel-400 rounded-full border-2 border-solid;
+    border-color: hsl(var(--muted));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary;
+  }
+
+  canvas {
+    display: block;
+    touch-action: pan-y;
+  }
+}
+
+@layer components {
+  /* Section shell used by every page for consistent rhythm. */
+  .section {
+    @apply relative py-16 md:py-24;
+  }
+
+  .section-tight {
+    @apply relative py-12 md:py-16;
+  }
+
+  .shell {
+    @apply mx-auto w-full max-w-7xl px-4 md:px-6 lg:px-8;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 font-heading text-xs font-bold uppercase tracking-brand text-primary;
+  }
+
+  .display-1 {
+    @apply font-heading text-4xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl xl:text-7xl;
+  }
+
+  .display-2 {
+    @apply font-heading text-3xl font-black uppercase leading-[1] tracking-tight sm:text-4xl lg:text-5xl;
+  }
+
+  .display-3 {
+    @apply font-heading text-2xl font-extrabold uppercase leading-tight tracking-tight sm:text-3xl;
+  }
+
+  .lede {
+    @apply text-base leading-relaxed text-muted-foreground sm:text-lg;
+  }
+
+  /* Hairline diagonal hazard stripe — a recurring brand motif. */
+  .hazard {
+    background-image: repeating-linear-gradient(
+      45deg,
+      hsl(var(--primary)) 0 10px,
+      transparent 10px 20px
+    );
+  }
+
+  /* Tread-pattern texture, drawn in CSS so it costs no requests. */
+  .tread-texture {
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        rgb(255 255 255 / 0.05) 0 2px,
+        transparent 2px 14px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        rgb(0 0 0 / 0.22) 0 6px,
+        transparent 6px 26px
+      );
+  }
+
+  .grid-texture {
+    background-image: linear-gradient(
+        to right,
+        hsl(var(--border)) 1px,
+        transparent 1px
+      ),
+      linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .glass {
+    @apply border border-white/10 bg-white/5 backdrop-blur-xl;
+  }
+
+  .glass-light {
+    @apply border border-black/5 bg-white/70 backdrop-blur-xl;
+  }
+
+  /* Subtle interactive lift shared by cards and tiles. */
+  .elevate {
+    @apply transition-all duration-300 ease-brand;
+  }
+  .elevate:hover {
+    @apply -translate-y-1 shadow-lift;
+  }
+
+  .link-underline {
+    @apply relative after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-current after:transition-all after:duration-300 hover:after:w-full;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Edge-fade mask for marquees and horizontal scrollers. */
+  .mask-fade-x {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 8%,
+      black 92%,
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 8%,
+      black 92%,
+      transparent
+    );
+  }
+
+  .mask-fade-b {
+    mask-image: linear-gradient(to bottom, black 60%, transparent);
+    -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent);
+  }
+
+  .perspective {
+    perspective: 1200px;
+  }
+
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .text-shadow-hero {
+    text-shadow: 0 2px 24px rgb(0 0 0 / 0.55);
+  }
+}
