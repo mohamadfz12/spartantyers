@@ -15,7 +15,12 @@ import {
   type ElementType,
   type ReactNode,
 } from 'react'
-import { useCountUp, useInViewOnce, useReducedMotion } from '@/hooks'
+import {
+  useCountUp,
+  useInViewOnce,
+  useMediaQuery,
+  useReducedMotion,
+} from '@/hooks'
 import { cn, formatNumber } from '@/lib/utils'
 
 /**
@@ -62,7 +67,23 @@ export function Reveal({
   repeat = false,
 }: RevealProps) {
   const reduced = useReducedMotion()
-  const offset = OFFSETS[direction]
+  const wide = useMediaQuery('(min-width: 768px)')
+
+  /*
+   * Horizontal reveals slide in from 40px off-axis, which on a narrow screen
+   * is 40px of horizontal overflow for as long as the element is waiting to
+   * animate. That widens the layout viewport on mobile, which widens every
+   * fixed overlay, which pushes the nav drawer off the edge of the screen.
+   *
+   * Containing it with `overflow` is not an option — any overflow value on an
+   * ancestor kills `position: sticky`. So below the breakpoint, sideways
+   * reveals simply become vertical ones. At that width the two read almost
+   * identically anyway.
+   */
+  const resolved =
+    !wide && (direction === 'left' || direction === 'right') ? 'up' : direction
+
+  const offset = OFFSETS[resolved]
   const Component = motion[as as 'div'] ?? motion.div
 
   if (reduced) {

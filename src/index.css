@@ -83,18 +83,20 @@
     scroll-behavior: smooth;
 
     /*
-     * Safety net against horizontal bleed — decorative glows, and reveal
-     * animations that start translated sideways before they scroll into view.
+     * NO overflow value here. Not `hidden`, and not `clip` either.
      *
-     * This has to be `clip`, not `hidden`. On a phone, content wider than the
-     * screen expands the layout viewport, which in turn widens every
-     * `position: fixed` overlay — the mobile nav drawer ends up rendering
-     * partly off the right edge with its close button unreachable. `clip`
-     * stops that without establishing a scroll container, so the many `sticky`
-     * elements on the site (header, filter rails, the pinned anatomy section)
-     * keep working. `overflow: hidden` here would break every one of them.
+     * Overflow on the root element propagates to the viewport and makes it the
+     * clipping container, which breaks `position: sticky` everywhere on the
+     * site — the pinned anatomy section on the home page, the header, the shop
+     * filter rail, the Wheel Lab stage, the checkout summary. `clip` was tried
+     * here as a "safe" way to contain horizontal bleed and it broke all of
+     * them: the anatomy section silently became 340vh of empty space.
+     *
+     * Horizontal bleed is contained at its source instead — each decorative
+     * layer sits in its own `absolute inset-0 overflow-hidden` wrapper that is
+     * not an ancestor of anything sticky. `body` keeps `overflow-x: hidden`
+     * below as a last-resort guard against a stray sideways scrollbar.
      */
-    overflow-x: clip;
   }
 
   /* Honour the OS setting everywhere, including our JS-driven motion. */

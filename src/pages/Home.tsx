@@ -32,6 +32,7 @@ import {
   valueProps,
 } from '@/data/content'
 import { featuredReviews } from '@/data/reviews'
+import { photos, segmentPhotos } from '@/data/media'
 import { Seo, localBusinessJsonLd } from '@/components/Seo'
 import { Icon } from '@/components/Icon'
 import { Badge, Button, Card, Rating } from '@/components/ui'
@@ -450,16 +451,20 @@ function Anatomy() {
   return (
     <section
       ref={ref}
-      // `overflow-x-clip` rather than `overflow-hidden`: the glow orb below
-      // bleeds past the right edge on narrow screens, but this section's whole
-      // effect depends on a `sticky` child, and `overflow: hidden` on an
-      // ancestor would silently kill that. `clip` contains the bleed without
-      // creating a scroll container.
-      className="relative overflow-x-clip bg-charcoal text-charcoal-foreground"
+      // Deliberately NOT clipped. The glow below bleeds past the right edge on
+      // narrow screens, but this section's whole effect is a `sticky` child —
+      // and ANY overflow value other than `visible` on an ancestor kills
+      // sticky, `clip` included. Clipping here silently turned the section
+      // into 340vh of empty space. The bleed is contained by the wrapper
+      // around the decorative layer instead, which is not an ancestor of the
+      // sticky element.
+      className="relative bg-charcoal text-charcoal-foreground"
       style={{ height: `${ANATOMY_STEPS.length * 85}vh` }}
     >
-      <div className="grid-texture pointer-events-none absolute inset-0 opacity-[0.06]" />
-      <div className="pointer-events-none absolute left-1/4 top-1/4 h-96 w-96 rounded-full bg-primary/15 blur-[130px]" />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="grid-texture absolute inset-0 opacity-[0.06]" />
+        <div className="absolute left-1/4 top-1/4 h-96 w-96 rounded-full bg-primary/15 blur-[130px]" />
+      </div>
 
       {/* Pinned viewport */}
       <div className="sticky top-0 flex h-screen items-center overflow-hidden">
@@ -819,19 +824,42 @@ function Segments() {
         </Reveal>
 
         <Stagger className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {customerSegments.map((segment) => (
-            <Card key={segment.title} interactive className="h-full p-6 text-center">
-              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Icon name={segment.icon} className="h-7 w-7" />
-              </span>
-              <h3 className="mt-5 font-heading text-sm font-bold uppercase tracking-wide">
-                {segment.title}
-              </h3>
-              <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
-                {segment.body}
-              </p>
-            </Card>
-          ))}
+          {customerSegments.map((segment, index) => {
+            const photo = segmentPhotos[index] ?? segmentPhotos[0]
+            return (
+              <Card
+                key={segment.title}
+                interactive
+                className="group h-full overflow-hidden p-0"
+              >
+                <div className="relative h-36 overflow-hidden">
+                  <img
+                    src={photo.src}
+                    alt={photo.alt}
+                    width={photo.width}
+                    height={photo.height}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  {/* Keeps the icon legible whatever the photo is doing. */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" />
+                  <span className="absolute bottom-3 left-4 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
+                    <Icon name={segment.icon} className="h-5 w-5" />
+                  </span>
+                </div>
+
+                <div className="p-5">
+                  <h3 className="font-heading text-sm font-bold uppercase tracking-wide">
+                    {segment.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {segment.body}
+                  </p>
+                </div>
+              </Card>
+            )
+          })}
         </Stagger>
       </div>
     </section>
@@ -881,8 +909,21 @@ function Testimonials() {
 function FleetCta() {
   return (
     <section className="relative overflow-hidden bg-charcoal py-16 text-charcoal-foreground md:py-20">
-      <div className="tread-texture pointer-events-none absolute inset-0 opacity-30" />
-      <div className="pointer-events-none absolute -right-20 top-1/2 h-96 w-96 -translate-y-1/2 rounded-full bg-primary/20 blur-[120px]" />
+      {/* Decorative layer, self-contained so nothing here can bleed past the
+          section edge on a narrow screen. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <img
+          src={photos.warehouseRacks.src}
+          alt=""
+          aria-hidden
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover opacity-20"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-charcoal via-charcoal/90 to-charcoal/70" />
+        <div className="tread-texture absolute inset-0 opacity-20" />
+        <div className="absolute -right-20 top-1/2 h-96 w-96 -translate-y-1/2 rounded-full bg-primary/20 blur-[120px]" />
+      </div>
 
       <div className="shell relative grid items-center gap-10 lg:grid-cols-[1.4fr_1fr]">
         <Reveal direction="right">

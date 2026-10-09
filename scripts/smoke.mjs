@@ -227,6 +227,75 @@ await visit('/', 'home-3d', async (page, errors) => {
   }
 })
 
+/**
+ * Scroll the home page end to end.
+ *
+ * This exists because a page can pass every at-rest check and still be broken
+ * the moment someone scrolls. Setting `overflow` on an ancestor (even `clip`)
+ * silently disables `position: sticky`, which turned the pinned anatomy
+ * section into 340vh of empty dark page — invisible to a test that only ever
+ * looked at the top of the document.
+ */
+await visit('/', 'scroll-home', async (page, errors) => {
+  const height = await page.evaluate(() => document.documentElement.scrollHeight)
+  const viewport = await page.evaluate(() => window.innerHeight)
+
+  for (const fraction of [0.15, 0.3, 0.45, 0.6, 0.75, 0.9]) {
+    await page.evaluate((y) => window.scrollTo(0, y), Math.round(height * fraction))
+    await page.waitForTimeout(900)
+
+    // Count text that is on screen but painted at zero opacity — the signature
+    // of a scroll-triggered reveal that never fired.
+    const state = await page.evaluate(() => {
+      const vh = window.innerHeight
+      let visible = 0
+      let invisible = 0
+      for (const el of document.querySelectorAll('main *')) {
+        const box = el.getBoundingClientRect()
+        if (box.bottom < 0 || box.top > vh || !box.width || !box.height) continue
+        if (!el.textContent?.trim()) continue
+        if (Number.parseFloat(getComputedStyle(el).opacity) < 0.05) invisible++
+        else visible++
+      }
+      return { visible, invisible }
+    })
+
+    // A viewport-sized slice of a content page should never be empty.
+    if (state.visible < 5) {
+      errors.push(
+        `at ${Math.round(fraction * 100)}% scroll only ${state.visible} elements are visible ` +
+          `(${state.invisible} present but transparent) — likely a dead sticky or an unfired reveal`,
+      )
+    }
+  }
+
+  // The pinned section must actually pin: its heading stays on screen across
+  // a scroll range far taller than the viewport.
+  const anatomy = page.getByRole('heading', { name: /four numbers decide the price/i })
+  const anatomyTop = await anatomy.evaluate((el) => {
+    const section = el.closest('section')
+    return section ? window.scrollY + section.getBoundingClientRect().top : -1
+  })
+
+  if (anatomyTop < 0) {
+    errors.push('could not locate the pinned anatomy section')
+  } else {
+    for (const offset of [viewport * 0.5, viewport * 1.5, viewport * 2.5]) {
+      await page.evaluate((y) => window.scrollTo(0, y), Math.round(anatomyTop + offset))
+      await page.waitForTimeout(500)
+      if (!(await anatomy.isVisible())) {
+        errors.push(
+          `pinned section came unstuck ${Math.round(offset)}px in — sticky is broken, ` +
+            'check for an overflow value on an ancestor',
+        )
+        break
+      }
+    }
+  }
+
+  await page.evaluate(() => window.scrollTo(0, 0))
+})
+
 // Theme toggle flips the `dark` class.
 await visit('/', 'theme', async (page, errors) => {
   const before = await page.evaluate(() =>

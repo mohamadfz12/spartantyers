@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import { cn } from '@/lib/utils'
 import { site } from '@/config/site'
+import { logos } from '@/data/media'
 
 /**
  * The Spartan mark: a hoplite shield cut from a tyre cross-section, with the
@@ -67,6 +68,14 @@ export function LogoMark({ className }: { className?: string }) {
   )
 }
 
+/**
+ * The real Spartan Tyres lockup.
+ *
+ * The supplied artwork has its dark plate baked in, so it is given a matching
+ * rounded container — on a light header that reads as a deliberate logo block
+ * rather than a stray black rectangle. `LogoMark` above stays available as a
+ * themeable vector for places that need a square, recolourable mark.
+ */
 export function Logo({
   className,
   showWordmark = true,
@@ -76,26 +85,28 @@ export function Logo({
   showWordmark?: boolean
   compact?: boolean
 }) {
-  return (
-    <span className={cn('flex items-center gap-2.5', className)}>
-      <LogoMark className={compact ? 'h-8 w-8' : 'h-10 w-10'} />
+  if (!showWordmark) {
+    return <LogoMark className={cn(compact ? 'h-8 w-8' : 'h-10 w-10', className)} />
+  }
 
-      {showWordmark ? (
-        <span className="flex flex-col leading-none">
-          <span
-            className={cn(
-              'font-heading font-black uppercase tracking-tight',
-              compact ? 'text-lg' : 'text-xl',
-            )}
-          >
-            Spartan
-            <span className="text-primary">.</span>
-          </span>
-          <span className="font-heading text-[0.58rem] font-bold uppercase tracking-brand text-muted-foreground">
-            Truck Tyres
-          </span>
-        </span>
-      ) : null}
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center overflow-hidden rounded-md bg-[#111113]',
+        compact ? 'h-9 px-2' : 'h-11 px-2.5',
+        className,
+      )}
+    >
+      <img
+        src={logos.horizontal.src}
+        alt={`${site.name} — commercial truck tyres`}
+        width={logos.horizontal.width}
+        height={logos.horizontal.height}
+        // Above the fold in the header on every page, so never lazy.
+        loading="eager"
+        decoding="async"
+        className={cn('w-auto object-contain', compact ? 'h-6' : 'h-8')}
+      />
     </span>
   )
 }

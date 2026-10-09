@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { brandLogos } from '@/data/media'
 
 /**
  * Typographic marks for every tyre brand on the site.
@@ -110,6 +111,15 @@ export function brandStyle(name: string): BrandStyle {
   return BRAND_STYLES[name] ?? FALLBACK
 }
 
+/**
+ * Brands whose supplied artwork we render. These are the two lines actually
+ * held in the warehouse; every other manufacturer we can source falls back to
+ * the typographic treatment below, which keeps third-party trademarks off
+ * pages that merely list what is available to order. Add a name here to show
+ * its artwork instead.
+ */
+const ARTWORK_BRANDS = new Set(['Greforce', 'Lionshead'])
+
 export function BrandMark({
   name,
   className,
@@ -120,9 +130,32 @@ export function BrandMark({
   size?: 'sm' | 'md' | 'lg'
 }) {
   const style = brandStyle(name)
+  const artwork = ARTWORK_BRANDS.has(name) ? brandLogos[name] : undefined
 
   const textSize =
     size === 'lg' ? 'text-2xl md:text-3xl' : size === 'sm' ? 'text-sm' : 'text-lg'
+
+  if (artwork) {
+    const height = size === 'lg' ? 'h-12' : size === 'sm' ? 'h-6' : 'h-9'
+    return (
+      <span className={cn('flex items-center justify-center', className)}>
+        <img
+          src={artwork.src}
+          alt={name}
+          width={artwork.width}
+          height={artwork.height}
+          loading="lazy"
+          decoding="async"
+          // The supplied artwork is light-on-dark, so it needs a dark plate to
+          // stay legible in both colour schemes.
+          className={cn(
+            'w-auto rounded-md bg-[#111113] px-3 py-1.5 object-contain',
+            height,
+          )}
+        />
+      </span>
+    )
+  }
 
   return (
     <span
