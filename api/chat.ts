@@ -139,16 +139,17 @@ function systemPrompt(): string {
     `- Sister business ${site.partner.name} (${site.partner.phone.display}) covers ${site.partner.services.join(', ')} at ${site.partner.address}.`,
     '',
     'CATALOGUE SUMMARY:',
-    `- ${cat.count} patterns across ${cat.brands.length} brands: ${cat.brands.join(' and ')}.`,
-    `- Sizes stocked: ${cat.sizes.join(', ')}.`,
+    `- ${cat.count} lines across ${cat.brands.length} brands: ${cat.brands.join(' and ')}.`,
+    `- Sizes in the range: ${cat.sizes.join(', ')}.`,
     `- Axle positions: ${cat.positions.join(', ')}.`,
     `- Applications: ${cat.applications.join(', ')}.`,
-    `- Price range: $${cat.priceMin} to $${cat.priceMax} per tyre, GST inclusive.`,
-    `- Patterns: ${cat.models.join('; ')}.`,
+    `- ${cat.pricedCount} lines have a published price and can be bought online; their price range is $${cat.priceMin} to $${cat.priceMax} per tyre, GST inclusive.`,
+    `- ${cat.poaCount} lines are price on application (POA) — built to order and quoted per order, never sold through the cart: ${cat.poaModels.join('; ')}.`,
+    `- All lines: ${cat.models.join('; ')}.`,
     '',
     'RULES:',
     '1. Never invent stock levels. You do not have live inventory. If asked whether something is in stock, say the website shop page shows live availability and offer the phone number.',
-    `2. Never quote a price for a specific tyre, a discount, or a total. Give the overall range above if helpful, then direct the customer to call ${site.phone.display} for a firm quote.`,
+    `2. Never quote a price for a specific tyre, a discount, or a total. Give the overall range above if helpful, then direct the customer to call ${site.phone.display} for a firm quote. For a POA line, say it is quoted per order and point to the "Request a quote" button on its product page.`,
     '3. Never state a fact that is not in this prompt. If you do not know, say so and hand over to the phone number or sales email.',
     '4. Never promise a delivery date; only repeat the dispatch window and delivery estimate above.',
     '5. We sell commercial truck, bus and trailer tyres only — no passenger car or 4WD tyres.',
@@ -246,7 +247,7 @@ function offlineReply(question: string): string {
 
   /* --- Brands --------------------------------------------------- */
   if (has('brand', 'greforce', 'lionshead', 'make', 'manufacturer')) {
-    return `We stock ${cat.brands.join(' and ')} — ${cat.count} patterns in total, from $${cat.priceMin} to $${cat.priceMax} per tyre including GST. ${site.partner.name} (${site.partner.phone.display}) can source brands we don't carry.`
+    return `We carry ${cat.brands.join(' and ')} — ${cat.count} lines in total. ${cat.pricedCount} can be bought online from $${cat.priceMin} to $${cat.priceMax} per tyre including GST, and ${cat.poaCount} are built to order and quoted on request. ${site.partner.name} (${site.partner.phone.display}) can source brands we don't carry.`
   }
 
   /* --- Afterpay / payment -------------------------------------- */
@@ -255,8 +256,8 @@ function offlineReply(question: string): string {
   }
 
   /* --- Price / quote ------------------------------------------- */
-  if (has('price', 'cost', 'how much', 'quote', 'cheap', 'discount', 'deal', 'promo')) {
-    return `Tyres in our range run from $${cat.priceMin} to $${cat.priceMax} each including GST, with automatic volume discounts from 4 tyres up to 11% at 40+. I can't quote a firm price here — ${lower(CONTACT)}`
+  if (has('price', 'cost', 'how much', 'quote', 'cheap', 'discount', 'deal', 'promo', 'poa')) {
+    return `Tyres we sell online run from $${cat.priceMin} to $${cat.priceMax} each including GST, with automatic volume discounts from 4 tyres up to 11% at 40+. Lines marked POA are built to order — use "Request a quote" on the product page. I can't quote a firm price here — ${lower(CONTACT)}`
   }
 
   /* --- Stock ---------------------------------------------------- */

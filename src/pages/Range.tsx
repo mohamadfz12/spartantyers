@@ -7,14 +7,16 @@ import {
   allApplications,
   allRimDiameters,
   allSizes,
-  effectivePrice,
+  lowestPrice,
+  poaProducts,
   priceRange,
+  pricedProducts,
   products,
   productsForPosition,
 } from '@/data/products'
 import { stockedBrands } from '@/data/brands'
 import type { AxlePosition, Product } from '@/data/types'
-import { money, pluralise } from '@/lib/utils'
+import { money, pluralise, priceLabel } from '@/lib/utils'
 import { Seo, breadcrumbJsonLd } from '@/components/Seo'
 import { Badge, Button } from '@/components/ui'
 import { StaticWheel } from '@/components/three'
@@ -99,7 +101,7 @@ export default function Range() {
           rim,
           count: matching.length,
           sizes,
-          from: Math.min(...matching.map(effectivePrice)),
+          from: lowestPrice(matching),
         }
       }),
     [],
@@ -112,7 +114,7 @@ export default function Range() {
         return {
           application,
           count: matching.length,
-          from: Math.min(...matching.map(effectivePrice)),
+          from: lowestPrice(matching),
           sizes: [...new Set(matching.map((product) => product.size))].length,
         }
       }),
@@ -123,7 +125,7 @@ export default function Range() {
     <>
       <Seo
         title="Full Tyre Range — Truck, Light Commercial, Bus & Trailer | Spartan Tyres"
-        description={`${products.length} commercial tyre lines across ${allSizes.length} sizes, from ${money(priceRange.min)} a tyre. Steer, drive, trailer and all-position fitments in 17.5in, 19.5in and 22.5in, stocked at Yennora.`}
+        description={`${products.length} commercial tyre lines across ${allSizes.length} sizes, from ${money(priceRange.min)} a tyre. Steer, drive, trailer and all-position fitments in 17.5in, 19.5in and 22.5in, from our Yennora warehouse or built to order.`}
         canonicalPath="/products"
         jsonLd={breadcrumbJsonLd([{ name: 'Range', path: '/products' }])}
       />
@@ -131,7 +133,7 @@ export default function Range() {
       <PageHero
         eyebrow="The range"
         title="Every fitment we carry, and how to find yours"
-        lede={`${products.length} lines across ${allSizes.length} sizes from ${money(priceRange.min)} to ${money(priceRange.max)} a tyre, held at our own warehouse. We are an independent supplier, so if the fitment you need is outside the range we will source it rather than talk you into something else.`}
+        lede={`${products.length} lines across ${allSizes.length} sizes: ${pricedProducts.length} sold online from ${money(priceRange.min)} to ${money(priceRange.max)} a tyre, and ${poaProducts.length} built to order and quoted on request. We are an independent supplier, so if the fitment you need is outside the range we will source it rather than talk you into something else.`}
         breadcrumb={[{ name: 'Range', path: '/products' }]}
         actions={
           <>
@@ -265,6 +267,7 @@ export default function Range() {
           <Stagger className="mt-10 grid gap-5 lg:grid-cols-3">
             {(Object.keys(POSITION_LABELS) as AxlePosition[]).map((position) => {
               const matching = productsForPosition(position)
+              const from = lowestPrice(matching)
               return (
                 <Link
                   key={position}
@@ -283,7 +286,7 @@ export default function Range() {
                     {POSITION_NOTE[position]}
                   </p>
                   <span className="mt-5 inline-flex items-center gap-2 font-heading text-xs font-bold uppercase tracking-brand text-primary">
-                    From {money(Math.min(...matching.map(effectivePrice)))}
+                    {from != null ? `From ${money(from)}` : 'Price on application'}
                     <ArrowRight
                       aria-hidden="true"
                       className="h-3.5 w-3.5 transition-transform duration-300 ease-brand group-hover:translate-x-1"
@@ -302,14 +305,14 @@ export default function Range() {
           <SectionHeading
             id="range-rim"
             eyebrow="By rim diameter"
-            title="Every size we hold"
+            title="Every size we carry"
             lede="Rim diameter is the one figure on a sidewall with no tolerance at all, so it is the fastest way to narrow the catalogue."
           />
 
           <Reveal className="mt-10 overflow-hidden rounded-lg border border-border bg-card">
             <table className="w-full text-left text-sm">
               <caption className="sr-only">
-                Stocked sizes grouped by rim diameter, with line counts and starting prices
+                Sizes in the range grouped by rim diameter, with line counts and starting prices
               </caption>
               <thead>
                 <tr className="border-b border-border">
@@ -323,7 +326,7 @@ export default function Range() {
                     scope="col"
                     className="px-4 py-3 font-heading text-xs font-bold uppercase tracking-brand text-muted-foreground md:px-6"
                   >
-                    Sizes stocked
+                    Sizes
                   </th>
                   <th
                     scope="col"
@@ -371,7 +374,7 @@ export default function Range() {
                       {group.count}
                     </td>
                     <td className="px-4 py-4 text-right font-heading font-bold tabular-nums text-primary md:px-6">
-                      {money(group.from)}
+                      {priceLabel(group.from)}
                     </td>
                   </tr>
                 ))}
@@ -407,7 +410,8 @@ export default function Range() {
                   </h3>
                   <p className="mt-1.5 text-xs text-muted-foreground">
                     {group.count} {pluralise(group.count, 'line')} across {group.sizes}{' '}
-                    {pluralise(group.sizes, 'size')} — from {money(group.from)}
+                    {pluralise(group.sizes, 'size')} —{' '}
+                    {group.from != null ? `from ${money(group.from)}` : 'price on application'}
                   </p>
                 </div>
                 <ArrowRight
@@ -433,11 +437,11 @@ export default function Range() {
               />
               <div className="mt-6 flex flex-col gap-4 text-sm leading-relaxed text-muted-foreground">
                 <p>
-                  Our own warehouse covers {allSizes.length} sizes across{' '}
-                  {stockedBrands.map((brand) => brand.name).join(' and ')}, from{' '}
-                  {money(priceRange.min)} to {money(priceRange.max)} a tyre — so there is a
-                  genuine budget option and a genuine premium option in most fitments rather
-                  than one price point.
+                  Our range covers {allSizes.length} sizes across{' '}
+                  {stockedBrands.map((brand) => brand.name).join(' and ')}, with published
+                  prices from {money(priceRange.min)} to {money(priceRange.max)} a tyre — so
+                  there is a genuine budget option and a genuine premium option in most
+                  fitments rather than one price point.
                 </p>
                 <p>
                   Specialty and hard-to-find sizes are sourced through our partner{' '}
@@ -447,7 +451,8 @@ export default function Range() {
                 </p>
                 <p>
                   Out-of-stock lines can be pre-ordered, which allocates you stock from the
-                  next shipment rather than putting you on a waiting list.
+                  next shipment rather than putting you on a waiting list. Lines marked POA
+                  are built to order: we quote price and lead time before you commit.
                 </p>
               </div>
 

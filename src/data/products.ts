@@ -43,32 +43,50 @@ export const POSITION_LABELS: Record<AxlePosition, string> = {
 /* ------------------------------------------------------------------ *
  * Raw specification sheet
  *
- * Every spec below (pattern, size, ply, rim, tread depth, load index,
- * speed symbol, axle position) is taken from the Greforce and Lionshead
- * manufacturer data sheets Spartan Tyres publishes. Commercial fields
- * (price, stock, ratings) sit alongside them.
+ * The range, SKUs, ply ratings, fitments and prices follow Spartan's own
+ * catalogues (Range Catalogue RETAIL, June 2026, and the Lionshead Barcode
+ * Catalogue). Each SKU is the value printed in the barcode, and `price` is
+ * the published RRP inc. GST — or `null` where the price list says POA:
+ * price on application / build to order. Trade pricing is deliberately not
+ * held here; the bundle is public.
+ *
+ * The remaining specs (rim, tread depth, load index, speed symbol) come
+ * from the Greforce and Lionshead manufacturer data sheets. Where a maker
+ * publishes nothing for the exact line, the field is `null` and the site
+ * says "to be confirmed" — the lines added from the June 2026 catalogue
+ * have no published EU label, for instance. Stock and ratings are
+ * commercial fields kept alongside them.
+ *
+ * Checked against the makers' published tables in October 2026:
+ *  - LA301E in 11R22.5 is 148/145M. It was listed here as 149/146, which is
+ *    Lionshead's figure for 11R24.5, so it overstated the load by 100kg.
+ *  - LD317E had the same 149/146 with no published row behind it, so its
+ *    load index is now confirmed per quote rather than repeated.
+ *  - GRT33 in 11R22.5 is M rated (was L).
  * ------------------------------------------------------------------ */
 
 interface Spec {
   pattern: string
   brand: BrandName
   size: string
+  sku: string
   ply: string
   rim: string
-  treadDepthMm: number
-  loadIndex: string
-  speedRating: string
+  treadDepthMm: number | null
+  loadIndex: string | null
+  speedRating: string | null
   rawPosition: keyof typeof POSITION_MAP
   application: Application
   tread: TreadFamily
-  price: number
+  /** RRP inc. GST, or `null` for price on application. */
+  price: number | null
   discount?: number
   stock: number
   rating: number
   reviewCount: number
   fuelRating: Product['fuelRating']
-  noiseDb: number
-  retreadable: boolean
+  noiseDb: number | null
+  retreadable: boolean | null
   threePeak?: boolean
   headline: string
   description: string
@@ -77,13 +95,13 @@ interface Spec {
 
 const SPECS: Spec[] = [
   {
-    pattern: 'GRD57', brand: 'Greforce', size: '11R22.5', ply: '18PR', rim: '8.25',
+    pattern: 'GRD57', brand: 'Greforce', size: '11R22.5', sku: 'GRF-11R225-GRD57', ply: '18PR', rim: '8.25',
     treadDepthMm: 21.5, loadIndex: '148/145', speedRating: 'M', rawPosition: 'Drive',
-    application: 'Long Haul', tread: 'lug', price: 365, stock: 184, rating: 4.7, reviewCount: 63,
+    application: 'Long Haul', tread: 'lug', price: null, stock: 0, rating: 4.7, reviewCount: 63,
     fuelRating: 'B', noiseDb: 73, retreadable: true, threePeak: true,
     headline: 'Deep-lug drive tyre built for interstate mileage',
     description:
-      'The GRD57 is Greforce\'s long-haul drive workhorse. A 21.5mm deep block pattern with stone-ejector bars delivers traction from new right through to the retread, while the wide-belt casing keeps the footprint square under full GVM. It is the pattern most of our interstate linehaul customers standardise on.',
+      'The GRD57 is Greforce\'s long-haul drive workhorse. A 21.5mm deep block pattern with stone-ejector bars delivers traction from new right through to the retread, while the wide-belt casing keeps the footprint square under full GVM. It is built to order and quoted per order, which suits the way linehaul fleets buy it — a full drive group at a time.',
     highlights: [
       '21.5mm deep lug pattern for maximum removal mileage',
       'Stone ejectors protect the belt package on regional roads',
@@ -92,24 +110,24 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'G-PILOT X1', brand: 'Greforce', size: '295/80R22.5', ply: '20PR', rim: '9.00',
+    pattern: 'G-PILOT X1', brand: 'Greforce', size: '295/80R22.5', sku: 'GRF-29580R225-GPILOTX1', ply: '20PR', rim: '9.00',
     treadDepthMm: 17.0, loadIndex: '154/150', speedRating: 'K', rawPosition: 'Steer & Trailer',
-    application: 'Long Haul', tread: 'rib', price: 469, discount: 12, stock: 96, rating: 4.8, reviewCount: 48,
+    application: 'Long Haul', tread: 'rib', price: 330, stock: 96, rating: 4.8, reviewCount: 48,
     fuelRating: 'A', noiseDb: 71, retreadable: true,
     headline: 'Five-rib steer tyre with class-leading rolling resistance',
     description:
       'The G-PILOT X1 is the premium steer and trailer fitment in the Greforce range. Five continuous ribs and a low-heat tread compound cut rolling resistance to an A rating, and the 20PR casing carries 3750kg per tyre. Drivers consistently report straighter tracking and quieter running at highway speed.',
     highlights: [
+      'Five-rib highway steer pattern for stable, true tracking',
+      'High-mileage casing built for long-haul and regional steer',
       'A-rated rolling resistance — up to 7.5% fuel saving',
-      'Five continuous ribs for precise, stable steering',
       '20PR casing rated to 3750kg per tyre',
-      'Wide 295mm section on a 9.00 rim for even wear',
     ],
   },
   {
-    pattern: 'GRT33', brand: 'Greforce', size: '275/70R22.5', ply: '18PR', rim: '8.25',
+    pattern: 'GRT33', brand: 'Greforce', size: '275/70R22.5', sku: 'GRF-27570R225-GRT33', ply: '18PR', rim: '8.25',
     treadDepthMm: 14.0, loadIndex: '146/143', speedRating: 'L', rawPosition: 'Steer & Trailer',
-    application: 'Regional', tread: 'rib', price: 335, stock: 142, rating: 4.6, reviewCount: 37,
+    application: 'Regional', tread: 'rib', price: 250, stock: 142, rating: 4.6, reviewCount: 37,
     fuelRating: 'B', noiseDb: 72, retreadable: true,
     headline: 'All-rounder steer and trailer rib for regional work',
     description:
@@ -122,39 +140,39 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'GRT33', brand: 'Greforce', size: '255/70R22.5', ply: '16PR', rim: '7.50',
-    treadDepthMm: 14.0, loadIndex: '140/137', speedRating: 'M', rawPosition: 'Trailer',
-    application: 'Regional', tread: 'trailer', price: 319, stock: 78, rating: 4.5, reviewCount: 21,
+    pattern: 'GRT33', brand: 'Greforce', size: '255/70R22.5', sku: 'GRF-25570R225-GRT33', ply: '16PR', rim: '7.50',
+    treadDepthMm: 14.0, loadIndex: '140/137', speedRating: 'M', rawPosition: 'Steer & Trailer',
+    application: 'Regional', tread: 'trailer', price: null, stock: 0, rating: 4.5, reviewCount: 21,
     fuelRating: 'B', noiseDb: 71, retreadable: true,
-    headline: 'Narrow-section trailer rib for tight-clearance builds',
+    headline: 'Narrow-section GRT33 for tight-clearance builds',
     description:
-      'The 255/70R22.5 GRT33 suits trailer builds where clearance is tight and a 275 section will not fit. Same proven four-rib tread, lighter 16PR casing, and a 7.50 rim fitment that drops unsprung weight without giving up tread life.',
+      'The 255/70R22.5 GRT33 suits steer and trailer fitments where clearance is tight and a 275 section will not fit. Same proven four-rib tread, lighter 16PR casing, and a 7.50 rim fitment that drops unsprung weight without giving up tread life. Built to order and quoted per order.',
     highlights: [
-      'Fits trailer builds where a 275 section will not clear',
+      'Fits steer and trailer positions where a 275 section will not clear',
       'Lighter 16PR casing reduces unsprung weight',
-      'Free-rolling rib pattern for long, even trailer wear',
+      'Free-rolling rib pattern for long, even wear',
       'Rated to 2500kg per tyre at 140 load index',
     ],
   },
   {
-    pattern: 'GRT33', brand: 'Greforce', size: '11R22.5', ply: '18PR', rim: '8.25',
-    treadDepthMm: 13.5, loadIndex: '148/145', speedRating: 'L', rawPosition: 'Steer & Trailer',
-    application: 'Regional', tread: 'rib', price: 299, discount: 10, stock: 263, rating: 4.6, reviewCount: 91,
+    pattern: 'GRT33', brand: 'Greforce', size: '11R22.5', sku: 'GRF-11R225-GRT33', ply: '18PR', rim: '8.25',
+    treadDepthMm: 13.5, loadIndex: '148/145', speedRating: 'M', rawPosition: 'Steer & Trailer',
+    application: 'Regional', tread: 'rib', price: null, stock: 0, rating: 4.6, reviewCount: 91,
     fuelRating: 'B', noiseDb: 72, retreadable: true,
-    headline: 'The volume 11R22.5 steer fitment',
+    headline: 'Four-rib 11R22.5 steer and trailer fitment',
     description:
-      'If you run 11R22.5 on the front, this is the value benchmark. The GRT33 in the classic 11R size pairs a 13.5mm four-rib tread with an 18PR casing rated to 3150kg, and we hold it in depth year round so fleet re-orders ship same week.',
+      'If you run 11R22.5 on the front, this is the straightforward choice. The GRT33 in the classic 11R size pairs a 13.5mm four-rib tread with an 18PR casing rated to 3150kg. It is built to order, so it is quoted on quantity — send us your fleet volume and we will come back with price and lead time.',
     highlights: [
-      'Deepest-held stock line in our warehouse',
       'Classic 11R22.5 fitment — direct swap for most steer axles',
+      '13.5mm four-rib tread for even, predictable wear',
       '18PR casing rated to 3150kg per tyre',
       'Consistent batch-to-batch performance',
     ],
   },
   {
-    pattern: 'GRT33', brand: 'Greforce', size: '9.5R17.5', ply: '18PR', rim: '6.75',
+    pattern: 'GRT33', brand: 'Greforce', size: '9.5R17.5', sku: 'GRF-95R175-GRT33', ply: '18PR', rim: '6.75',
     treadDepthMm: 13.5, loadIndex: '143/141', speedRating: 'L', rawPosition: 'Steer & Trailer',
-    application: 'Urban Delivery', tread: 'rib', price: 235, stock: 54, rating: 4.4, reviewCount: 18,
+    application: 'Urban Delivery', tread: 'rib', price: 175, stock: 54, rating: 4.4, reviewCount: 18,
     fuelRating: 'B', noiseDb: 70, retreadable: false,
     headline: 'Light-truck rib for metro distribution',
     description:
@@ -167,9 +185,9 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'GR999', brand: 'Greforce', size: '215/75R17.5', ply: '18PR', rim: '6.00',
+    pattern: 'GR999', brand: 'Greforce', size: '215/75R17.5', sku: 'GRF-21575R175-GR999', ply: '18PR', rim: '6.00',
     treadDepthMm: 15.5, loadIndex: '135/133', speedRating: 'L', rawPosition: 'Drive',
-    application: 'Urban Delivery', tread: 'block', price: 215, stock: 61, rating: 4.5, reviewCount: 24,
+    application: 'Urban Delivery', tread: 'block', price: 165, stock: 61, rating: 4.5, reviewCount: 24,
     fuelRating: 'B', noiseDb: 71, retreadable: false,
     headline: 'Block-pattern light-truck drive tyre',
     description:
@@ -182,9 +200,9 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'GR999', brand: 'Greforce', size: '9.5R17.5', ply: '16PR', rim: '6.75',
+    pattern: 'GR999', brand: 'Greforce', size: '9.5R17.5', sku: 'GRF-95R175-GR999', ply: '16PR', rim: '6.75',
     treadDepthMm: 15.0, loadIndex: '139/137', speedRating: 'L', rawPosition: 'Drive',
-    application: 'Urban Delivery', tread: 'block', price: 249, stock: 43, rating: 4.4, reviewCount: 15,
+    application: 'Urban Delivery', tread: 'block', price: 180, stock: 43, rating: 4.4, reviewCount: 15,
     fuelRating: 'B', noiseDb: 71, retreadable: false,
     headline: 'Drive traction for 9.5R17.5 rigids',
     description:
@@ -197,9 +215,9 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'GR999', brand: 'Greforce', size: '235/75R17.5', ply: '18PR', rim: '6.75',
+    pattern: 'GR999', brand: 'Greforce', size: '235/75R17.5', sku: 'GRF-23575R175-GR999', ply: '18PR', rim: '6.75',
     treadDepthMm: 15.5, loadIndex: '143/141', speedRating: 'L', rawPosition: 'Drive',
-    application: 'Urban Delivery', tread: 'block', price: 239, discount: 8, stock: 88, rating: 4.6, reviewCount: 31,
+    application: 'Urban Delivery', tread: 'block', price: 170, stock: 88, rating: 4.6, reviewCount: 31,
     fuelRating: 'B', noiseDb: 71, retreadable: false,
     headline: 'The popular 235/75R17.5 drive fitment',
     description:
@@ -208,13 +226,13 @@ const SPECS: Spec[] = [
       'Widest GR999 section for maximum drive footprint',
       '18PR casing rated to 2725kg per tyre',
       'Suits tippers, crane trucks and heavy rigids',
-      'Currently on promotion',
+      'Closed-shoulder drive pattern balancing grip and mileage',
     ],
   },
   {
-    pattern: 'G-ARMOR A68', brand: 'Greforce', size: '11R22.5', ply: '18PR', rim: '8.25',
+    pattern: 'G-ARMOR A68', brand: 'Greforce', size: '11R22.5', sku: 'GRF-11R225-GARMORA68', ply: '18PR', rim: '8.25',
     treadDepthMm: 13.5, loadIndex: '148/145', speedRating: 'M', rawPosition: 'All Position',
-    application: 'Mixed Service', tread: 'rib', price: 309, stock: 117, rating: 4.7, reviewCount: 44,
+    application: 'Mixed Service', tread: 'rib', price: null, stock: 0, rating: 4.7, reviewCount: 44,
     fuelRating: 'B', noiseDb: 73, retreadable: true,
     headline: 'Armoured all-position casing for mixed service',
     description:
@@ -227,24 +245,24 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'GR612', brand: 'Greforce', size: '235/75R17.5', ply: '18PR', rim: '6.75',
+    pattern: 'GR612', brand: 'Greforce', size: '235/75R17.5', sku: 'GRF-23575R175-GR612', ply: '18PR', rim: '6.75',
     treadDepthMm: 12.5, loadIndex: '143/141', speedRating: 'J', rawPosition: 'Steer & Trailer',
-    application: 'Urban Delivery', tread: 'rib', price: 229, stock: 72, rating: 4.3, reviewCount: 19,
+    application: 'Urban Delivery', tread: 'rib', price: 175, stock: 72, rating: 4.3, reviewCount: 19,
     fuelRating: 'B', noiseDb: 70, retreadable: false,
     headline: 'Economy steer rib for light commercial',
     description:
-      'GR612 is the entry point into the Greforce light-truck range. A straightforward five-rib highway tread on an 18PR casing — no frills, predictable wear, and the lowest cost per fitment we stock in 17.5in.',
+      'GR612 is the entry point into the Greforce light-truck range. A straightforward five-rib highway tread on an 18PR casing — no frills, predictable wear, and a sharp price for a 235/75R17.5 steer fitment.',
     highlights: [
-      'Lowest-cost 235/75R17.5 steer fitment we hold',
       'Five-rib highway tread for predictable wear',
+      'Reinforced shoulder resists kerbing and scrub',
       'Quiet 70dB running',
       'Ideal for high-turnover rental and hire fleets',
     ],
   },
   {
-    pattern: 'GR612', brand: 'Greforce', size: '265/70R19.5', ply: '18PR', rim: '7.50',
+    pattern: 'GR612', brand: 'Greforce', size: '265/70R19.5', sku: 'GRF-26570R195-GR612', ply: '18PR', rim: '7.50',
     treadDepthMm: 12.5, loadIndex: '143/141', speedRating: 'K', rawPosition: 'All Position',
-    application: 'Urban Delivery', tread: 'rib', price: 299, stock: 38, rating: 4.4, reviewCount: 16,
+    application: 'Urban Delivery', tread: 'rib', price: 220, stock: 38, rating: 4.4, reviewCount: 16,
     fuelRating: 'B', noiseDb: 71, retreadable: true,
     headline: 'All-position 19.5in rib for medium rigids',
     description:
@@ -257,13 +275,13 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'GRD1212', brand: 'Greforce', size: '275/70R22.5', ply: '18PR', rim: '8.25',
+    pattern: 'GRD1212', brand: 'Greforce', size: '275/70R22.5', sku: 'GRF-27570R225-GRD1212', ply: '18PR', rim: '8.25',
     treadDepthMm: 21.5, loadIndex: '146/143 or 148/145', speedRating: 'J/K', rawPosition: 'All Position',
-    application: 'On / Off Road', tread: 'lug', price: 389, stock: 64, rating: 4.7, reviewCount: 27,
+    application: 'On / Off Road', tread: 'lug', price: null, stock: 0, rating: 4.7, reviewCount: 27,
     fuelRating: 'C', noiseDb: 75, retreadable: true, threePeak: true,
     headline: 'Deep all-position lug for on/off road duty',
     description:
-      'An unusual and useful tyre: 21.5mm of aggressive lug tread rated for all three axle positions. GRD1212 is what we recommend for tippers, agitators and civil work where the truck spends half its life on a site and half on the highway.',
+      'An unusual and useful tyre: 21.5mm of aggressive lug tread rated for all three axle positions. GRD1212 is what we recommend for tippers, agitators and civil work where the truck spends half its life on a site and half on the highway. Built to order and quoted per order.',
     highlights: [
       '21.5mm aggressive lug with all-position rating',
       'Built for tippers, agitators and civil contractors',
@@ -272,39 +290,39 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'GRD35', brand: 'Greforce', size: '11R22.5', ply: '18PR', rim: '8.25',
+    pattern: 'GRD35', brand: 'Greforce', size: '11R22.5', sku: 'GRF-11R225-GRD35', ply: '18PR', rim: '8.25',
     treadDepthMm: 21.5, loadIndex: '148/145', speedRating: 'M', rawPosition: 'Drive',
-    application: 'Long Haul', tread: 'lug', price: 359, stock: 156, rating: 4.6, reviewCount: 58,
+    application: 'Long Haul', tread: 'lug', price: null, stock: 0, rating: 4.6, reviewCount: 58,
     fuelRating: 'B', noiseDb: 74, retreadable: true, threePeak: true,
     headline: 'Deep drive lug in the classic 11R size',
     description:
-      'GRD35 brings 21.5mm of deep drive tread to the 11R22.5 fitment at a lower price point than the GRD57. The tread blocks are slightly more closed, which trades a little loose-surface bite for noticeably quieter highway running.',
+      'GRD35 brings 21.5mm of deep drive tread to the 11R22.5 fitment. The tread blocks are slightly more closed than the GRD57\'s, which trades a little loose-surface bite for noticeably quieter highway running.',
     highlights: [
-      '21.5mm deep drive tread at a sharp price',
+      '21.5mm deep drive tread',
       'More closed blocks — quieter than an open lug',
       'M speed rating for 130km/h operation',
-      'Held in depth for fleet re-orders',
+      'Built to order — quoted on fleet volumes',
     ],
   },
   {
-    pattern: 'G-PILOT X3', brand: 'Greforce', size: '295/80R22.5', ply: '20PR', rim: '9.00',
+    pattern: 'G-PILOT X3', brand: 'Greforce', size: '295/80R22.5', sku: 'GRF-29580R225-GPILOTX3', ply: '20PR', rim: '9.00',
     treadDepthMm: 21.0, loadIndex: '154/150', speedRating: 'K', rawPosition: 'Drive',
-    application: 'Long Haul', tread: 'lug', price: 489, discount: 10, stock: 72, rating: 4.8, reviewCount: 41,
+    application: 'Long Haul', tread: 'lug', price: 330, stock: 72, rating: 4.8, reviewCount: 41,
     fuelRating: 'B', noiseDb: 73, retreadable: true, threePeak: true,
     headline: 'Premium 295/80 drive tyre — the X1\'s partner',
     description:
-      'G-PILOT X3 is the drive-axle counterpart to the X1 steer tyre. Run them together and you get a matched 295/80R22.5 set: the X1 steering and the X3 pulling, both on 20PR casings rated to 3750kg. This is the top of the Greforce linehaul range.',
+      'G-PILOT X3 is the drive-axle counterpart to the X1 steer tyre. Run them together and you get a matched 295/80R22.5 set: the X1 steering and the X3 pulling, both on 20PR casings rated to 3750kg. A deep block pattern on a cut- and chip-resistant compound means it does not give up when the work leaves the bitumen.',
     highlights: [
       'Matched set with the G-PILOT X1 steer tyre',
-      '21mm deep drive tread on a 20PR casing',
+      'Deep block drive pattern for maximum traction',
+      'Cut- and chip-resistant compound for regional and on/off-road work',
       'Rated to 3750kg per tyre — highest in the range bar the GR666',
-      'Premium linehaul specification',
     ],
   },
   {
-    pattern: 'GR881', brand: 'Greforce', size: '11R22.5', ply: '18PR', rim: '8.25',
+    pattern: 'GR881', brand: 'Greforce', size: '11R22.5', sku: 'GRF-11R225-GR881', ply: '18PR', rim: '8.25',
     treadDepthMm: 15.0, loadIndex: '148/145', speedRating: 'M', rawPosition: 'All Position',
-    application: 'Mixed Service', tread: 'rib', price: 315, stock: 94, rating: 4.5, reviewCount: 33,
+    application: 'Mixed Service', tread: 'rib', price: null, stock: 0, rating: 4.5, reviewCount: 33,
     fuelRating: 'B', noiseDb: 72, retreadable: true,
     headline: 'All-position 11R22.5 with extra tread depth',
     description:
@@ -317,9 +335,9 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'GR666', brand: 'Greforce', size: '385/65R22.5', ply: '24PR', rim: '11.75',
+    pattern: 'GR666', brand: 'Greforce', size: '385/65R22.5', sku: 'GRF-38565R225-GR666', ply: '24PR', rim: '11.75',
     treadDepthMm: 14.5, loadIndex: '164', speedRating: 'K', rawPosition: 'Steer & Trailer',
-    application: 'Long Haul', tread: 'rib', price: 529, stock: 47, rating: 4.7, reviewCount: 22,
+    application: 'Long Haul', tread: 'rib', price: 330, stock: 47, rating: 4.7, reviewCount: 22,
     fuelRating: 'A', noiseDb: 72, retreadable: true,
     headline: 'Super-single for maximum axle load',
     description:
@@ -332,9 +350,9 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'HD01M', brand: 'Greforce', size: '11R22.5', ply: '18PR', rim: '8.25',
+    pattern: 'HD01M', brand: 'Greforce', size: '11R22.5', sku: 'GRF-11R225-HD01M', ply: '18PR', rim: '8.25',
     treadDepthMm: 23.0, loadIndex: '148/145', speedRating: 'L', rawPosition: 'Drive',
-    application: 'On / Off Road', tread: 'lug', price: 395, stock: 58, rating: 4.8, reviewCount: 36,
+    application: 'On / Off Road', tread: 'lug', price: 300, stock: 58, rating: 4.8, reviewCount: 36,
     fuelRating: 'C', noiseDb: 76, retreadable: true, threePeak: true,
     headline: '23mm of drive tread for the worst roads',
     description:
@@ -347,9 +365,9 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'GR678', brand: 'Greforce', size: '265/70R19.5', ply: '18PR', rim: '7.50',
+    pattern: 'GR678', brand: 'Greforce', size: '265/70R19.5', sku: 'GRF-26570R195-GR678', ply: '18PR', rim: '7.50',
     treadDepthMm: 15.0, loadIndex: '143/141', speedRating: 'K', rawPosition: 'Drive',
-    application: 'Regional', tread: 'block', price: 315, stock: 4, rating: 4.5, reviewCount: 14,
+    application: 'Regional', tread: 'block', price: null, stock: 0, rating: 4.5, reviewCount: 14,
     fuelRating: 'B', noiseDb: 72, retreadable: true,
     headline: 'Drive-axle block pattern in 19.5in',
     description:
@@ -358,28 +376,28 @@ const SPECS: Spec[] = [
       'Purpose-built drive tread in 265/70R19.5',
       '15mm block depth for genuine traction',
       'Pairs with the GR612 all-position for a full set',
-      'Low stock — contact us for lead times on volume',
+      'Built to order — contact us for price and lead time',
     ],
   },
   {
-    pattern: 'GRD37', brand: 'Greforce', size: '11R22.5', ply: '16PR', rim: '8.25',
+    pattern: 'GRD37', brand: 'Greforce', size: '11R22.5', sku: 'GRF-11R225-GRD37', ply: '16PR', rim: '8.25',
     treadDepthMm: 20.0, loadIndex: '146/143', speedRating: 'L', rawPosition: 'Drive',
-    application: 'Regional', tread: 'lug', price: 339, stock: 102, rating: 4.4, reviewCount: 26,
+    application: 'Regional', tread: 'lug', price: null, stock: 0, rating: 4.4, reviewCount: 26,
     fuelRating: 'B', noiseDb: 74, retreadable: true,
     headline: 'Lighter 16PR deep-lug drive tyre',
     description:
-      'GRD37 offers 20mm of drive tread on a lighter 16PR casing. Where you do not need the full 3150kg rating, the weight saving across eight drive positions is worth real payload — and the price is lower too.',
+      'GRD37 offers 20mm of drive tread on a lighter 16PR casing. Where you do not need the full 3150kg rating, the weight saving across eight drive positions is worth real payload.',
     highlights: [
       '16PR casing saves weight across eight drive positions',
       '20mm deep lug tread',
       'Rated to 3000kg per tyre',
-      'Lower cost where full 18PR rating is not required',
+      'A lighter option where the full 18PR rating is not required',
     ],
   },
   {
-    pattern: 'HD02', brand: 'Greforce', size: '11R22.5', ply: '18PR', rim: '8.25',
+    pattern: 'HD02', brand: 'Greforce', size: '11R22.5', sku: 'GRF-11R225-HD02', ply: '18PR', rim: '8.25',
     treadDepthMm: 23.5, loadIndex: '148/145', speedRating: 'L', rawPosition: 'Drive',
-    application: 'On / Off Road', tread: 'lug', price: 399, stock: 0, rating: 4.9, reviewCount: 29,
+    application: 'On / Off Road', tread: 'lug', price: 300, stock: 0, rating: 4.9, reviewCount: 29,
     fuelRating: 'C', noiseDb: 76, retreadable: true, threePeak: true,
     headline: 'The deepest drive tread we stock',
     description:
@@ -392,9 +410,9 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'GR622', brand: 'Greforce', size: '11R22.5', ply: '18PR', rim: '8.25',
+    pattern: 'GR622', brand: 'Greforce', size: '11R22.5', sku: 'GRF-11R225-GR622', ply: '18PR', rim: '8.25',
     treadDepthMm: 19.5, loadIndex: '148/145', speedRating: 'M', rawPosition: 'Drive',
-    application: 'Long Haul', tread: 'lug', price: 349, stock: 131, rating: 4.5, reviewCount: 39,
+    application: 'Long Haul', tread: 'lug', price: null, stock: 0, rating: 4.5, reviewCount: 39,
     fuelRating: 'B', noiseDb: 73, retreadable: true,
     headline: 'Balanced-depth highway drive tyre',
     description:
@@ -409,58 +427,58 @@ const SPECS: Spec[] = [
 
   /* ---- Lionshead ---- */
   {
-    pattern: 'LA301E', brand: 'Lionshead', size: '11R22.5', ply: '18PR', rim: '8.25',
-    treadDepthMm: 14.5, loadIndex: '149/146', speedRating: 'L', rawPosition: 'All Position',
-    application: 'Regional', tread: 'rib', price: 305, stock: 88, rating: 4.6, reviewCount: 34,
+    pattern: 'LA301E', brand: 'Lionshead', size: '11R22.5', sku: 'LH-11R225-LA301E', ply: '18PR', rim: '8.25',
+    treadDepthMm: 14.5, loadIndex: '148/145', speedRating: 'M', rawPosition: 'All Position',
+    application: 'Mixed Service', tread: 'rib', price: 220, stock: 88, rating: 4.6, reviewCount: 34,
     fuelRating: 'B', noiseDb: 72, retreadable: true,
-    headline: 'Lionshead all-position with a 149 load index',
+    headline: 'Versatile Lionshead all-position for mixed fleets',
     description:
-      'The LA301E carries a 149 load index — one step above most 11R22.5 competitors at 3250kg per tyre. Combined with an all-position rating and 14.5mm of rib tread, it is the Lionshead answer for operators running at maximum legal axle mass.',
+      'The LA301E is the Lionshead all-rounder: an all-position pattern for mixed-service fleets, with 14.5mm of tread and a sturdy shoulder that resists kerbing and scrub. The 18PR casing is rated 148/145M — 3150kg per tyre at up to 130km/h — so one specification covers every axle on an 11R22.5 truck.',
     highlights: [
-      '149 load index — 3250kg per tyre, above the 11R22.5 norm',
-      'All-position rating for flexible fitment',
-      '14.5mm rib tread with reinforced shoulders',
-      'Built for operators at maximum legal axle mass',
+      'Versatile all-position pattern for mixed-service fleets',
+      'Sturdy shoulder design resists kerbing and scrub',
+      '18PR casing rated to 3150kg per tyre',
+      'M speed rating for 130km/h operation',
     ],
   },
   {
-    pattern: 'LD317E', brand: 'Lionshead', size: '11R22.5', ply: '18PR', rim: '8.25',
-    treadDepthMm: 18.0, loadIndex: '149/146', speedRating: 'M', rawPosition: 'Drive',
-    application: 'Long Haul', tread: 'lug', price: 345, discount: 7, stock: 119, rating: 4.7, reviewCount: 45,
+    pattern: 'LD317E', brand: 'Lionshead', size: '11R22.5', sku: 'LH-11R225-LD317E', ply: '18PR', rim: '8.25',
+    treadDepthMm: 18.0, loadIndex: null, speedRating: 'M', rawPosition: 'Drive',
+    application: 'Long Haul', tread: 'lug', price: null, stock: 0, rating: 4.7, reviewCount: 45,
     fuelRating: 'B', noiseDb: 73, retreadable: true, threePeak: true,
-    headline: 'Lionshead drive tyre, 149 load index',
+    headline: 'Closed-shoulder Lionshead drive lug',
     description:
-      'LD317E is the drive partner to the LA301E, sharing the same uprated 149 load index. An 18mm closed-shoulder lug pattern delivers linehaul traction with the even wear that closed shoulders produce, and the M rating allows 130km/h.',
+      'LD317E is a closed-shoulder Lionshead drive lug in 11R22.5: 18mm of tread laid out for the even wear that closed shoulders produce, with an M rating for 130km/h. It is built to order and quoted per order, and we confirm the load index with your quote.',
     highlights: [
-      'Matched 149 load index with the LA301E all-position',
       'Closed-shoulder lug for even drive wear',
       '18mm tread depth with M speed rating',
-      'Rated to 3250kg per tyre',
+      'Drive partner to the LA301E all-position',
+      'Built to order — quoted per order',
     ],
   },
   {
-    pattern: 'LA302E', brand: 'Lionshead', size: '215/75R17.5', ply: '16PR', rim: '6.00',
-    treadDepthMm: 12.5, loadIndex: '127/124 or 135/133', speedRating: 'M/J', rawPosition: 'Trailer',
-    application: 'Urban Delivery', tread: 'trailer', price: 199, stock: 5, rating: 4.2, reviewCount: 11,
+    pattern: 'LA302E', brand: 'Lionshead', size: '215/75R17.5', sku: 'LH-21575R175-LA302E', ply: '16PR', rim: '6.00',
+    treadDepthMm: 12.5, loadIndex: '127/124 or 135/133', speedRating: 'M/J', rawPosition: 'Steer & Trailer',
+    application: 'Urban Delivery', tread: 'trailer', price: null, stock: 0, rating: 4.2, reviewCount: 11,
     fuelRating: 'B', noiseDb: 70, retreadable: false,
-    headline: 'Entry-price trailer tyre for light builds',
+    headline: 'Light-truck rib for steer and trailer builds',
     description:
-      'The most affordable tyre in our catalogue. LA302E is a closed-shoulder trailer rib for light tandem trailers and plant floats, available in two load ratings depending on batch — check the sidewall against your plate before fitting.',
+      'LA302E is a closed-shoulder rib for light-truck steer and trailer axles — light tandem trailers, plant floats and light rigids. It is available in two load ratings depending on batch, so check the sidewall against your plate before fitting. Built to order and quoted per order.',
     highlights: [
-      'Lowest price point in the Spartan catalogue',
-      'Closed-shoulder trailer rib for long, free-rolling life',
+      'Closed-shoulder rib for long, free-rolling life',
+      'Lighter 16PR casing for tandem trailers and plant floats',
       'Dual load rating — 127/124 or 135/133 by batch',
-      'Only 5 left in stock',
+      'Built to order — quoted per order',
     ],
   },
   {
-    pattern: 'LD328E', brand: 'Lionshead', size: '235/75R17.5', ply: '18PR', rim: '6.75',
+    pattern: 'LD328E', brand: 'Lionshead', size: '235/75R17.5', sku: 'LH-23575R175-LD328E', ply: '18PR', rim: '6.75',
     treadDepthMm: 15.5, loadIndex: '143/141', speedRating: 'L', rawPosition: 'Drive',
-    application: 'Urban Delivery', tread: 'block', price: 245, stock: 67, rating: 4.5, reviewCount: 20,
+    application: 'Urban Delivery', tread: 'block', price: null, stock: 0, rating: 4.5, reviewCount: 20,
     fuelRating: 'B', noiseDb: 71, retreadable: false,
     headline: 'Lionshead 17.5in drive tyre',
     description:
-      'LD328E gives 15.5mm of open block tread in the common 235/75R17.5 light-truck drive size. A direct alternative to the Greforce GR999 at a slightly higher price point, with a marginally more open shoulder for wet grip.',
+      'LD328E gives 15.5mm of open block tread in the common 235/75R17.5 light-truck drive size. A direct alternative to the Greforce GR999, with a marginally more open shoulder for wet grip.',
     highlights: [
       '15.5mm open block tread for wet-surface traction',
       'More open shoulder than the GR999 equivalent',
@@ -469,18 +487,84 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    pattern: 'LS306E', brand: 'Lionshead', size: '235/75R17.5', ply: '18PR', rim: '6.75',
+    pattern: 'LS306E', brand: 'Lionshead', size: '235/75R17.5', sku: 'LH-23575R175-LS306E', ply: '18PR', rim: '6.75',
     treadDepthMm: 12.5, loadIndex: '143/141', speedRating: 'L', rawPosition: 'Steer & Trailer',
-    application: 'Urban Delivery', tread: 'rib', price: 225, discount: 11, stock: 95, rating: 4.4, reviewCount: 23,
+    application: 'Urban Delivery', tread: 'rib', price: null, stock: 0, rating: 4.4, reviewCount: 23,
     fuelRating: 'B', noiseDb: 70, retreadable: false,
     headline: 'Lionshead steer rib for light commercial',
     description:
-      'LS306E completes the Lionshead 17.5in offering as the steer and trailer fitment. Run it with the LD328E on the drive and you have a full Lionshead set for a medium rigid at a lower total cost than most branded alternatives.',
+      'LS306E completes the Lionshead 17.5in offering as the steer and trailer fitment. Run it with the LD328E on the drive and you have a full Lionshead set for a medium rigid.',
     highlights: [
       'Pairs with the LD328E for a complete Lionshead set',
       'Five-rib steer tread for straight tracking',
       'Quiet 70dB running for metro work',
-      'Currently discounted',
+      'Built to order — quoted per order',
+    ],
+  },
+
+  /* ---- Added from the June 2026 range catalogue ----
+   * Last in the sheet, so "newest to the range" sorts them first. Load and
+   * speed for GRT52 and LD316E are the makers' published figures; Lionshead
+   * publishes none for LA313E or LD330E, so those are confirmed per quote.
+   * No EU label or retread data is published for any of the four. */
+  {
+    pattern: 'GRT52', brand: 'Greforce', size: '215/75R17.5', sku: 'GRF-21575R175-GRT52', ply: '18PR', rim: '6.00',
+    treadDepthMm: 12.0, loadIndex: '135/133', speedRating: 'L', rawPosition: 'All Position',
+    application: 'Urban Delivery', tread: 'rib', price: 175, stock: 0, rating: 0, reviewCount: 0,
+    fuelRating: null, noiseDb: null, retreadable: null,
+    headline: 'All-position highway rib for light trucks',
+    description:
+      'GRT52 is a highway rib for light-truck steer and all-position use in 215/75R17.5, the size behind a lot of light rigids and delivery trucks. The groove layout is designed for even wear and low rolling resistance, on an 18PR casing rated to 2180kg per tyre.',
+    highlights: [
+      'Highway rib for light-truck steer and all-position use',
+      'Even wear with low rolling resistance',
+      '18PR casing rated to 2180kg per tyre',
+      'Pairs with the GR999 drive tyre in the same size',
+    ],
+  },
+  {
+    pattern: 'LD316E', brand: 'Lionshead', size: '11R22.5', sku: 'LH-11R225-LD316E', ply: '18PR', rim: '8.25',
+    treadDepthMm: 20.0, loadIndex: '148/145', speedRating: 'M', rawPosition: 'Drive',
+    application: 'Regional', tread: 'lug', price: 220, stock: 0, rating: 0, reviewCount: 0,
+    fuelRating: null, noiseDb: null, retreadable: null,
+    headline: 'Deep-lug Lionshead drive tyre for regional work',
+    description:
+      'LD316E is a deep-lug drive pattern for traction and long mileage, on a robust 18PR casing engineered for regional drive duty. With 20mm of tread and an M speed rating it is a hard-working 11R22.5 drive fitment, and it partners the LA301E all-position in the same size.',
+    highlights: [
+      'Deep-lug drive pattern for traction and long mileage',
+      'Robust casing engineered for regional drive duty',
+      '20mm tread depth with M speed rating',
+      '18PR casing rated to 3150kg per tyre',
+    ],
+  },
+  {
+    pattern: 'LA313E', brand: 'Lionshead', size: '11R22.5', sku: 'LH-11R225-LA313E', ply: '18PR', rim: '8.25',
+    treadDepthMm: null, loadIndex: null, speedRating: null, rawPosition: 'Steer & Trailer',
+    application: 'Regional', tread: 'rib', price: null, stock: 0, rating: 0, reviewCount: 0,
+    fuelRating: null, noiseDb: null, retreadable: null,
+    headline: 'Lionshead highway rib in 11R22.5',
+    description:
+      'LA313E is a straight multi-rib Lionshead pattern for 11R22.5 steer and trailer axles. It is built to order and quoted per order, and because Lionshead\'s published data does not cover the LA313E, we confirm the load index, speed symbol and tread depth with your quote.',
+    highlights: [
+      'Multi-rib highway pattern for steer and trailer axles',
+      'Classic 11R22.5 fitment on an 18PR casing',
+      'Full specification confirmed with your quote',
+      'Built to order — quoted per order',
+    ],
+  },
+  {
+    pattern: 'LD330E', brand: 'Lionshead', size: '11R22.5', sku: 'LH-11R225-LD330E', ply: '18PR', rim: '8.25',
+    treadDepthMm: 23.0, loadIndex: null, speedRating: null, rawPosition: 'Drive',
+    application: 'On / Off Road', tread: 'lug', price: null, stock: 0, rating: 0, reviewCount: 0,
+    fuelRating: null, noiseDb: null, retreadable: null,
+    headline: 'Deep-tread Lionshead drive block',
+    description:
+      'LD330E is the deepest Lionshead drive pattern in 11R22.5: 23mm of open-shoulder block tread for traction on broken and unsealed surfaces, and long removal mileage. It is built to order and quoted per order, and we confirm the load index and speed symbol with your quote.',
+    highlights: [
+      '23mm open-shoulder block tread',
+      'Traction on broken and unsealed surfaces',
+      'Load index and speed symbol confirmed with your quote',
+      'Built to order — quoted per order',
     ],
   },
 ]
@@ -530,30 +614,33 @@ function roundMoney(value: number): number {
   return Math.round(value * 100) / 100
 }
 
-function buildProduct(spec: Spec, index: number): Product {
+function buildProduct(spec: Spec): Product {
   const { sectionWidthMm, rimDiameterIn } = parseSize(spec.size)
-  const li = primaryLoadIndex(spec.loadIndex)
-  const symbol = primarySpeedSymbol(spec.speedRating)
+  const maxLoadKg =
+    spec.loadIndex != null ? (LOAD_INDEX_KG[primaryLoadIndex(spec.loadIndex)] ?? 0) : null
+  const maxSpeedKmh =
+    spec.speedRating != null
+      ? (SPEED_SYMBOL_KMH[primarySpeedSymbol(spec.speedRating)] ?? 0)
+      : null
   const position = POSITION_MAP[spec.rawPosition]
 
+  // A promotion only means something against a published price.
+  const discount = spec.price != null ? spec.discount : undefined
   const discountPrice =
-    spec.discount != null
-      ? roundMoney(spec.price * (1 - spec.discount / 100))
+    spec.price != null && discount != null
+      ? roundMoney(spec.price * (1 - discount / 100))
       : undefined
 
-  const tags = [
-    spec.application,
-    ...position.map((p) => POSITION_LABELS[p]),
-    spec.brand,
-    `${spec.treadDepthMm}mm tread`,
-  ]
+  const tags = [spec.application, ...position.map((p) => POSITION_LABELS[p]), spec.brand]
+  if (spec.treadDepthMm != null) tags.push(`${spec.treadDepthMm}mm tread`)
   if (spec.retreadable) tags.push('Retreadable')
   if (spec.threePeak) tags.push('Severe service')
   if (spec.fuelRating === 'A') tags.push('Fuel saver')
+  if (spec.price == null) tags.push('Price on application', 'POA', 'Built to order')
 
   return {
     id: `${slugify(spec.brand)}-${slugify(spec.pattern)}-${slugify(spec.size)}`,
-    sku: `SPT-${spec.brand.slice(0, 2).toUpperCase()}${String(index + 1).padStart(3, '0')}`,
+    sku: spec.sku,
     brand: spec.brand,
     model: spec.pattern,
     size: spec.size,
@@ -567,13 +654,14 @@ function buildProduct(spec: Spec, index: number): Product {
     treadDepthMm: spec.treadDepthMm,
     loadIndex: spec.loadIndex,
     speedRating: spec.speedRating,
-    maxLoadKg: LOAD_INDEX_KG[li] ?? 0,
-    maxSpeedKmh: SPEED_SYMBOL_KMH[symbol] ?? 0,
+    // 0 only if an index is missing from the tables above — `npm run check` fails on it.
+    maxLoadKg,
+    maxSpeedKmh,
     rimDiameterIn,
     sectionWidthMm,
 
     price: spec.price,
-    discount: spec.discount,
+    discount,
     discountPrice,
     stock: spec.stock,
     rating: spec.rating,
@@ -594,6 +682,44 @@ function buildProduct(spec: Spec, index: number): Product {
 export const products: Product[] = SPECS.map(buildProduct)
 
 /* ------------------------------------------------------------------ *
+ * Pricing
+ *
+ * A line either has a published price and goes through the cart, or it is
+ * price on application and goes to a quote. Everything that does money
+ * arithmetic narrows to `PricedProduct` first, so a POA line can never be
+ * summed, sorted or charged as if it cost $0.
+ * ------------------------------------------------------------------ */
+
+export type PricedProduct = Product & { price: number }
+
+/** True when the line has a published price and can be bought online. */
+export function hasPrice(product: Product): product is PricedProduct {
+  return product.price != null
+}
+
+/** What a customer pays per tyre before volume breaks, or `null` for POA. */
+export function effectivePrice(product: PricedProduct): number
+export function effectivePrice(product: Product): number | null
+export function effectivePrice(product: Product): number | null {
+  if (product.price == null) return null
+  return product.discountPrice ?? product.price
+}
+
+/** The cheapest published price in a list, or `null` if every line is POA. */
+export function lowestPrice(list: Product[]): number | null {
+  const prices = list.filter(hasPrice).map((product) => effectivePrice(product))
+  return prices.length ? Math.min(...prices) : null
+}
+
+/** By price either way, with price-on-application lines after every priced one. */
+export function comparePrice(a: Product, b: Product, direction: 'asc' | 'desc' = 'asc'): number {
+  const pa = effectivePrice(a)
+  const pb = effectivePrice(b)
+  if (pa == null || pb == null) return pa == null ? (pb == null ? 0 : 1) : -1
+  return direction === 'asc' ? pa - pb : pb - pa
+}
+
+/* ------------------------------------------------------------------ *
  * Derived collections & lookups
  * ------------------------------------------------------------------ */
 
@@ -601,17 +727,21 @@ export const productById = new Map(products.map((p) => [p.id, p]))
 
 export const getProduct = (id: string): Product | undefined => productById.get(id)
 
-export const effectivePrice = (p: Product): number => p.discountPrice ?? p.price
+/** Lines with a published price — the ones the cart can sell. */
+export const pricedProducts: PricedProduct[] = products.filter(hasPrice)
 
-export const dealProducts = products
+/** Price on application: built to order and quoted per order. */
+export const poaProducts: Product[] = products.filter((p) => !hasPrice(p))
+
+export const dealProducts: PricedProduct[] = pricedProducts
   .filter((p) => p.discount != null)
   .sort((a, b) => (b.discount ?? 0) - (a.discount ?? 0))
 
 export const featuredProducts = [
   'greforce-g-pilot-x1-295-80r22-5',
-  'greforce-grd57-11r22-5',
+  'greforce-g-pilot-x3-295-80r22-5',
   'greforce-gr666-385-65r22-5',
-  'lionshead-ld317e-11r22-5',
+  'lionshead-la301e-11r22-5',
 ]
   .map((id) => productById.get(id))
   .filter((p): p is Product => Boolean(p))
@@ -631,12 +761,17 @@ export const allBrands: BrandName[] = ['Greforce', 'Lionshead']
 
 export const allApplications = [...new Set(products.map((p) => p.application))] as Application[]
 
+/** Range of published prices. POA lines have no price, so they sit outside it. */
 export const priceRange = {
-  min: Math.min(...products.map(effectivePrice)),
-  max: Math.max(...products.map(effectivePrice)),
+  min: Math.min(...pricedProducts.map((p) => effectivePrice(p))),
+  max: Math.max(...pricedProducts.map((p) => effectivePrice(p))),
 }
 
-export const inStockCount = products.filter((p) => p.stock > 0).length
+/** Priced lines with stock on the floor at Yennora. */
+export const inStockCount = pricedProducts.filter((p) => p.stock > 0).length
+
+/** Priced lines at zero stock, still sold as pre-orders. */
+export const preOrderCount = pricedProducts.filter((p) => p.stock <= 0).length
 
 /** Volume price breaks — applied automatically in the cart. */
 export const PRICE_BREAKS = [
@@ -666,6 +801,6 @@ export function relatedProducts(product: Product, limit = 4): Product[] {
   }
   return products
     .filter((p) => p.id !== product.id)
-    .sort((a, b) => score(b) - score(a) || effectivePrice(a) - effectivePrice(b))
+    .sort((a, b) => score(b) - score(a) || comparePrice(a, b))
     .slice(0, limit)
 }

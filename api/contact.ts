@@ -28,10 +28,30 @@ const ENQUIRY_TYPES = [
   'fleet',
   'wholesale',
   'fitting',
+  'product',
+  'stock',
+  'sourcing',
   'delivery',
   'warranty',
   'other',
 ]
+
+/**
+ * The forms send human labels ("Fleet quote", "Wholesale account"…), not the
+ * slugs above. Without this map every one of them fell through to "other",
+ * which left the admin inbox's type filter with nothing to filter on.
+ */
+const TYPE_BY_LABEL: Record<string, string> = {
+  'general enquiry': 'general',
+  'product or fitment question': 'product',
+  'stock and availability': 'stock',
+  'fleet quote': 'fleet',
+  'wholesale account': 'wholesale',
+  'order or delivery': 'delivery',
+  'warranty or return': 'warranty',
+  'sourcing a size you do not stock': 'sourcing',
+  'quote request': 'quote',
+}
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['POST'])) return
@@ -62,10 +82,9 @@ export default withGuard(async (req, res) => {
 
   // Unknown types are normalised rather than rejected — a new form option
   // should never start failing against an older deployment.
-  const normalisedType = (enquiryTypeRaw ?? 'general').toLowerCase()
-  const enquiryType = ENQUIRY_TYPES.includes(normalisedType)
-    ? normalisedType
-    : 'other'
+  const normalisedType = (enquiryTypeRaw ?? 'general').trim().toLowerCase()
+  const slug = TYPE_BY_LABEL[normalisedType] ?? normalisedType
+  const enquiryType = ENQUIRY_TYPES.includes(slug) ? slug : 'other'
 
   // Phone and company are optional; an invalid phone is dropped, not fatal.
   const phone = asPhone(body.phone) ?? undefined

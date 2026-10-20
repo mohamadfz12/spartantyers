@@ -11,7 +11,7 @@ import * as THREE from 'three'
 import type { Product, TreadFamily } from '@/data/types'
 import { lerp } from '@/lib/utils'
 import { TruckWheel } from './TruckWheel'
-import { proportionsForProduct, TREAD_SPECS } from './wheelGeometry'
+import { drawnTreadDepth, proportionsForProduct, TREAD_SPECS } from './wheelGeometry'
 import { disposeWheelTextures, studioEnvironment } from './wheelTextures'
 
 /**
@@ -215,7 +215,7 @@ function HeroWheelRig({ product, reducedMotion, density = 1 }: HeroSceneProps) {
             <TruckWheel
               size={product.size}
               tread={product.tread}
-              treadDepthMm={product.treadDepthMm}
+              treadDepthMm={drawnTreadDepth(product)}
               sidewall={sidewall}
               density={density}
             />
@@ -286,7 +286,7 @@ function ProductWheelRig({
           <TruckWheel
             size={product.size}
             tread={product.tread}
-            treadDepthMm={product.treadDepthMm}
+            treadDepthMm={drawnTreadDepth(product)}
             sidewall={sidewall}
           />
         </group>
@@ -337,8 +337,8 @@ export interface ConfiguratorSceneProps {
     brand: string
     model: string
     size: string
-    loadIndex: string
-    speedRating: string
+    loadIndex: string | null
+    speedRating: string | null
     ply: string
   }
   rimStyle: 'alloy' | 'steel'

@@ -14,6 +14,7 @@ import { Seo } from '@/components/Seo'
 import { Badge, Button } from '@/components/ui'
 import { StaticWheel } from '@/components/three'
 import { Reveal } from '@/components/motion'
+import { ProductThumb } from '@/components/shop/ProductThumb'
 import { FulfilmentPicker } from '@/components/checkout/FulfilmentPicker'
 import { OrderSummary } from '@/components/checkout/OrderSummary'
 import { PriceBreakLadder } from '@/components/checkout/PriceBreakLadder'
@@ -165,8 +166,10 @@ function CartLines() {
       <ul className="divide-y divide-border">
         {lines.map((line) => {
           const product = productById.get(line.id)
-          const rrp = product && product.discountPrice ? product.price : null
-          const unit = product ? effectivePrice(product) : line.price
+          const rrp = product && product.discountPrice != null ? product.price : null
+          // The cart only ever holds priced lines (see the store's merge), so
+          // the saved price is a safe fallback for a line that has just left.
+          const unit = (product && effectivePrice(product)) ?? line.price
           const lowStock =
             product && product.stock > 0 && line.quantity > product.stock
               ? product.stock
@@ -185,7 +188,7 @@ function CartLines() {
                     'focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   )}
                 >
-                  <StaticWheel tread={line.tread} />
+                  <ProductThumb brand={line.brand} model={line.model} tread={line.tread} />
                 </Link>
 
                 <div className="min-w-0 flex-1">

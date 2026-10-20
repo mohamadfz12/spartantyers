@@ -13,7 +13,7 @@ import {
   POSITION_LABELS,
   allRimDiameters,
   allSizes,
-  effectivePrice,
+  lowestPrice,
   products,
 } from '@/data/products'
 import { site } from '@/config/site'
@@ -85,6 +85,7 @@ export default function Finder() {
     () => inSize.filter((product) => product.position.includes(axle)),
     [inSize, axle],
   )
+  const fromPrice = useMemo(() => lowestPrice(inSize), [inSize])
 
   const chooseSize = (next: string) => {
     setSize(next)
@@ -131,7 +132,7 @@ export default function Finder() {
           <p className="lede mt-4 max-w-2xl">
             The size is moulded on the sidewall — something like 295/80R22.5 or
             11R22.5. Type it however it comes out and we will find it, or build it
-            up below if the sidewall is past reading. We hold{' '}
+            up below if the sidewall is past reading. We carry{' '}
             {allSizes.length} sizes across {products.length} lines.
           </p>
         </div>
@@ -162,8 +163,10 @@ export default function Finder() {
                 </p>
                 <p className="font-mono text-2xl font-bold leading-tight">{size}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {inSize.length} {pluralise(inSize.length, 'line')} in this size,
-                  from {money(Math.min(...inSize.map(effectivePrice)))} per tyre
+                  {inSize.length} {pluralise(inSize.length, 'line')} in this size,{' '}
+                  {fromPrice != null
+                    ? `from ${money(fromPrice)} per tyre`
+                    : 'price on application'}
                 </p>
               </div>
               <Button variant="outline" onClick={reset}>
@@ -446,7 +449,7 @@ export default function Finder() {
                   {POSITION_LABELS[axle].toLowerCase()} axle
                 </h3>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  We hold {inSize.length} {pluralise(inSize.length, 'line')} in this
+                  We carry {inSize.length} {pluralise(inSize.length, 'line')} in this
                   size, but none of them carries a{' '}
                   {POSITION_LABELS[axle].toLowerCase()} rating. Fitting a tyre to an
                   axle it is not rated for is not something we will recommend — try

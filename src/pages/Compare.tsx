@@ -1,16 +1,17 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Plus, Scale, ShoppingCart, X } from 'lucide-react'
+import { ArrowRight, MessageSquareQuote, Plus, Scale, ShoppingCart, X } from 'lucide-react'
 import type { Product } from '@/data/types'
-import { effectivePrice, productById } from '@/data/products'
+import { effectivePrice, hasPrice, productById } from '@/data/products'
 import { site } from '@/config/site'
-import { cn, formatNumber, money } from '@/lib/utils'
+import { cn, formatNumber, money, priceLabel, specValue } from '@/lib/utils'
 import { useCart } from '@/store/cart'
-import { MAX_COMPARE, toast, useCompare } from '@/store/ui'
+import { MAX_COMPARE, requestQuote, toast, useCompare } from '@/store/ui'
 import { Badge, Button, Rating } from '@/components/ui'
-import { StaticWheel, wheelProportions } from '@/components/three'
+import { proportionsForProduct } from '@/components/three'
 import { Seo, breadcrumbJsonLd } from '@/components/Seo'
 import { fuelRank } from '@/components/shop/Filters'
+import { ProductThumb } from '@/components/shop/ProductThumb'
 
 /* ------------------------------------------------------------------ *
  * The comparison rows
@@ -18,13 +19,14 @@ import { fuelRank } from '@/components/shop/Filters'
  * `better` is the whole point of this page. Where a row has a defensible
  * winner — deepest tread, highest load, best rolling resistance, lowest
  * price, highest rating, quietest — it gets flagged. Where "best" would be
- * a matter of what the truck does, it is left alone.
+ * a matter of what the truck does, it is left alone. A tyre with no figure
+ * for a row (POA, or a spec the maker does not publish) sits that row out.
  * ------------------------------------------------------------------ */
 
 interface Row {
   label: string
   render: (product: Product) => React.ReactNode
-  metric?: (product: Product) => number
+  metric?: (product: Product) => number | null
   better?: 'high' | 'low'
   note?: string
 }
@@ -34,7 +36,7 @@ const ROWS: Row[] = [
     label: 'Price per tyre',
     render: (product) => (
       <span className="font-heading text-lg font-black">
-        {money(effectivePrice(product))}
+        {priceLabel(effectivePrice(product))}
       </span>
     ),
     metric: (product) => effectivePrice(product),
@@ -43,50 +45,54 @@ const ROWS: Row[] = [
   },
   {
     label: 'Tread depth',
-    render: (product) => `${product.treadDepthMm}mm`,
+    render: (product) => specValue(product.treadDepthMm, (mm) => `${mm}mm`),
     metric: (product) => product.treadDepthMm,
     better: 'high',
     note: 'More rubber to wear through',
   },
   {
     label: 'Load per tyre',
-    render: (product) => `${formatNumber(product.maxLoadKg)}kg`,
+    render: (product) => specValue(product.maxLoadKg, (kg) => `${formatNumber(kg)}kg`),
     metric: (product) => product.maxLoadKg,
     better: 'high',
     note: 'Single fitment, from the load index',
   },
   {
     label: 'Fuel rating',
-    render: (product) => product.fuelRating,
+    render: (product) => product.fuelRating ?? 'Not published',
     metric: (product) => fuelRank(product.fuelRating),
     better: 'low',
     note: 'Rolling resistance, A best',
   },
   {
     label: 'Customer rating',
-    render: (product) => (
-      <Rating value={product.rating} count={product.reviewCount} size="sm" />
-    ),
-    metric: (product) => product.rating,
+    render: (product) =>
+      product.reviewCount > 0 ? (
+        <Rating value={product.rating} count={product.reviewCount} size="sm" />
+      ) : (
+        'No ratings yet'
+      ),
+    metric: (product) => (product.reviewCount > 0 ? product.rating : null),
     better: 'high',
   },
   {
     label: 'Top speed',
-    render: (product) => `${product.maxSpeedKmh}km/h`,
+    render: (product) => specValue(product.maxSpeedKmh, (kmh) => `${kmh}km/h`),
     metric: (product) => product.maxSpeedKmh,
     better: 'high',
     note: 'From the speed symbol',
   },
   {
     label: 'Pass-by noise',
-    render: (product) => `${product.noiseDb}dB`,
+    render: (product) => specValue(product.noiseDb, (db) => `${db}dB`, 'Not published'),
     metric: (product) => product.noiseDb,
     better: 'low',
   },
   {
     label: 'Retreadable',
-    render: (product) => (product.retreadable ? 'Yes' : 'No'),
-    metric: (product) => (product.retreadable ? 1 : 0),
+    render: (product) =>
+      product.retreadable == null ? 'Not published' : product.retreadable ? 'Yes' : 'No',
+    metric: (product) => (product.retreadable == null ? null : product.retreadable ? 1 : 0),
     better: 'high',
     note: 'Two to three further lives',
   },
@@ -99,14 +105,16 @@ const ROWS: Row[] = [
   { label: 'Application', render: (product) => product.application },
   { label: 'Ply rating', render: (product) => product.ply },
   { label: 'Measuring rim', render: (product) => `${product.rim}in` },
-  { label: 'Load index', render: (product) => product.loadIndex },
-  { label: 'Speed symbol', render: (product) => product.speedRating },
+  { label: 'Load index', render: (product) => specValue(product.loadIndex, (index) => index) },
+  {
+    label: 'Speed symbol',
+    render: (product) => specValue(product.speedRating, (symbol) => symbol),
+  },
   { label: 'Section width', render: (product) => `${product.sectionWidthMm}mm` },
   { label: 'Rim diameter', render: (product) => `${product.rimDiameterIn}in` },
   {
     label: 'Overall diameter',
-    render: (product) =>
-      `${formatNumber(wheelProportions(product.size, product.treadDepthMm).overallDiameterMm)}mm`,
+    render: (product) => `${formatNumber(proportionsForProduct(product).overallDiameterMm)}mm`,
     note: 'Check this against your clearance',
   },
   {
@@ -116,9 +124,11 @@ const ROWS: Row[] = [
   {
     label: 'Availability',
     render: (product) =>
-      product.stock > 0
-        ? `${formatNumber(product.stock)} in stock`
-        : 'Pre-order',
+      !hasPrice(product)
+        ? 'Built to order'
+        : product.stock > 0
+          ? `${formatNumber(product.stock)} in stock`
+          : 'Pre-order',
   },
   { label: 'Tread pattern', render: (product) => product.tread },
   { label: 'SKU', render: (product) => product.sku },
@@ -148,7 +158,11 @@ export default function Compare() {
 
     for (const row of ROWS) {
       if (!row.metric || !row.better) continue
-      const values = selected.map(row.metric)
+      const values = selected
+        .map(row.metric)
+        .filter((value): value is number => value != null)
+      // A "best" needs at least two tyres that actually have the figure.
+      if (values.length < 2) continue
       const best =
         row.better === 'high' ? Math.max(...values) : Math.min(...values)
       // Nothing to flag if they are all the same.
@@ -169,6 +183,10 @@ export default function Compare() {
   )
 
   const handleAdd = (product: Product) => {
+    if (!hasPrice(product)) {
+      requestQuote(product)
+      return
+    }
     add(product)
     toast({
       title: product.stock > 0 ? 'Added to cart' : 'Added as pre-order',
@@ -248,9 +266,11 @@ export default function Compare() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="h-16 w-16 shrink-0">
-                          <StaticWheel
+                          <ProductThumb
+                            brand={product.brand}
+                            model={product.model}
                             tread={product.tread}
-                            title={`${product.brand} ${product.model} ${product.size}`}
+                            alt={`${product.brand} ${product.model} ${product.size}`}
                           />
                         </div>
                         <button
@@ -280,24 +300,36 @@ export default function Compare() {
 
                       <p className="mt-2 flex items-baseline gap-2">
                         <span className="font-heading text-xl font-black">
-                          {money(effectivePrice(product))}
+                          {priceLabel(effectivePrice(product))}
                         </span>
-                        {product.discountPrice ? (
+                        {product.discountPrice != null && product.price != null ? (
                           <span className="text-xs text-muted-foreground line-through">
                             {money(product.price)}
                           </span>
                         ) : null}
                       </p>
 
-                      <Button
-                        size="sm"
-                        onClick={() => handleAdd(product)}
-                        variant={product.stock > 0 ? 'primary' : 'outline'}
-                        className="mt-3 w-full"
-                      >
-                        <ShoppingCart aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-                        {product.stock > 0 ? 'Add to cart' : 'Pre-order'}
-                      </Button>
+                      {hasPrice(product) ? (
+                        <Button
+                          size="sm"
+                          onClick={() => handleAdd(product)}
+                          variant={product.stock > 0 ? 'primary' : 'outline'}
+                          className="mt-3 w-full"
+                        >
+                          <ShoppingCart aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                          {product.stock > 0 ? 'Add to cart' : 'Pre-order'}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => handleAdd(product)}
+                          variant="outline"
+                          className="mt-3 w-full"
+                        >
+                          <MessageSquareQuote aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                          Request a quote
+                        </Button>
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -435,9 +467,11 @@ function EmptyState({
         {only ? (
           <div className="mt-6 flex max-w-sm items-center gap-4 rounded-lg border border-border bg-background p-4">
             <div className="h-14 w-14 shrink-0">
-              <StaticWheel
+              <ProductThumb
+                brand={only.brand}
+                model={only.model}
                 tread={only.tread}
-                title={`${only.brand} ${only.model} ${only.size}`}
+                alt={`${only.brand} ${only.model} ${only.size}`}
               />
             </div>
             <div className="min-w-0 flex-1">
@@ -446,7 +480,7 @@ function EmptyState({
               </p>
               <p className="truncate font-heading text-sm font-bold">{only.model}</p>
               <p className="font-mono text-xs text-muted-foreground">
-                {only.size} · {money(effectivePrice(only))}
+                {only.size} · {priceLabel(effectivePrice(only))}
               </p>
             </div>
             <button

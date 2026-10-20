@@ -45,8 +45,9 @@ function makeCanvas(size: number): {
 export interface SidewallSpec {
   brand: string
   size: string
-  loadIndex: string
-  speedRating: string
+  /** `null` when unpublished — the marking is then left off, not invented. */
+  loadIndex: string | null
+  speedRating: string | null
   ply: string
   model: string
 }
@@ -136,7 +137,7 @@ function renderSidewallBand(
     ctx.font = `600 ${Math.round(height * 0.1)}px Montserrat, Arial, sans-serif`
     ctx.fillStyle = '#7c828a'
     ctx.fillText(
-      `${spec.loadIndex}${spec.speedRating}   ${spec.ply}`,
+      [`${spec.loadIndex ?? ''}${spec.speedRating ?? ''}`, spec.ply].filter(Boolean).join('   '),
       cx,
       height * 0.7,
     )

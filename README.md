@@ -71,7 +71,7 @@ Full annotated list in [`.env.example`](./.env.example). Summary:
 | `KV_REST_API_URL` `KV_REST_API_TOKEN` | **strongly recommended** | In-memory store, wiped every cold start |
 | `ANTHROPIC_API_KEY` | no | Chat falls back to a keyword responder built from the same real data |
 | `PROMO_CODES` | no | Built-in code table |
-| `LOW_STOCK_THRESHOLD` | no (`5`) | — |
+| `LOW_STOCK_THRESHOLD` | no (`24`) | — |
 | `PUBLIC_SITE_URL` | no | Falls back to the Vercel deployment URL |
 
 ---
@@ -110,7 +110,28 @@ else hard-codes them.
 **The API never trusts client prices.** `api/_lib/pricing.ts` recomputes the
 authoritative order total from product ids + quantities, mirroring the volume
 price-break and promo maths in `src/store/cart.ts`. The checkout sends
-`lines: [{id, quantity}]` and displays the server's returned total.
+`lines: [{id, quantity}]` and displays the server's returned total. It also
+sends `expectedTotal` — the figure on the Pay button — purely as a check: if
+the server's total differs (a price changed under an open cart, an admin
+override, a minimum-quantity promo dropped), nothing is charged and the
+customer is told why.
+
+**The catalogue follows Spartan's own price list.** `src/data/products.ts`
+mirrors the June 2026 Range Catalogue (RETAIL) and the Lionshead Barcode
+Catalogue: every SKU is the barcode value, `price` is the published RRP, and a
+`null` price is POA (price on application / build to order). POA lines are
+listed and fully specced but never reach the cart — they open a quote form
+that lands in the admin inbox tagged `quote`, and the API refuses them at
+checkout. The TRADE catalogue is confidential and is deliberately not in the
+bundle. Manufacturer figures that are not published for a line (load index,
+speed symbol, EU label…) are `null` and display as "to be confirmed" rather
+than an invented number; `npm run check` guards all of this. Product photos are
+the catalogue's own shots, cropped and squared in `public/img/products/`, keyed
+by pattern in `src/data/media.ts`.
+
+**A saved cart is re-priced on load.** The cart persists to localStorage, so
+`src/store/cart.ts` re-reads every line's price and SKU from the catalogue on
+hydration and drops lines that left the range or became POA.
 
 **Square charges are idempotent.** One `idempotencyKey` per checkout attempt,
 reused across retries, so a double-click or a retry after a network blip cannot
@@ -178,8 +199,10 @@ back to the SVG wheel. three.js is never on the critical path.
 
 Per-page `<Seo>` writes title, description, canonical, Open Graph, Twitter and
 JSON-LD. `index.html` ships hand-written defaults and `AutoPartsStore`
-structured data for the home page, and `scripts/generate-sitemap.mjs` emits all
-53 URLs from the real data at build time.
+structured data for the home page, and `scripts/generate-sitemap.mjs` emits
+every URL from the real data at build time (57 with the current catalogue).
+Product JSON-LD carries an `Offer` only for lines with a published price — an
+offer without a price is invalid, so POA lines simply have none.
 
 This is a client-rendered SPA, so meta tags are written after hydration.
 Googlebot renders JavaScript and sees them; some other crawlers will not.

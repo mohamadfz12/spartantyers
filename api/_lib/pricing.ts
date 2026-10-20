@@ -8,6 +8,7 @@
  * are never read, only compared.
  *
  * The maths mirrors `cartTotals()` exactly, in this order:
+ *   0. a price-on-application line is rejected outright — it has no price
  *   1. subtotal  = sum(effectivePrice(product) * quantity)
  *   2. volume    = round2(subtotal * PRICE_BREAKS rate for total tyre count)
  *   3. promo     = round2((subtotal - volume) * promo.percentOff)
@@ -139,6 +140,16 @@ export function priceOrder(
       continue
     }
 
+    // Price-on-application lines are quoted, not sold through the cart — and
+    // never at an implied $0.
+    const unitPrice = effectivePrice(product)
+    if (unitPrice == null) {
+      errors.push(
+        `${product.brand} ${product.model} ${product.size} is price on application. Call ${site.phone.display} or request a quote from the product page.`,
+      )
+      continue
+    }
+
     // Stock 0 is a pre-order (we restock continuously), but a partially
     // stocked line cannot be over-sold.
     const preOrder = product.stock <= 0
@@ -153,8 +164,6 @@ export function priceOrder(
         `${product.brand} ${product.model} ${product.size} is on back-order — dispatch may take longer than ${site.commerce.dispatchWindow}.`,
       )
     }
-
-    const unitPrice = effectivePrice(product)
 
     lines.push({
       id: product.id,

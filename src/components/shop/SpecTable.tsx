@@ -1,7 +1,10 @@
 import type { Product } from '@/data/types'
 import { POSITION_LABELS } from '@/data/products'
-import { cn, formatNumber } from '@/lib/utils'
-import { wheelProportions } from '@/components/three'
+import { cn, formatNumber, specValue } from '@/lib/utils'
+import { proportionsForProduct } from '@/components/three'
+
+/** The note under any figure the maker has not published for this line. */
+const UNPUBLISHED = 'Not in the published data for this line — we confirm it with your order'
 
 export interface SpecRow {
   label: string
@@ -16,10 +19,12 @@ export interface SpecRow {
  *
  * Every figure is read or derived from the catalogue — load in kilograms from
  * the ISO load index, top speed from the speed symbol, overall diameter from
- * the same geometry the 3D wheel is built from.
+ * the same geometry the 3D wheel is built from. A figure the maker does not
+ * publish for this line says so instead of showing a number.
  */
 export function productSpecRows(product: Product): SpecRow[] {
-  const geometry = wheelProportions(product.size, product.treadDepthMm)
+  // Overall diameter depends on the size code alone, never the tread depth.
+  const geometry = proportionsForProduct(product)
 
   return [
     { label: 'Size', value: product.size },
@@ -33,18 +38,24 @@ export function productSpecRows(product: Product): SpecRow[] {
     { label: 'Measuring rim', value: `${product.rim}in` },
     {
       label: 'Tread depth',
-      value: `${product.treadDepthMm}mm`,
-      note: 'When new — sets removal mileage',
+      value: specValue(product.treadDepthMm, (mm) => `${mm}mm`),
+      note: product.treadDepthMm != null ? 'When new — sets removal mileage' : UNPUBLISHED,
     },
     {
       label: 'Load index',
-      value: product.loadIndex,
-      note: `${formatNumber(product.maxLoadKg)}kg maximum per tyre, single fitment`,
+      value: specValue(product.loadIndex, (index) => index),
+      note:
+        product.maxLoadKg != null
+          ? `${formatNumber(product.maxLoadKg)}kg maximum per tyre, single fitment`
+          : UNPUBLISHED,
     },
     {
       label: 'Speed symbol',
-      value: product.speedRating,
-      note: `${product.maxSpeedKmh}km/h sustained maximum`,
+      value: specValue(product.speedRating, (symbol) => symbol),
+      note:
+        product.maxSpeedKmh != null
+          ? `${product.maxSpeedKmh}km/h sustained maximum`
+          : UNPUBLISHED,
     },
     { label: 'Section width', value: `${product.sectionWidthMm}mm` },
     { label: 'Rim diameter', value: `${product.rimDiameterIn}in` },
@@ -55,13 +66,20 @@ export function productSpecRows(product: Product): SpecRow[] {
     },
     {
       label: 'Fuel rating',
-      value: product.fuelRating,
-      note: 'Rolling resistance, A best to D worst',
+      value: specValue(product.fuelRating, (rating) => rating, 'Not published'),
+      note:
+        product.fuelRating != null
+          ? 'Rolling resistance, A best to D worst'
+          : 'No EU tyre label published for this line',
     },
-    { label: 'Pass-by noise', value: `${product.noiseDb}dB` },
+    {
+      label: 'Pass-by noise',
+      value: specValue(product.noiseDb, (db) => `${db}dB`, 'Not published'),
+    },
     {
       label: 'Retreadable',
-      value: product.retreadable ? 'Yes' : 'No',
+      value:
+        product.retreadable == null ? 'Not published' : product.retreadable ? 'Yes' : 'No',
       note: product.retreadable ? 'Casing designed for two to three cycles' : undefined,
     },
     {

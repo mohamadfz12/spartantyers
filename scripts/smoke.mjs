@@ -49,6 +49,7 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
   '.json': 'application/json',
   '.webmanifest': 'application/manifest+json',
   '.txt': 'text/plain; charset=utf-8',
@@ -142,6 +143,16 @@ async function visit(path, label, interact) {
       errors.push('error boundary tripped')
     }
 
+    // Unpublished specs are null in the data; one slipping into a template
+    // string would print "nullmm" or "NaN" rather than fail loudly.
+    const leaked = await page.evaluate(() => {
+      const match = document.body.innerText.match(
+        /\b(?:undefined|NaN)\b|\bnull(?:mm|kg|dB|km\/h|PR)?\b/,
+      )
+      return match ? match[0] : null
+    })
+    if (leaked) errors.push(`page text contains "${leaked}"`)
+
     if (interact) await interact(page, errors)
 
     await page.screenshot({
@@ -176,8 +187,11 @@ const ROUTES = [
   ['/shop', 'shop'],
   ['/shop?position=drive&brand=Greforce', 'shop-filtered'],
   ['/shop?q=11R22.5', 'shop-search'],
-  ['/product/greforce-grd57-11r22-5', 'product'],
-  ['/product/lionshead-la302e-215-75r17-5', 'product-lowstock'],
+  ['/product/greforce-g-pilot-x1-295-80r22-5', 'product'],
+  ['/product/greforce-grd57-11r22-5', 'product-poa'],
+  ['/product/lionshead-la313e-11r22-5', 'product-unpublished-specs'],
+  ['/product/lionshead-ld330e-11r22-5', 'product-partial-photo'],
+  ['/product/lionshead-ld316e-11r22-5', 'product-new'],
   ['/product/greforce-hd02-11r22-5', 'product-preorder'],
   ['/product/does-not-exist', 'product-404'],
   ['/deals', 'deals'],
@@ -328,6 +342,54 @@ await visit('/shop', 'cart-flow', async (page, errors) => {
   const checkout = page.getByRole('link', { name: /secure checkout/i })
   if ((await checkout.count()) === 0) {
     errors.push('cart drawer did not show a checkout link after adding an item')
+  }
+})
+
+// A price-on-application line never reaches the cart; it opens a quote form
+// that names the exact SKU.
+await visit('/product/greforce-grd57-11r22-5', 'poa-quote', async (page, errors) => {
+  // The buy box is the h1's column; related cards further down are other lines.
+  const buyBox = page.locator('h1').first().locator('xpath=..')
+  if ((await buyBox.getByRole('button', { name: /add to cart|pre-order/i }).count()) > 0) {
+    errors.push('a POA product page offers add to cart')
+  }
+  await buyBox.getByRole('button', { name: /request a quote/i }).first().click()
+  const dialog = page.getByRole('dialog')
+  try {
+    await dialog.waitFor({ state: 'visible', timeout: 5000 })
+    if (!(await dialog.getByText('GRF-11R225-GRD57').count())) {
+      errors.push('quote dialog does not name the SKU')
+    }
+    if (!(await dialog.getByRole('button', { name: /request a quote/i }).count())) {
+      errors.push('quote dialog has no submit button')
+    }
+  } catch {
+    errors.push('Request a quote did not open the quote dialog')
+  }
+})
+
+// Catalogue photographs actually load on the cards, and a POA card offers a
+// quote rather than the cart.
+await visit('/shop', 'shop-photos', async (page, errors) => {
+  const photos = page.locator('article img[src*="/img/products/"]')
+  const count = await photos.count()
+  if (count === 0) errors.push('no catalogue photographs on the shop cards')
+  for (let i = 0; i < Math.min(count, 6); i++) {
+    const img = photos.nth(i)
+    await img.scrollIntoViewIfNeeded()
+    const ok = await img.evaluate(
+      (el) =>
+        el.complete
+          ? el.naturalWidth > 0
+          : new Promise((resolve) => {
+              el.addEventListener('load', () => resolve(el.naturalWidth > 0), { once: true })
+              el.addEventListener('error', () => resolve(false), { once: true })
+            }),
+    )
+    if (!ok) errors.push(`photo did not load: ${await img.getAttribute('src')}`)
+  }
+  if ((await page.getByRole('button', { name: /request a quote/i }).count()) === 0) {
+    errors.push('no POA card offers Request a quote')
   }
 })
 

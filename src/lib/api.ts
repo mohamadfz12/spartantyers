@@ -124,6 +124,8 @@ export const api = {
     }
     lines: Array<{ id: string; quantity: number }>
     notes?: string
+    /** The total the customer was shown. Compared, never used to price. */
+    expectedTotal?: number
   }) =>
     request<{
       ok: true

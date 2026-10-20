@@ -138,6 +138,7 @@ export default function Terms() {
                 <PolicyList
                   items={[
                     'Out-of-stock lines can be pre-ordered, which allocates you stock from the next shipment rather than placing you on a waiting list. Normal dispatch and handling times apply once the shipment lands.',
+                    'Lines marked POA (price on application) are built to order and are not sold through the online checkout. We confirm price, specification and lead time with you in writing before taking any payment.',
                     'Lead times quoted on pre-orders and sourced items are estimates based on supplier advice and are not guaranteed.',
                     'Where we source a specialty or hard-to-find fitment, we come back to you with availability, lead time and price before you commit to anything.',
                     'Specifications can vary between production batches on some lines — load index and speed symbol in particular. Always check the sidewall of what arrives against your vehicle compliance plate before fitting.',

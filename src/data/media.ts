@@ -5,12 +5,10 @@
  * Everything here is served from `public/img/` so Vite leaves the filenames
  * alone and the browser can cache them independently of the JS bundle.
  *
- * A note on the tyre product shot: the original site used a single generic
- * render for every SKU, and that render carries another manufacturer's
- * sidewall branding. Putting it on a Greforce or Lionshead product card would
- * misrepresent the item, so product imagery stays with the generated wheel —
- * which shows the correct brand, size and tread pattern for each SKU. The
- * photograph is used for editorial and category contexts instead.
+ * A note on the generic tyre shot: the original site used a single render
+ * for every SKU, and that render carries another manufacturer's sidewall
+ * branding. It is only ever shown labelled as illustrative, and only on lines
+ * that have no photograph of their own (see `productPhotos` below).
  */
 
 export interface Media {
@@ -182,18 +180,94 @@ export interface GalleryShot extends Media {
   illustrative: boolean
 }
 
+/* ------------------------------------------------------------------ *
+ * Product photography
+ *
+ * The manufacturer shots from Spartan's June 2026 catalogues: the Range
+ * Catalogue for every Greforce and Lionshead line with a published price,
+ * and the Lionshead Barcode Catalogue for the rest of Lionshead. Each was
+ * cropped to the tyre (dropping the wordmark printed into the Greforce
+ * artwork), set on white and squared, so a grid of them reads evenly.
+ *
+ * They are keyed by pattern, not SKU — the catalogue uses one shot per
+ * pattern across every size, and so do we.
+ *
+ * Two deliberate gaps:
+ *  - LS306E. The barcode catalogue prints the LD328E drive-block shot
+ *    against it, but LS306E is a steer rib. Showing it would misdescribe the
+ *    tyre, so LS306E keeps the generated wheel until a real shot exists.
+ *  - LD330E. The only shot is a crop of the upper half of the tyre: good for
+ *    the tread, wrong for a product card. It is a gallery detail only.
+ * ------------------------------------------------------------------ */
+
+export interface ProductPhoto extends Media {
+  /**
+   * A whole-tyre shot that can stand for the product on a card. `false` marks
+   * a partial crop that only belongs in the product gallery.
+   */
+  wholeTyre: boolean
+}
+
+/** Every shot is square; `size` is its edge in pixels. */
+const shot = (file: string, alt: string, size: number, wholeTyre = true): ProductPhoto => ({
+  ...img(`products/${file}.webp`, alt, size, size),
+  wholeTyre,
+})
+
+const productPhotos: Record<string, ProductPhoto> = {
+  'Greforce|GR666': shot('greforce-gr666', 'Greforce GR666 super-single truck tyre', 353),
+  'Greforce|G-PILOT X1': shot('greforce-g-pilot-x1', 'Greforce G-PILOT X1 steer tyre', 900),
+  'Greforce|G-PILOT X3': shot('greforce-g-pilot-x3', 'Greforce G-PILOT X3 drive tyre', 547),
+  'Greforce|GRT33': shot('greforce-grt33', 'Greforce GRT33 rib-pattern truck tyre', 352),
+  'Greforce|GRT52': shot('greforce-grt52', 'Greforce GRT52 rib-pattern truck tyre', 352),
+  'Greforce|GR612': shot('greforce-gr612', 'Greforce GR612 rib-pattern truck tyre', 353),
+  'Greforce|GR999': shot('greforce-gr999', 'Greforce GR999 block-pattern drive tyre', 354),
+  'Greforce|HD01M': shot('greforce-hd01m', 'Greforce HD01M drive tyre', 352),
+  'Greforce|HD02': shot('greforce-hd02', 'Greforce HD02 drive tyre', 354),
+  'Lionshead|LA301E': shot('lionshead-la301e', 'Lionshead LA301E all-position truck tyre', 900),
+  'Lionshead|LA302E': shot('lionshead-la302e', 'Lionshead LA302E rib-pattern truck tyre', 900),
+  'Lionshead|LA313E': shot('lionshead-la313e', 'Lionshead LA313E rib-pattern truck tyre', 900),
+  'Lionshead|LD316E': shot('lionshead-ld316e', 'Lionshead LD316E drive tyre', 526),
+  'Lionshead|LD317E': shot('lionshead-ld317e', 'Lionshead LD317E drive tyre', 900),
+  'Lionshead|LD328E': shot('lionshead-ld328e', 'Lionshead LD328E drive tyre', 900),
+  'Lionshead|LD330E': shot(
+    'lionshead-ld330e',
+    'Close-up of the Lionshead LD330E drive tread',
+    271,
+    false,
+  ),
+}
+
+/** Every photograph of a pattern, whole-tyre or not. */
+export function productPhotoFor(product: {
+  brand: string
+  model: string
+}): ProductPhoto | undefined {
+  return productPhotos[`${product.brand}|${product.model}`]
+}
+
+/** The photograph that can stand for the product on a card or a cart line. */
+export function productCardPhoto(product: {
+  brand: string
+  model: string
+}): ProductPhoto | undefined {
+  const photo = productPhotoFor(product)
+  return photo?.wholeTyre ? photo : undefined
+}
+
+/** Every file referenced above — checked against `public/img` by `npm run check`. */
+export const productPhotoFiles: string[] = Object.values(productPhotos).map(
+  (photo) => photo.src,
+)
+
 /**
- * The photographic half of a product gallery.
+ * Illustrative stock photography for lines with no photograph of their own.
  *
  * Both shots came from the existing site and are the same two images for
- * every SKU — there is no per-product photography yet. The tread close-up
- * leads because it is brand-neutral and genuinely representative of a block
- * pattern; the full-tyre render follows, and both are labelled as
- * illustrative. The generated wheel remains in the gallery as the one view
- * that is accurate to the specific product: correct brand, size and tread.
- *
- * Replacing these with real shots of Greforce and Lionshead stock is a change
- * to this array alone.
+ * every such SKU. The tread close-up leads because it is brand-neutral and
+ * genuinely representative of a block pattern; the full-tyre render follows,
+ * and both are labelled as illustrative. The generated wheel stays in the
+ * gallery as the view that is accurate to the product's brand, size and tread.
  */
 export const productGallery: GalleryShot[] = [
   {

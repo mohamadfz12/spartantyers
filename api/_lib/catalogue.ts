@@ -12,10 +12,19 @@
  * (type-only), so pulling it in drags in no React, no Vite env and no CSS.
  */
 
-import { products, getProduct, effectivePrice, PRICE_BREAKS, priceBreakFor } from '../../src/data/products'
+import {
+  products,
+  getProduct,
+  effectivePrice,
+  hasPrice,
+  pricedProducts,
+  poaProducts,
+  PRICE_BREAKS,
+  priceBreakFor,
+} from '../../src/data/products'
 import type { Product } from '../../src/data/types'
 
-export { products, getProduct, effectivePrice, PRICE_BREAKS, priceBreakFor }
+export { products, getProduct, effectivePrice, hasPrice, PRICE_BREAKS, priceBreakFor }
 export type { Product }
 
 /** Stock/price adjustments stored outside the bundle (admin edits, sales). */
@@ -29,6 +38,9 @@ export interface ProductOverride {
 /**
  * Applies an override on top of a bundled product. `discountPrice` is derived
  * here exactly as `buildProduct` derives it so the two can never disagree.
+ *
+ * A price override on a price-on-application line gives it a price; without
+ * one it stays POA, and a discount has nothing to apply to.
  */
 export function mergeOverride(
   product: Product,
@@ -39,7 +51,7 @@ export function mergeOverride(
   const price = typeof override.price === 'number' ? override.price : product.price
 
   const discount =
-    override.discount === null
+    price == null || override.discount === null
       ? undefined
       : typeof override.discount === 'number'
         ? override.discount
@@ -52,7 +64,7 @@ export function mergeOverride(
     price,
     discount,
     discountPrice:
-      discount != null
+      price != null && discount != null
         ? Math.round(price * (1 - discount / 100) * 100) / 100
         : undefined,
     stock,
@@ -82,6 +94,8 @@ export function resolveProduct(
  */
 export function catalogueSummary(): {
   count: number
+  pricedCount: number
+  poaCount: number
   brands: string[]
   sizes: string[]
   positions: string[]
@@ -89,16 +103,21 @@ export function catalogueSummary(): {
   priceMin: number
   priceMax: number
   models: string[]
+  poaModels: string[]
 } {
-  const prices = products.map(effectivePrice)
+  const prices = pricedProducts.map((p) => effectivePrice(p))
+  const name = (p: Product) => `${p.brand} ${p.model} ${p.size}`
   return {
     count: products.length,
+    pricedCount: pricedProducts.length,
+    poaCount: poaProducts.length,
     brands: [...new Set(products.map((p) => p.brand))],
     sizes: [...new Set(products.map((p) => p.size))],
     positions: [...new Set(products.flatMap((p) => p.position))],
     applications: [...new Set(products.map((p) => p.application))],
     priceMin: Math.min(...prices),
     priceMax: Math.max(...prices),
-    models: products.map((p) => `${p.brand} ${p.model} ${p.size}`),
+    models: products.map(name),
+    poaModels: poaProducts.map(name),
   }
 }

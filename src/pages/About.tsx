@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, MapPin, Phone, Quote } from 'lucide-react'
 import { site } from '@/config/site'
 import { aboutStory, customerSegments, homeStats } from '@/data/content'
-import { allSizes, priceRange, products } from '@/data/products'
+import { allSizes, poaProducts, priceRange, products } from '@/data/products'
 import { featuredReviews } from '@/data/reviews'
 import { money } from '@/lib/utils'
 import { Seo, breadcrumbJsonLd, organisationJsonLd } from '@/components/Seo'
@@ -42,7 +42,7 @@ const CAPABILITY = [
   {
     label: 'Range held',
     value: `${products.length} lines across ${allSizes.length} sizes`,
-    detail: `Greforce and Lionshead, from 215/75R17.5 light truck to the 385/65R22.5 super-single, ${money(priceRange.min)}–${money(priceRange.max)} a tyre.`,
+    detail: `Greforce and Lionshead, from 215/75R17.5 light truck to the 385/65R22.5 super-single, ${money(priceRange.min)}–${money(priceRange.max)} a tyre, with ${poaProducts.length} lines built to order and quoted on request.`,
   },
   {
     label: 'Freight',

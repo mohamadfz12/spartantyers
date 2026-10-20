@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Phone, Search, SlidersHorizontal, X } from 'lucide-react'
 import type { Product } from '@/data/types'
-import { POSITION_LABELS, inStockCount, products } from '@/data/products'
+import { POSITION_LABELS, inStockCount, poaProducts, preOrderCount, products } from '@/data/products'
 import { site } from '@/config/site'
 import { cn, debounce, formatNumber, money, pluralise } from '@/lib/utils'
 import {
@@ -133,7 +133,7 @@ export default function Shop() {
     <>
       <Seo
         title={title}
-        description={`Browse all ${products.length} Greforce and Lionshead truck, bus and trailer tyre lines. Filter by size, axle position, application and price. ${inStockCount} lines in stock at our Yennora warehouse.`}
+        description={`Browse all ${products.length} Greforce and Lionshead truck, bus and trailer tyre lines. Filter by size, axle position, application and price. ${inStockCount} lines in stock at our Yennora warehouse, the rest on pre-order or built to order.`}
         canonicalPath="/shop"
         jsonLd={jsonLd}
       />
@@ -148,10 +148,11 @@ export default function Shop() {
           <p className="eyebrow">The full range</p>
           <h1 className="display-2 mt-3">Truck &amp; trailer tyres</h1>
           <p className="lede mt-4 max-w-2xl">
-            Every Greforce and Lionshead line we hold, with the specs that decide
+            Every Greforce and Lionshead line we carry, with the specs that decide
             the purchase on the card. {formatNumber(inStockCount)} of{' '}
-            {products.length} lines are in stock at Yennora right now — the rest
-            are available to pre-order.
+            {products.length} lines are in stock at Yennora right now,{' '}
+            {preOrderCount} can be pre-ordered, and {poaProducts.length} are built to
+            order and quoted on request.
           </p>
         </div>
       </header>

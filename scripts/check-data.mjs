@@ -10,7 +10,7 @@
  */
 
 import { build } from 'esbuild'
-import { readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -36,6 +36,7 @@ await build({
       export * as blog from './src/data/blog'
       export * as faq from './src/data/faq'
       export * as content from './src/data/content'
+      export * as media from './src/data/media'
       export { site, nav } from './src/config/site'
     `,
     resolveDir: root,
@@ -73,35 +74,90 @@ const skus = all.map((p) => p.sku)
 const dupSkus = skus.filter((s, i) => skus.indexOf(s) !== i)
 check('SKUs are unique', dupSkus.length === 0, `duplicates: ${dupSkus.join(', ')}`)
 
+/**
+ * Spartan's SKUs encode brand, size and pattern (GRF-29580R225-GPILOTX1), and
+ * the same string is printed in the warehouse barcode — so a SKU that does not
+ * spell out its own line is a typo that would mis-pick in the warehouse.
+ */
+const SKU_PREFIX = { Greforce: 'GRF', Lionshead: 'LH' }
+const expectedSku = (p) =>
+  `${SKU_PREFIX[p.brand]}-${p.size.replace(/[/.]/g, '')}-${p.model.replace(/[\s-]/g, '').toUpperCase()}`
+
 for (const p of all) {
   check(`${p.id}: slug is URL-safe`, /^[a-z0-9-]+$/.test(p.id), p.id)
-  check(`${p.id}: price > 0`, p.price > 0)
-  check(`${p.id}: maxLoadKg resolved`, p.maxLoadKg > 0, `load index "${p.loadIndex}"`)
-  check(`${p.id}: maxSpeedKmh resolved`, p.maxSpeedKmh > 0, `speed "${p.speedRating}"`)
+  check(`${p.id}: SKU matches brand, size and pattern`, p.sku === expectedSku(p),
+    `${p.sku} — expected ${expectedSku(p)}`)
+  check(`${p.id}: price is a positive number or POA`, p.price === null || p.price > 0)
+  // An unpublished figure is null; a published one must resolve.
+  check(`${p.id}: maxLoadKg resolved`, p.loadIndex === null ? p.maxLoadKg === null : p.maxLoadKg > 0,
+    `load index "${p.loadIndex}"`)
+  check(`${p.id}: maxSpeedKmh resolved`,
+    p.speedRating === null ? p.maxSpeedKmh === null : p.maxSpeedKmh > 0,
+    `speed "${p.speedRating}"`)
+  check(`${p.id}: tread depth positive or unpublished`, p.treadDepthMm === null || p.treadDepthMm > 0)
   check(`${p.id}: has axle positions`, p.position.length > 0)
   check(`${p.id}: sectionWidthMm parsed`, p.sectionWidthMm > 0, `size "${p.size}"`)
   check(`${p.id}: rimDiameterIn parsed`, p.rimDiameterIn > 0, `size "${p.size}"`)
   check(`${p.id}: stock not negative`, p.stock >= 0)
   check(`${p.id}: rating in range`, p.rating >= 0 && p.rating <= 5)
+  check(`${p.id}: no star rating without ratings`, p.reviewCount > 0 || p.rating === 0)
   check(`${p.id}: highlights present`, p.highlights.length >= 3)
   check(`${p.id}: tread family known`, ['rib', 'lug', 'block', 'trailer'].includes(p.tread))
+  check(`${p.id}: copy never prints an unpublished value`,
+    ![p.headline, p.description, ...p.highlights, ...p.tags].some((text) => /\bnull\b|undefined|NaN/.test(text)))
+
+  if (p.price === null) {
+    // Built to order: nothing on the floor, and nothing to discount.
+    check(`${p.id}: POA line carries no stock`, p.stock === 0)
+    check(`${p.id}: POA line carries no discount`, p.discount == null && p.discountPrice == null)
+  }
 
   if (p.discount != null) {
     check(`${p.id}: discount sane`, p.discount > 0 && p.discount < 90)
     check(
       `${p.id}: discountPrice below price`,
-      p.discountPrice != null && p.discountPrice < p.price,
+      p.discountPrice != null && p.price != null && p.discountPrice < p.price,
     )
   }
 }
 
-// Curated lists must resolve — a typo here would render a blank home page.
+notes.push(`${P.pricedProducts.length} priced · ${P.poaProducts.length} POA`)
+
+// Curated lists must resolve — a typo here would render a blank home page —
+// and "the lines we move most" must be lines the cart can actually sell.
 check('featuredProducts all resolve', P.featuredProducts.length === 4,
   `got ${P.featuredProducts.length}, expected 4`)
-check('dealProducts non-empty', P.dealProducts.length > 0)
+for (const p of P.featuredProducts) {
+  check(`featured ${p.id} has a price`, p.price !== null)
+  check(`featured ${p.id} is in stock`, p.stock > 0)
+}
+check('every deal has a price', P.dealProducts.every((p) => p.price !== null))
 check('allSizes non-empty', P.allSizes.length > 0)
 check('priceRange sane', P.priceRange.min > 0 && P.priceRange.max >= P.priceRange.min)
-check('inStockCount <= total', P.inStockCount <= all.length)
+check('inStockCount <= priced lines', P.inStockCount <= P.pricedProducts.length)
+check('priced + POA covers the catalogue',
+  P.pricedProducts.length + P.poaProducts.length === all.length)
+
+// Price-on-application lines must sort after every priced line.
+const sorted = [...all].sort((a, b) => P.comparePrice(a, b))
+const firstPoa = sorted.findIndex((p) => p.price === null)
+check('comparePrice puts POA last', firstPoa === -1 || sorted.slice(firstPoa).every((p) => p.price === null))
+const sortedDesc = [...all].sort((a, b) => P.comparePrice(a, b, 'desc'))
+check('comparePrice puts POA last descending too',
+  sortedDesc.slice(sortedDesc.length - P.poaProducts.length).every((p) => p.price === null))
+
+/* ------------------------------------------------------------------ *
+ * Product photography
+ * ------------------------------------------------------------------ */
+
+const { media: MEDIA } = m
+for (const src of MEDIA.productPhotoFiles) {
+  check(`photo ${src} exists`, existsSync(join(root, 'public', src)), src)
+}
+const withPhoto = all.filter((p) => MEDIA.productPhotoFor(p))
+notes.push(`${withPhoto.length} lines with a catalogue photo`)
+check('photos are keyed to real patterns',
+  MEDIA.productPhotoFiles.length <= new Set(all.map((p) => `${p.brand}|${p.model}`)).size)
 
 // Every axle position must have stock, or the axle selector shows an empty state.
 for (const position of ['steer', 'drive', 'trailer']) {

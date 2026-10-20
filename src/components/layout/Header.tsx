@@ -12,7 +12,7 @@ import {
   X,
 } from 'lucide-react'
 import { nav, site } from '@/config/site'
-import { cn, money } from '@/lib/utils'
+import { cn, priceLabel } from '@/lib/utils'
 import { useCart, useCartTotals } from '@/store/cart'
 import { useTheme } from '@/store/ui'
 import { useScrollDirection, useScrolledPast } from '@/hooks'
@@ -553,7 +553,7 @@ function SearchDialog({
                       </p>
                     </div>
                     <span className="shrink-0 font-heading text-sm font-bold text-primary">
-                      {money(effectivePrice(product))}
+                      {priceLabel(effectivePrice(product))}
                     </span>
                   </Link>
                 </li>

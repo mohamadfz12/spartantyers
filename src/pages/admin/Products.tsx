@@ -25,7 +25,7 @@ import { useAdminQuery } from '@/components/admin/useAdminQuery'
 import { Badge, Button, Card, Input, Label, Skeleton } from '@/components/ui'
 import { useIsMobile } from '@/hooks'
 import { api } from '@/lib/api'
-import { cn, formatNumber, money, moneyExact } from '@/lib/utils'
+import { cn, formatNumber, moneyExact, priceLabel } from '@/lib/utils'
 import type { Product } from '@/data/types'
 import {
   SESSION_EXPIRED_MESSAGE,
@@ -41,7 +41,9 @@ import { toast } from '@/store/ui'
  * Only `price`, `discount` and `stock` are editable, because that is
  * all `PATCH /api/admin/products` accepts — the bundled specs stay
  * authoritative. Every other column is read-only on purpose rather
- * than by omission.
+ * than by omission. Price-on-application lines keep price and discount
+ * read-only too: they are quoted per order, so a price set here would
+ * only ever apply at a checkout the shop never lets them reach.
  *
  * Writes are optimistic and roll back on failure. The alternative — a
  * spinner over the cell until the round trip lands — makes bulk
@@ -341,7 +343,7 @@ export default function Products() {
                       id={`product-${product.id}`}
                       className={cn(
                         'border-b border-border align-middle last:border-0',
-                        rowTint(product.stock),
+                        rowTint(product),
                         focusId === product.id && 'ring-2 ring-inset ring-primary',
                       )}
                     >
@@ -364,43 +366,56 @@ export default function Products() {
                         {product.positionLabel || product.position.join(' / ')}
                       </td>
 
-                      <td className="px-1 py-1 text-right text-xs">
-                        <EditableCell
-                          label={`Price for ${product.sku}`}
-                          initial={String(product.price)}
-                          validate={validatePrice}
-                          onCommit={(raw) => save(product, 'price', raw)}
-                          saving={savingId === product.id}
-                        >
-                          {money(product.price)}
-                        </EditableCell>
-                      </td>
+                      {product.price == null ? (
+                        <>
+                          <td className="px-2.5 py-1.5 text-right text-xs font-semibold">
+                            <span title="Price on application — quoted per order">POA</span>
+                          </td>
+                          <td className="px-2.5 py-1.5 text-right text-xs text-muted-foreground">
+                            —
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-1 py-1 text-right text-xs">
+                            <EditableCell
+                              label={`Price for ${product.sku}`}
+                              initial={String(product.price)}
+                              validate={validatePrice}
+                              onCommit={(raw) => save(product, 'price', raw)}
+                              saving={savingId === product.id}
+                            >
+                              {priceLabel(product.price)}
+                            </EditableCell>
+                          </td>
 
-                      <td className="px-1 py-1 text-right text-xs">
-                        <EditableCell
-                          label={`Discount percentage for ${product.sku}`}
-                          initial={product.discount != null ? String(product.discount) : ''}
-                          validate={validateDiscount}
-                          onCommit={(raw) => save(product, 'discount', raw)}
-                          saving={savingId === product.id}
-                          placeholder="none"
-                          inputMode="numeric"
-                        >
-                          {product.discount != null ? (
-                            <span className="font-semibold text-primary">
-                              {product.discount}%
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </EditableCell>
-                      </td>
+                          <td className="px-1 py-1 text-right text-xs">
+                            <EditableCell
+                              label={`Discount percentage for ${product.sku}`}
+                              initial={product.discount != null ? String(product.discount) : ''}
+                              validate={validateDiscount}
+                              onCommit={(raw) => save(product, 'discount', raw)}
+                              saving={savingId === product.id}
+                              placeholder="none"
+                              inputMode="numeric"
+                            >
+                              {product.discount != null ? (
+                                <span className="font-semibold text-primary">
+                                  {product.discount}%
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </EditableCell>
+                          </td>
+                        </>
+                      )}
 
                       <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-xs font-semibold tabular-nums">
                         {product.discount != null ? (
-                          <span className="text-primary">{money(effective)}</span>
+                          <span className="text-primary">{priceLabel(effective)}</span>
                         ) : (
-                          <span className="text-muted-foreground">{money(effective)}</span>
+                          <span className="text-muted-foreground">{priceLabel(effective)}</span>
                         )}
                       </td>
 
@@ -418,7 +433,7 @@ export default function Products() {
                       </td>
 
                       <td className="whitespace-nowrap px-2.5 py-1.5 text-right">
-                        <StockBadge stock={product.stock} />
+                        <StockBadge product={product} />
                       </td>
                     </tr>
                   )
@@ -453,7 +468,7 @@ function ProductCard({
     <li>
       <Card
         id={`product-${product.id}`}
-        className={cn('p-4', rowTint(product.stock), focused && 'ring-2 ring-primary')}
+        className={cn('p-4', rowTint(product), focused && 'ring-2 ring-primary')}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -468,7 +483,7 @@ function ProductCard({
               {product.sku}
             </p>
           </div>
-          <StockBadge stock={product.stock} />
+          <StockBadge product={product} />
         </div>
 
         <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3">
@@ -477,17 +492,21 @@ function ProductCard({
               Price
             </dt>
             <dd className="mt-1">
-              <EditableCell
-                label={`Price for ${product.sku}`}
-                initial={String(product.price)}
-                validate={validatePrice}
-                onCommit={(raw) => onSave(product, 'price', raw)}
-                saving={saving}
-                numeric={false}
-                className="text-sm font-semibold"
-              >
-                {money(product.price)}
-              </EditableCell>
+              {product.price == null ? (
+                <span className="text-sm font-semibold">POA</span>
+              ) : (
+                <EditableCell
+                  label={`Price for ${product.sku}`}
+                  initial={String(product.price)}
+                  validate={validatePrice}
+                  onCommit={(raw) => onSave(product, 'price', raw)}
+                  saving={saving}
+                  numeric={false}
+                  className="text-sm font-semibold"
+                >
+                  {priceLabel(product.price)}
+                </EditableCell>
+              )}
             </dd>
           </div>
 
@@ -496,6 +515,9 @@ function ProductCard({
               Discount
             </dt>
             <dd className="mt-1">
+              {product.price == null ? (
+                <span className="text-sm text-muted-foreground">—</span>
+              ) : (
               <EditableCell
                 label={`Discount percentage for ${product.sku}`}
                 initial={product.discount != null ? String(product.discount) : ''}
@@ -513,6 +535,7 @@ function ProductCard({
                   <span className="text-muted-foreground">—</span>
                 )}
               </EditableCell>
+              )}
             </dd>
           </div>
 
@@ -540,7 +563,7 @@ function ProductCard({
         <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
           Effective price{' '}
           <span className="font-semibold tabular-nums text-foreground">
-            {moneyExact(effective)}
+            {effective != null ? moneyExact(effective) : 'POA — quoted per order'}
           </span>
         </p>
       </Card>
@@ -552,7 +575,15 @@ function ProductCard({
  * Bits
  * ------------------------------------------------------------------ */
 
-function StockBadge({ stock }: { stock: number }) {
+function StockBadge({ product }: { product: Product }) {
+  const { stock } = product
+  if (product.price == null) {
+    return (
+      <Badge variant="outline" size="sm" className="text-muted-foreground">
+        Built to order
+      </Badge>
+    )
+  }
   if (stock === 0) {
     return (
       <Badge variant="destructive" size="sm">
@@ -574,9 +605,11 @@ function StockBadge({ stock }: { stock: number }) {
   )
 }
 
-function rowTint(stock: number): string {
-  if (stock === 0) return 'bg-destructive/5'
-  if (stock <= 5) return 'bg-muted/60'
+function rowTint(product: Product): string {
+  // Built-to-order lines sit at zero stock by design; nothing to flag.
+  if (product.price == null) return ''
+  if (product.stock === 0) return 'bg-destructive/5'
+  if (product.stock <= 5) return 'bg-muted/60'
   return ''
 }
 
@@ -610,12 +643,14 @@ function compare(a: Product, b: Product, key: SortKey): number {
         b.positionLabel || b.position.join(),
         'en-AU',
       )
+    // POA sorts as the lowest value, so it lands last in the default
+    // high-to-low price sort and first when flipped — never mixed in.
     case 'price':
-      return a.price - b.price
+      return (a.price ?? -1) - (b.price ?? -1)
     case 'discount':
       return (a.discount ?? -1) - (b.discount ?? -1)
     case 'effective':
-      return (a.discountPrice ?? a.price) - (b.discountPrice ?? b.price)
+      return (a.discountPrice ?? a.price ?? -1) - (b.discountPrice ?? b.price ?? -1)
     case 'stock':
       return a.stock - b.stock
     default:
@@ -653,14 +688,17 @@ function applyLocally(product: Product, field: EditableField, raw: string): Prod
     discount,
     stock,
     discountPrice:
-      discount != null ? Math.round(price * (1 - discount / 100) * 100) / 100 : undefined,
+      price != null && discount != null
+        ? Math.round(price * (1 - discount / 100) * 100) / 100
+        : undefined,
   }
 }
 
 function describeChange(field: EditableField, product: Product): string {
-  if (field === 'price') return `Price is now ${moneyExact(product.price)}.`
+  if (field === 'price') return `Price is now ${priceLabel(product.price)}.`
   if (field === 'stock') return `${formatNumber(product.stock)} in stock.`
-  return product.discount != null
-    ? `${product.discount}% off — ${moneyExact(product.discountPrice ?? product.price)}.`
+  const effective = product.discountPrice ?? product.price
+  return product.discount != null && effective != null
+    ? `${product.discount}% off — ${moneyExact(effective)}.`
     : 'Discount cleared.'
 }

@@ -7,6 +7,7 @@ import {
   dealProducts,
   effectivePrice,
   products,
+  type PricedProduct,
 } from '@/data/products'
 import { site } from '@/config/site'
 import { cn, formatNumber, money, pluralise } from '@/lib/utils'
@@ -20,7 +21,7 @@ import { QuickView } from '@/components/shop/QuickView'
 /** A set of four is one axle end; eight is a full drive group. */
 const SET_SIZES = [4, 8] as const
 
-function savingPerTyre(product: Product): number {
+function savingPerTyre(product: PricedProduct): number {
   return product.price - effectivePrice(product)
 }
 

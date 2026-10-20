@@ -1,11 +1,15 @@
 import type { FaqItem } from './types'
+import { allSizes, poaProducts, pricedProducts, products } from './products'
 
 /* ------------------------------------------------------------------ *
  * Frequently asked questions
  *
- * Every answer here must stay consistent with src/config/site.ts.
+ * Every answer here must stay consistent with src/config/site.ts, and
+ * counts come from the catalogue so they cannot drift from it.
  * Order within each category runs from the most commonly asked down.
  * ------------------------------------------------------------------ */
+
+const lineCount = (brand: string) => products.filter((p) => p.brand === brand).length
 
 export const faqs: FaqItem[] = [
   /* ---- Ordering ---- */
@@ -32,6 +36,11 @@ export const faqs: FaqItem[] = [
     question: 'Can I order a tyre that is showing out of stock?',
     answer:
       'Yes. Out-of-stock lines can be pre-ordered, which allocates you stock from the next shipment rather than putting you on a waiting list. Normal dispatch and handling times apply once the container lands. The HD02 in 11R22.5 is the line this happens to most often, so if you run that fitment it is worth ordering ahead of your replacement cycle.',
+  },
+  {
+    category: 'Ordering',
+    question: 'Some tyres show POA instead of a price. What does that mean?',
+    answer: `POA is price on application. Those ${poaProducts.length} lines are built to order rather than held on the floor, so the price depends on the quantity and the production run. Use Request a quote on the product page, or call 1300 846 024, and we will come back with price and lead time - usually within one business day. Nothing is charged until you have accepted the quote.`,
   },
 
   /* ---- Delivery & Pickup ---- */
@@ -77,13 +86,13 @@ export const faqs: FaqItem[] = [
     category: 'Products & Fitment',
     question: 'Which brands do you stock, and can you get the ones you do not?',
     answer:
-      'We hold Greforce and Lionshead in our own warehouse, ready to ship - 27 lines across 9 sizes from 17.5in light truck up to 385/65R22.5 super-singles. Bridgestone, Michelin, Goodyear, Continental, Pirelli, Dunlop, Hankook and Yokohama are available through our partner 1 Truck Stop rather than from our stock. For those, call 1 Truck Stop on 1300 376 304 or go to https://1truckstop.com.au/truck-tyres/.',
+      `We carry Greforce and Lionshead ourselves - ${products.length} lines across ${allSizes.length} sizes from 17.5in light truck up to 385/65R22.5 super-singles, with ${pricedProducts.length} held in our own warehouse ready to ship and ${poaProducts.length} built to order. Bridgestone, Michelin, Goodyear, Continental, Pirelli, Dunlop, Hankook and Yokohama are available through our partner 1 Truck Stop rather than from our stock. For those, call 1 Truck Stop on 1300 376 304 or go to https://1truckstop.com.au/truck-tyres/.`,
   },
   {
     category: 'Products & Fitment',
     question: 'What is the difference between Greforce and Lionshead?',
     answer:
-      'Greforce is the broader of the two ranges with 22 of our 27 lines, spanning everything from the economy GR612 light-truck rib through the GRT33 volume fitments to the premium G-PILOT linehaul patterns and the 23.5mm HD02 off-highway drive tyre. Lionshead is a focused five-line range that does two things particularly well: an uprated 149 load index in 11R22.5 on the LA301E all-position and LD317E drive, worth 3250kg per tyre against the usual 3150kg, and sharply priced 17.5in fitments in the LA302E, LD328E and LS306E. Both are specified to the same standard - it is a difference in range coverage, not in quality tier.',
+      `Greforce is the broader of the two ranges with ${lineCount('Greforce')} of our ${products.length} lines, spanning everything from the economy GR612 light-truck rib through the GRT33 volume fitments to the premium G-PILOT linehaul patterns and the 23.5mm HD02 off-highway drive tyre. Lionshead is a focused ${lineCount('Lionshead')}-line range of value radials for regional and vocational fleets: the LA301E all-position and LA313E rib with the LD316E, LD317E and LD330E drive patterns in 11R22.5, plus 17.5in fitments in the LA302E, LD328E and LS306E. Both are specified to the same standard - it is a difference in range coverage, not in quality tier.`,
   },
   {
     category: 'Products & Fitment',
@@ -101,7 +110,7 @@ export const faqs: FaqItem[] = [
     category: 'Products & Fitment',
     question: 'Can my old casings be retreaded, and do you take old tyres away?',
     answer:
-      'Every line we stock in 22.5in and 19.5in is specified as retreadable, typically for two to three cycles on a sound casing; none of our 17.5in light-truck lines are. We sell new tyres only - we do not sell retreads or run a used-tyre collection service - but we can point you to retreaders through our partner network if you have casings worth processing. Scrap casings should go to a licensed tyre recycler, which your fitter will usually handle as part of the changeover.',
+      'Most of our 22.5in and 19.5in lines are specified as retreadable, typically for two to three cycles on a sound casing - the spec table on each product page says which - while our 17.5in light-truck lines are not built for it. We sell new tyres only - we do not sell retreads or run a used-tyre collection service - but we can point you to retreaders through our partner network if you have casings worth processing. Scrap casings should go to a licensed tyre recycler, which your fitter will usually handle as part of the changeover.',
   },
 
   /* ---- Payment ---- */
@@ -185,7 +194,7 @@ export const faqs: FaqItem[] = [
     category: 'Fleet & Wholesale',
     question: 'Can you source rare or hard-to-find sizes?',
     answer:
-      'Usually. Our own warehouse covers 9 sizes across Greforce and Lionshead, and anything outside that we source through our partner 1 Truck Stop and our wider supplier network. Send us the size, load index and speed symbol you need plus the quantity, and we will come back with availability, lead time and price before you commit to anything.',
+      `Usually. Our own range covers ${allSizes.length} sizes across Greforce and Lionshead, and anything outside that we source through our partner 1 Truck Stop and our wider supplier network. Send us the size, load index and speed symbol you need plus the quantity, and we will come back with availability, lead time and price before you commit to anything.`,
   },
 ]
 

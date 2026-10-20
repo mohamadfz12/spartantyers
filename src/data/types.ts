@@ -14,6 +14,7 @@ export type Application =
 
 export interface Product {
   id: string
+  /** Spartan's catalogue SKU — the value encoded in the warehouse barcode. */
   sku: string
   brand: BrandName
   model: string
@@ -27,26 +28,39 @@ export interface Product {
 
   ply: string
   rim: string
-  treadDepthMm: number
-  loadIndex: string
-  speedRating: string
+  /*
+   * The manufacturer figures below are `null` where nothing is published for
+   * this exact line. The page then says "to be confirmed" rather than show a
+   * number nobody has checked.
+   */
+  /** Original tread depth in mm. */
+  treadDepthMm: number | null
+  loadIndex: string | null
+  speedRating: string | null
   /** Derived from the single-fitment load index. */
-  maxLoadKg: number
+  maxLoadKg: number | null
   /** Derived from the speed symbol. */
-  maxSpeedKmh: number
+  maxSpeedKmh: number | null
   rimDiameterIn: number
   sectionWidthMm: number
 
-  price: number
+  /**
+   * Retail price per tyre, inc. GST — the RRP from Spartan's price list.
+   * `null` is price on application (POA): the line is built to order, so it
+   * is quoted per order rather than sold through the cart.
+   */
+  price: number | null
   discount?: number
   discountPrice?: number
   stock: number
   rating: number
   reviewCount: number
 
-  fuelRating: 'A' | 'B' | 'C' | 'D'
-  noiseDb: number
-  retreadable: boolean
+  /** EU tyre-label rolling-resistance class. */
+  fuelRating: 'A' | 'B' | 'C' | 'D' | null
+  /** EU tyre-label external noise. */
+  noiseDb: number | null
+  retreadable: boolean | null
   threePeak: boolean
 
   headline: string

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, BookOpen, CheckCircle2, Phone } from 'lucide-react'
 import { site } from '@/config/site'
 import { fleetServices, howItWorks } from '@/data/content'
-import { PRICE_BREAKS, allSizes, products } from '@/data/products'
+import { PRICE_BREAKS, allSizes, poaProducts, pricedProducts } from '@/data/products'
 import { Seo, breadcrumbJsonLd, organisationJsonLd } from '@/components/Seo'
 import { Badge, Button } from '@/components/ui'
 import { Reveal, Stagger } from '@/components/motion'
@@ -70,7 +70,7 @@ export default function FleetSolutions() {
       <PageHero
         eyebrow="Fleet solutions"
         title="Bulk tyre supply for fleets that cannot afford to wait"
-        lede={`Volume pricing that is published rather than negotiated, ${products.length} lines held across ${allSizes.length} sizes at our own warehouse, and freight arranged to your depot. Dispatch within ${site.commerce.dispatchWindow} of payment clearing.`}
+        lede={`Volume pricing that is published rather than negotiated, ${pricedProducts.length} lines held at our own warehouse plus ${poaProducts.length} built to order across ${allSizes.length} sizes, and freight arranged to your depot. Dispatch within ${site.commerce.dispatchWindow} of payment clearing.`}
         breadcrumb={[{ name: 'Fleet Solutions', path: '/fleet-solutions' }]}
         actions={
           <>

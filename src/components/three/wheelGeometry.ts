@@ -87,8 +87,25 @@ export function wheelProportions(
   }
 }
 
+/**
+ * Representative tread depth per family, for drawing only: a build with no
+ * catalogue match in the Wheel Lab, or a line whose maker publishes no depth.
+ * Never shown as the product's own figure.
+ */
+export const NOMINAL_TREAD_DEPTH_MM: Record<TreadFamily, number> = {
+  rib: 14,
+  lug: 21.5,
+  block: 15.5,
+  trailer: 12.5,
+}
+
+/** The depth to draw: the published figure, or the family's nominal one. */
+export function drawnTreadDepth(product: Pick<Product, 'treadDepthMm' | 'tread'>): number {
+  return product.treadDepthMm ?? NOMINAL_TREAD_DEPTH_MM[product.tread]
+}
+
 export function proportionsForProduct(product: Product): WheelProportions {
-  return wheelProportions(product.size, product.treadDepthMm)
+  return wheelProportions(product.size, drawnTreadDepth(product))
 }
 
 /* ------------------------------------------------------------------ *

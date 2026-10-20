@@ -6,7 +6,15 @@ import type { Product, TreadFamily } from '@/data/types'
 import { StaticWheel, WheelSpinner } from './StaticWheel'
 
 export { StaticWheel, WheelSpinner } from './StaticWheel'
-export { TREAD_SPECS, EXPLODED_PARTS, parseTyreSize, wheelProportions } from './wheelGeometry'
+export {
+  TREAD_SPECS,
+  EXPLODED_PARTS,
+  NOMINAL_TREAD_DEPTH_MM,
+  drawnTreadDepth,
+  parseTyreSize,
+  proportionsForProduct,
+  wheelProportions,
+} from './wheelGeometry'
 export type { TreadSpec, ExplodedPart } from './wheelGeometry'
 
 /**
@@ -244,8 +252,8 @@ export interface WheelConfiguratorProps {
     brand: string
     model: string
     size: string
-    loadIndex: string
-    speedRating: string
+    loadIndex: string | null
+    speedRating: string | null
     ply: string
   }
   rimStyle: 'alloy' | 'steel'

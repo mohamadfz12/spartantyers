@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, ExternalLink, Phone } from 'lucide-react'
 import { site } from '@/config/site'
 import { BRANDS_SUBTITLE, brands, sourcedBrands, stockedBrands } from '@/data/brands'
-import { allSizes, products } from '@/data/products'
+import { allSizes, poaProducts, pricedProducts, products } from '@/data/products'
 import { pluralise } from '@/lib/utils'
 import { Seo, breadcrumbJsonLd } from '@/components/Seo'
 import { Badge, Button } from '@/components/ui'
@@ -81,7 +81,7 @@ export default function Brands() {
             id="brands-stocked"
             eyebrow="In stock at Yennora"
             title="Stocked brands"
-            lede={`${products.length} lines across ${allSizes.length} sizes, held in our own warehouse and dispatched within ${site.commerce.dispatchWindow}. These are the brands we can quote a real stock figure on.`}
+            lede={`${products.length} lines across ${allSizes.length} sizes: ${pricedProducts.length} held in our own warehouse and dispatched within ${site.commerce.dispatchWindow}, and ${poaProducts.length} built to order. These are the brands we can quote a real stock figure on.`}
           />
 
           <Stagger className="mt-10 grid gap-6 md:grid-cols-2">

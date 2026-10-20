@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, CheckCircle2, Phone } from 'lucide-react'
 import { site } from '@/config/site'
 import { wholesaleBenefits } from '@/data/content'
-import { PRICE_BREAKS, allSizes, products } from '@/data/products'
+import { PRICE_BREAKS, allSizes, poaProducts, pricedProducts } from '@/data/products'
 import { stockedBrands } from '@/data/brands'
 import { Seo, breadcrumbJsonLd, organisationJsonLd } from '@/components/Seo'
 import { Badge, Button } from '@/components/ui'
@@ -45,7 +45,7 @@ const AUDIENCE = [
 
 const MIXED_ORDER = [
   'Any combination of sizes, brands and axle positions on one order — the volume break looks at the total quantity, not the line.',
-  `All ${products.length} stocked lines across ${allSizes.length} sizes are available in any quantity. There is no case quantity and no minimum spend.`,
+  `All ${pricedProducts.length} stocked lines across ${allSizes.length} sizes are available in any quantity, and the ${poaProducts.length} built-to-order lines are quoted to your volume. There is no case quantity and no minimum spend.`,
   'Metro delivery is free with no minimum, so a four-tyre top-up order costs no more to move than a forty-tyre one.',
   `Orders of ${site.commerce.bulkThreshold} or more are palletised and moved as bulk freight to your workshop or depot.`,
   `Sizes we do not hold are sourced through ${site.partner.name} and our wider supplier network — we come back with availability, lead time and price before you commit.`,

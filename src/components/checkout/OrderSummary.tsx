@@ -4,7 +4,7 @@ import { site } from '@/config/site'
 import { cn, money, moneyExact, pluralise } from '@/lib/utils'
 import { useCart, useCartTotals } from '@/store/cart'
 import { Badge } from '@/components/ui'
-import { StaticWheel } from '@/components/three'
+import { ProductThumb } from '@/components/shop/ProductThumb'
 
 /**
  * The money panel, shared by the cart and every step of checkout.
@@ -106,7 +106,7 @@ export function OrderSummary({
                   aria-hidden="true"
                   className="h-10 w-10 shrink-0 rounded-md bg-muted p-0.5"
                 >
-                  <StaticWheel tread={line.tread} />
+                  <ProductThumb brand={line.brand} model={line.model} tread={line.tread} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-heading text-sm font-bold">

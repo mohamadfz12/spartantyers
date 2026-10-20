@@ -6,7 +6,9 @@
  *
  * 1. SERVER-SIDE REPRICING. The request body carries only `{id, quantity}`
  *    pairs — no prices. `priceOrder()` recomputes the total from the catalogue,
- *    so a tampered cart cannot change what the card is charged.
+ *    so a tampered cart cannot change what the card is charged. The total the
+ *    Pay button showed comes along as `expectedTotal` purely as a check: if it
+ *    differs from the authoritative figure, nothing is charged.
  *
  * 2. IDEMPOTENCY. The client's `idempotencyKey` is forwarded verbatim to
  *    Square, which deduplicates on it for 24 hours. A double-clicked Pay
@@ -53,6 +55,7 @@ interface PaymentBody {
   address?: unknown
   lines?: unknown
   notes?: unknown
+  expectedTotal?: unknown
 }
 
 export default withGuard(async (req, res) => {
@@ -185,6 +188,29 @@ export default withGuard(async (req, res) => {
 
   if (pricing.errors.length) {
     fail(res, 400, pricing.errors.join(' '))
+    return
+  }
+
+  // The client's total is never an input to the charge, but it is what the
+  // Pay button showed. If the authoritative total differs — a price changed
+  // under an open cart, an admin override the storefront cannot see, or a
+  // minimum-quantity promo dropped here — stop rather than charge an amount
+  // the customer never agreed to. A cent of slack absorbs rounding drift
+  // between the two copies of the arithmetic.
+  const expected =
+    typeof body.expectedTotal === 'number' ? body.expectedTotal : Number(body.expectedTotal)
+  if (
+    body.expectedTotal != null &&
+    (!Number.isFinite(expected) || Math.abs(expected - pricing.total) > 0.015)
+  ) {
+    fail(
+      res,
+      409,
+      [
+        ...pricing.warnings,
+        `This order comes to $${pricing.total.toFixed(2)} rather than the $${Number.isFinite(expected) ? expected.toFixed(2) : '—'} shown, so nothing has been charged. Review your cart, or call ${site.phone.display}.`,
+      ].join(' '),
+    )
     return
   }
 

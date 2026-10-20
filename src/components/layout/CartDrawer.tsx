@@ -15,6 +15,7 @@ import { cn, money, pluralise } from '@/lib/utils'
 import { useCart, useCartTotals } from '@/store/cart'
 import { Badge, Button, Progress, Sheet, SheetClose } from '@/components/ui'
 import { StaticWheel } from '@/components/three'
+import { ProductThumb } from '@/components/shop/ProductThumb'
 import { AnimatePresence, motion } from '@/components/motion'
 
 /**
@@ -81,7 +82,11 @@ export function CartDrawer() {
                           onClick={close}
                           className="h-16 w-16 shrink-0 rounded-md bg-muted p-1"
                         >
-                          <StaticWheel tread={line.tread} />
+                          <ProductThumb
+                            brand={line.brand}
+                            model={line.model}
+                            tread={line.tread}
+                          />
                         </Link>
 
                         <div className="min-w-0 flex-1">

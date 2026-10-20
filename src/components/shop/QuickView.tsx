@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Info, ShoppingCart } from 'lucide-react'
+import { ArrowRight, Info, MessageSquareQuote, ShoppingCart } from 'lucide-react'
 import type { Product } from '@/data/types'
 import { effectivePrice, PRICE_BREAKS, priceBreakFor } from '@/data/products'
 import { site } from '@/config/site'
 import { money, pluralise } from '@/lib/utils'
 import { useCart } from '@/store/cart'
-import { toast } from '@/store/ui'
+import { requestQuote, toast } from '@/store/ui'
 import {
   Badge,
   Button,
@@ -43,22 +43,21 @@ export function QuickView({ product, onClose }: QuickViewProps) {
         if (!open) onClose()
       }}
     >
-      {product ? <Body key={product.id} product={product} /> : null}
+      {product ? <Body key={product.id} product={product} onClose={onClose} /> : null}
     </Dialog>
   )
 }
 
 /* ------------------------------------------------------------------ */
 
-function Body({ product }: { product: Product }) {
+function Body({ product, onClose }: { product: Product; onClose: () => void }) {
   const add = useCart((state) => state.add)
   const [quantity, setQuantity] = useState(4)
 
   const price = effectivePrice(product)
-  const outOfStock = product.stock <= 0
-  const lowStock = product.stock > 0 && product.stock <= 5
+  const outOfStock = price != null && product.stock <= 0
+  const lowStock = price != null && product.stock > 0 && product.stock <= 5
   const band = priceBreakFor(quantity)
-  const unit = band ? price * (1 - band.discount) : price
 
   const handleAdd = () => {
     add(product, quantity)
@@ -67,6 +66,12 @@ function Body({ product }: { product: Product }) {
       description: `${quantity} × ${product.brand} ${product.model} — ${product.size}`,
       variant: 'success',
     })
+  }
+
+  // One dialog at a time: close this one, then open the quote form.
+  const handleQuote = () => {
+    onClose()
+    requestQuote(product, quantity)
   }
 
   return (
@@ -93,13 +98,19 @@ function Body({ product }: { product: Product }) {
         {/* Buy box ------------------------------------------------- */}
         <div className="flex flex-col p-5 sm:p-6">
           <div className="flex flex-wrap items-center gap-2">
-            <Rating value={product.rating} count={product.reviewCount} size="sm" />
+            {product.reviewCount > 0 ? (
+              <Rating value={product.rating} count={product.reviewCount} size="sm" />
+            ) : null}
             {product.discount ? (
               <Badge variant="destructive" size="sm">
                 Save {product.discount}%
               </Badge>
             ) : null}
-            {outOfStock ? (
+            {price == null ? (
+              <Badge variant="charcoal" size="sm">
+                Built to order
+              </Badge>
+            ) : outOfStock ? (
               <Badge variant="charcoal" size="sm">
                 Pre-order
               </Badge>
@@ -114,17 +125,28 @@ function Body({ product }: { product: Product }) {
             )}
           </div>
 
-          <div className="mt-4 flex items-baseline gap-2.5">
-            <span className="font-heading text-3xl font-black leading-none">
-              {money(price)}
-            </span>
-            {product.discountPrice ? (
-              <span className="text-base text-muted-foreground line-through">
-                {money(product.price)}
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">per tyre, inc. GST</p>
+          {price != null ? (
+            <>
+              <div className="mt-4 flex items-baseline gap-2.5">
+                <span className="font-heading text-3xl font-black leading-none">
+                  {money(price)}
+                </span>
+                {product.discountPrice != null && product.price != null ? (
+                  <span className="text-base text-muted-foreground line-through">
+                    {money(product.price)}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">per tyre, inc. GST</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-4 font-heading text-3xl font-black leading-none">POA</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Price on application — built to order
+              </p>
+            </>
+          )}
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <QuantityStepper
@@ -132,23 +154,36 @@ function Body({ product }: { product: Product }) {
               label={`Quantity of ${product.brand} ${product.model} ${product.size}`}
               value={quantity}
               onChange={setQuantity}
-              max={outOfStock ? 200 : Math.max(product.stock, 1)}
+              max={price == null || outOfStock ? 200 : Math.max(product.stock, 1)}
             />
-            <Button onClick={handleAdd} className="flex-1">
-              <ShoppingCart aria-hidden="true" className="mr-2 h-4 w-4" />
-              {outOfStock ? 'Pre-order' : 'Add to cart'}
-            </Button>
+            {price != null ? (
+              <Button onClick={handleAdd} className="flex-1">
+                <ShoppingCart aria-hidden="true" className="mr-2 h-4 w-4" />
+                {outOfStock ? 'Pre-order' : 'Add to cart'}
+              </Button>
+            ) : (
+              <Button onClick={handleQuote} className="flex-1">
+                <MessageSquareQuote aria-hidden="true" className="mr-2 h-4 w-4" />
+                Request a quote
+              </Button>
+            )}
           </div>
 
           <p className="mt-3 flex items-start gap-2 rounded-md border border-border bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">
             <Info aria-hidden="true" className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
             <span>
-              {band ? (
+              {price == null ? (
+                <>
+                  This line is built to order, so it is priced per order rather
+                  than listed. Tell us the quantity and we come back with price
+                  and lead time, usually within one business day.
+                </>
+              ) : band ? (
                 <>
                   <strong className="font-semibold text-foreground">
-                    {band.label}: {money(unit)} each
+                    {band.label}: {money(price * (1 - band.discount))} each
                   </strong>{' '}
-                  — {money(price * quantity - unit * quantity)} off {quantity}{' '}
+                  — {money(price * quantity * band.discount)} off {quantity}{' '}
                   {pluralise(quantity, 'tyre')}, applied automatically in the cart.
                 </>
               ) : (

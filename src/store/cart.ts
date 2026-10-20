@@ -1,7 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { site } from '@/config/site'
-import { PRICE_BREAKS, effectivePrice, priceBreakFor } from '@/data/products'
+import {
+  PRICE_BREAKS,
+  effectivePrice,
+  hasPrice,
+  priceBreakFor,
+  productById,
+} from '@/data/products'
 import type { CartLine, Product } from '@/data/types'
 
 export type Fulfilment = 'delivery' | 'pickup'
@@ -48,6 +54,8 @@ export const useCart = create<CartState>()(
 
       add: (product, quantity = 1) =>
         set((state) => {
+          // Price-on-application lines go to a quote, never the cart.
+          if (!hasPrice(product)) return state
           const existing = state.lines.find((line) => line.id === product.id)
           const lines = existing
             ? state.lines.map((line) =>
@@ -133,6 +141,35 @@ export const useCart = create<CartState>()(
         fittingTyres: state.fittingTyres,
         promo: state.promo,
       }),
+      // A saved cart carries the unit price and SKU from the day it was
+      // filled. Re-read both from the catalogue on every load so the cart
+      // never shows yesterday's price, and drop lines that have left the
+      // range or moved to price on application.
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<CartState>
+        const lines = (saved.lines ?? []).flatMap((line): CartLine[] => {
+          const product = productById.get(line.id)
+          if (!product || !hasPrice(product)) return []
+          return [
+            {
+              ...line,
+              sku: product.sku,
+              brand: product.brand,
+              model: product.model,
+              size: product.size,
+              tread: product.tread,
+              price: effectivePrice(product),
+            },
+          ]
+        })
+        const total = lines.reduce((sum, line) => sum + line.quantity, 0)
+        return {
+          ...current,
+          ...saved,
+          lines,
+          fittingTyres: Math.min(saved.fittingTyres ?? 0, total),
+        }
+      },
     },
   ),
 )

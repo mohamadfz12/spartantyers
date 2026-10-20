@@ -32,12 +32,21 @@ export interface EnquiryFormProps {
   extras?: EnquiryExtra[]
   companyRequired?: boolean
   phoneRequired?: boolean
+  /** Off for forms whose `messagePrefix` and extras already say what is needed. */
+  messageRequired?: boolean
   messageLabel?: string
   messagePlaceholder?: string
   messageHint?: string
   submitLabel?: string
   successTitle?: string
   successBody?: string
+  /** Starting values for any field, keyed like the state: `message`, an extra's id… */
+  defaults?: Record<string, string>
+  /**
+   * A fixed first line for the message, sent however the visitor edits the
+   * box — e.g. which product a quote is for.
+   */
+  messagePrefix?: string
   className?: string
 }
 
@@ -50,12 +59,15 @@ export function EnquiryForm({
   extras = [],
   companyRequired = false,
   phoneRequired = false,
+  messageRequired = true,
   messageLabel = 'How can we help?',
   messagePlaceholder,
   messageHint,
   submitLabel = 'Send enquiry',
   successTitle = 'Enquiry received',
   successBody = `Thanks — we have your enquiry and will come back to you, usually within one business day. If it is urgent, call ${site.phone.display}.`,
+  defaults,
+  messagePrefix,
   className,
 }: EnquiryFormProps) {
   const uid = useId().replace(/:/g, '')
@@ -71,6 +83,7 @@ export function EnquiryForm({
     enquiryType: typeOptions ? '' : (enquiryType as string),
     message: '',
     ...Object.fromEntries(extras.map((extra) => [extra.id, ''])),
+    ...defaults,
   }))
 
   const [errors, setErrors] = useState<Errors>({})
@@ -111,8 +124,10 @@ export function EnquiryForm({
     }
 
     const message = values.message.trim()
-    if (!message) next.message = 'Please add a few details so we can answer properly.'
-    else if (message.length < 10) next.message = 'A little more detail will get you a better answer.'
+    if (messageRequired) {
+      if (!message) next.message = 'Please add a few details so we can answer properly.'
+      else if (message.length < 10) next.message = 'A little more detail will get you a better answer.'
+    }
 
     return next
   }
@@ -132,9 +147,9 @@ export function EnquiryForm({
       .filter((extra) => values[extra.id]?.trim())
       .map((extra) => `${extra.label}: ${values[extra.id].trim()}`)
 
-    const message = extraLines.length
-      ? `${extraLines.join('\n')}\n\n${values.message.trim()}`
-      : values.message.trim()
+    const header = [messagePrefix, ...extraLines].filter(Boolean).join('\n')
+    const body = values.message.trim()
+    const message = header && body ? `${header}\n\n${body}` : header || body
 
     setStatus('sending')
     try {
@@ -178,7 +193,9 @@ export function EnquiryForm({
               Object.fromEntries(
                 Object.keys(current).map((key) => [
                   key,
-                  key === 'enquiryType' && !typeOptions ? (enquiryType as string) : '',
+                  key === 'enquiryType' && !typeOptions
+                    ? (enquiryType as string)
+                    : (defaults?.[key] ?? ''),
                 ]),
               ),
             )
@@ -316,7 +333,7 @@ export function EnquiryForm({
       <Field
         label={messageLabel}
         htmlFor={field('message')}
-        required
+        required={messageRequired}
         hint={messageHint}
         error={errors.message}
       >

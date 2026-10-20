@@ -77,7 +77,7 @@ The instinct to keep three suppliers honest against each other is understandable
 
 What you get from concentrating the volume:
 
-- Stock held in depth on the lines you actually buy. Our GRT33 in 11R22.5 sits above 250 units for that reason.
+- Stock held in depth on the lines you actually buy, and build-to-order lines scheduled against your forecast instead of ordered in a hurry.
 - One person who knows your fleet and your fitment list, so a re-order is a phone call rather than a specification exercise.
 - Rare sizes through one channel. Brands we do not stock come via our partner 1 Truck Stop, so an odd fitment stays in the same conversation.
 
@@ -107,7 +107,7 @@ What follows: the compound softens and wears faster, belt-to-tread adhesion degr
 Specifying for heat means:
 
 - Correct cold pressure, every time. Underinflation is a heat problem before it is a wear problem.
-- Load index headroom. A tyre at 95 per cent of its rated load runs hotter than the same tyre at 80 per cent. The Lionshead LA301E and LD317E both carry a 149 load index in 11R22.5 - 3250kg against the 3150kg most 11R22.5 lines offer - which is a heat margin as much as a load margin.
+- Load index headroom. A tyre at 95 per cent of its rated load runs hotter than the same tyre at 80 per cent. In 11R22.5, an 18PR casing at 148/145 carries 3150kg against 3000kg for a 16PR at 146/143 - a heat margin as much as a load margin.
 - A speed rating that covers your operation. An M-rated casing is built to shed heat at 130 km/h, so at 100 km/h it has margin. A J-rated casing at 100 km/h has very little.
 - Not buying the deepest tread available unless you need it. A 23.5mm block has more rubber to flex and more insulation holding heat in the belt package - a legitimate trade on gravel, a bad one for a highway truck.
 
@@ -140,7 +140,7 @@ At the extreme end - logging and mine access roads - the HD01M at 23mm and the H
 
 Every casing has a load-speed relationship: carry more and you must go slower, go faster and you must carry less. The sidewall figures are the maximum of each, not both at once.
 
-The practical version for Australian work: if you run at or near maximum legal axle mass, do not also run at the top of the speed rating in summer. That combination is what produces heat failures. If you cannot avoid either, buy the load index headroom - two steer tyres at 3250kg give 6500kg against a 6000kg axle, where 3150kg tyres give 6300kg, legal but with nothing spare.
+The practical version for Australian work: if you run at or near maximum legal axle mass, do not also run at the top of the speed rating in summer. That combination is what produces heat failures. If you cannot avoid either, buy the load index headroom - two 295/80R22.5 steer tyres at 3750kg give 7500kg against a 6000kg axle, where 11R22.5 tyres at 3150kg give 6300kg, legal but with little spare.
 
 ## Specification checklist
 
@@ -195,7 +195,7 @@ Assume a B-double doing 200,000 km a year at 55 L/100km. That is 110,000 litres 
 - A 3 per cent saving is $6,600 a year.
 - The theoretical 7.5 per cent ceiling would be $16,500 a year.
 
-Now the cost side. Moving the two steer positions from a $335 B-rated tyre to a $469 A-rated G-PILOT X1 costs $268 extra per truck per set. Even if you gain nothing on the trailer positions, a 1 per cent fuel saving on this unit is $2,200 a year against a $268 one-off premium. The payback is measured in weeks, not years.
+Now the cost side. Moving the two steer positions from a $250 B-rated tyre to a $330 A-rated G-PILOT X1 costs $160 extra per truck per set. Even if you gain nothing on the trailer positions, a 1 per cent fuel saving on this unit is $2,200 a year against a $160 one-off premium. The payback is measured in weeks, not years.
 
 Across a fleet of ten units, 3 per cent is $66,000 a year. That is the scale at which this stops being a technical preference and becomes a budget line.
 
@@ -247,33 +247,33 @@ To be clear about our own position: we sell new tyres, not retreads. What we do 
 
 A commercial retread typically costs 35 to 45 per cent of the equivalent new tyre, including inspection, buffing, new tread and curing. You supply the casing.
 
-So when you scrap a sound casing you throw away the difference between the new price and the retread price. On a $365 drive tyre with a retread at 40 per cent, that is around $219 in the bin.
+So when you scrap a sound casing you throw away the difference between the new price and the retread price. On a $330 drive tyre with a retread at 40 per cent, that is around $198 in the bin.
 
 A premium casing designed for multiple lives will take two or three retread cycles. Our GRD57 in 11R22.5 is specified for two to three cycles, and the HD01M carries a thick undertread specifically to support multiple retreads. Three lives out of one casing changes the economics completely.
 
 ## The worked example
 
-Take a linehaul drive position. Assume a GRD57 at $365, and a conservative 170,000 km of removal mileage on the first life.
+Take a linehaul drive position. Assume a premium drive tyre at $330 - our G-PILOT X3 in 295/80R22.5, say - and a conservative 170,000 km of removal mileage on the first life.
 
 New tyre only, scrapped at removal:
 
-- $365 for 170,000 km
-- 0.215 cents per kilometre
+- $330 for 170,000 km
+- 0.194 cents per kilometre
 
 Same casing, two retreads at 40 per cent of new price, with retread lives coming in slightly shorter at 140,000 km each:
 
-- $365 plus $146 plus $146 equals $657
+- $330 plus $132 plus $132 equals $594
 - Total distance 170,000 plus 140,000 plus 140,000 equals 450,000 km
-- 0.146 cents per kilometre
+- 0.132 cents per kilometre
 
 That is a 32 per cent reduction in cost per kilometre from the same purchase decision, achieved by not scrapping the casing.
 
 Now compare the alternative strategy, buying cheaper and scrapping:
 
-- A $270 non-retreadable budget tyre delivering 120,000 km
-- 0.225 cents per kilometre
+- A $240 non-retreadable budget tyre delivering 120,000 km
+- 0.200 cents per kilometre
 
-The budget tyre is $95 cheaper on the invoice and 54 per cent more expensive per kilometre than the retreaded premium casing. This is the single most common mistake in fleet tyre purchasing: optimising the invoice instead of the kilometre.
+The budget tyre is $90 cheaper on the invoice and 52 per cent more expensive per kilometre than the retreaded premium casing. This is the single most common mistake in fleet tyre purchasing: optimising the invoice instead of the kilometre.
 
 > Run these numbers with your own removal mileages, not mine. The structure of the calculation matters more than my assumptions. If you do not know your removal mileages, that is the first problem to fix.
 
@@ -281,7 +281,7 @@ The budget tyre is $95 cheaper on the invoice and 54 per cent more expensive per
 
 There is a clean dividing line in our catalogue, and it follows rim diameter.
 
-Retreadable - every 22.5in and 19.5in line we stock:
+Retreadable - the 22.5in and 19.5in lines specified for it:
 
 - Greforce GRD57, GRD35, GRD37, GR622, HD01M, HD02 - drive patterns in 11R22.5
 - Greforce G-PILOT X1 and G-PILOT X3 in 295/80R22.5
@@ -292,10 +292,12 @@ Retreadable - every 22.5in and 19.5in line we stock:
 - Greforce GR612 and GR678 in 265/70R19.5
 - Lionshead LA301E and LD317E in 11R22.5
 
+The Lionshead LA313E, LD316E and LD330E in 11R22.5 are newer to the range and have no published retread rating yet - ask us before you plan a casing programme around them.
+
 Not retreadable - the 17.5in light-truck lines:
 
 - Greforce GRT33 and GR999 in 9.5R17.5
-- Greforce GR999 in 215/75R17.5 and 235/75R17.5
+- Greforce GR999 in 215/75R17.5 and 235/75R17.5, and the GRT52 in 215/75R17.5
 - Greforce GR612 in 235/75R17.5
 - Lionshead LA302E in 215/75R17.5
 - Lionshead LD328E and LS306E in 235/75R17.5
@@ -399,7 +401,7 @@ A compromise is right in three situations.
 
 - The truck's work is genuinely unpredictable. If a prime mover might be on a highway run this week and a quarry access road next week, one specification across the truck beats one optimised for a duty cycle it will not be doing.
 - You run a rotation programme. If tyres move through positions over their life, they need to be legal and effective in all of them. Our GR881 in 11R22.5 exists for this: an all-position casing with 15mm of tread rather than the 13.5mm of the GRT33, because rotating tyres need depth to give away.
-- You are cutting SKU count. Consolidating the unpredictable vehicles onto one all-position line - the G-ARMOR A68 in 11R22.5, or the Lionshead LA301E with its 149 load index - can take several part numbers out of the system.
+- You are cutting SKU count. Consolidating the unpredictable vehicles onto one all-position line - the G-ARMOR A68 or the Lionshead LA301E in 11R22.5 - can take several part numbers out of the system.
 
 Where all-position does not make sense: a dedicated linehaul fleet doing the same sealed-road run every week. You know the duty cycle, so buy for it. A matched G-PILOT X1 steer and X3 drive will beat an all-position compromise on both fuel and removal mileage.
 
@@ -554,7 +556,7 @@ A tyre that repeatedly loses pressure after the valve stem and core have been re
 
 If the tread is worn out but the casing is sound you have a choice: retreading typically costs 35 to 45 per cent of a new tyre.
 
-Retread when the casing is sound with no impact damage or sidewall repairs, the tyre was bought as a premium retreadable casing, the position is drive or trailer, and you have records of its history. Everything we stock in 22.5in and 19.5in is specified as retreadable; our 17.5in light-truck lines are not.
+Retread when the casing is sound with no impact damage or sidewall repairs, the tyre was bought as a premium retreadable casing, the position is drive or trailer, and you have records of its history. Most of what we stock in 22.5in and 19.5in is specified as retreadable - each product page says which - while our 17.5in light-truck lines are not built for it.
 
 Replace when the casing has sidewall damage, has been run flat, or has an unknown history - and on steer axles of heavy vehicles, where the consequence of a failure is not comparable to a drive or trailer failure.
 
@@ -609,7 +611,7 @@ The first figure is the load index for a single fitment, the second for a dual f
 
 So a 148/145 tyre carries 3150kg on its own, or 2900kg each in a dual pair. Two on a steer axle gives 6300kg against a 6.0 tonne axle. Eight drive tyres in duals at 2900kg gives 23,200kg against a 16.5 tonne tandem drive group.
 
-Fitting a tyre with a lower load index than your axle requires is unsafe and a compliance problem, and it is easy to do by accident because two tyres in the same size can carry different indexes. Our Greforce GRT33 in 11R22.5 is 148/145; the Lionshead LA301E in the same size is 149/146, one step higher at 3250kg. If you run at maximum legal axle mass, that step is worth having.
+Fitting a tyre with a lower load index than your axle requires is unsafe and a compliance problem, and it is easy to do by accident because two tyres in the same size can carry different indexes. Our Greforce GRD37 in 11R22.5 is 146/143 on a 16PR casing; the GRT33 in the same size is 148/145 on an 18PR, one step higher at 3150kg. If you run at maximum legal axle mass, that step is worth having.
 
 Watch for sizes quoted with two load ratings - our GRD1212 is listed as 146/143 or 148/145 because both have shipped - and check the sidewall of what arrives against your vehicle plate before fitting.
 

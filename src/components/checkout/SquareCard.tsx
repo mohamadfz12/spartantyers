@@ -370,6 +370,9 @@ export function SquareCard({
         // Ids and quantities only — the server reprices from the catalogue.
         lines,
         ...(notes ? { notes } : {}),
+        // Not an input to the price: the server refuses to charge anything
+        // other than the total this button showed.
+        expectedTotal: amount,
       })
 
       onSuccess({
@@ -382,6 +385,7 @@ export function SquareCard({
     },
     [
       address,
+      amount,
       customer,
       fittingTyres,
       fulfilment,

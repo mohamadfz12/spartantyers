@@ -13,7 +13,7 @@ import {
   Truck,
 } from 'lucide-react'
 import { site } from '@/config/site'
-import { cn, money, pluralise } from '@/lib/utils'
+import { cn, pluralise, priceLabel } from '@/lib/utils'
 import { useAxle } from '@/store/ui'
 import {
   POSITION_LABELS,
@@ -37,6 +37,7 @@ import { Seo, localBusinessJsonLd } from '@/components/Seo'
 import { Icon } from '@/components/Icon'
 import { Badge, Button, Card, Rating } from '@/components/ui'
 import { ProductCard } from '@/components/shop/ProductCard'
+import { ProductThumb } from '@/components/shop/ProductThumb'
 import { AxleSelector } from '@/components/shop/AxleSelector'
 import { BrandMark } from '@/components/brand/BrandMark'
 import { HeroWheel, StaticWheel } from '@/components/three'
@@ -218,8 +219,15 @@ function Hero() {
             </p>
             <p className="font-mono text-xs text-white/60">{heroProduct.size}</p>
             <p className="mt-1.5 text-[0.7rem] text-white/50">
-              {heroProduct.treadDepthMm}mm tread · {heroProduct.ply} ·{' '}
-              {heroProduct.maxLoadKg.toLocaleString('en-AU')}kg
+              {[
+                heroProduct.treadDepthMm != null ? `${heroProduct.treadDepthMm}mm tread` : null,
+                heroProduct.ply,
+                heroProduct.maxLoadKg != null
+                  ? `${heroProduct.maxLoadKg.toLocaleString('en-AU')}kg`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </p>
           </motion.div>
 
@@ -329,7 +337,11 @@ function AxlePicker() {
                       className="group flex items-center gap-4 rounded-lg border border-border bg-card p-3.5 transition-all duration-300 ease-brand hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lift"
                     >
                       <div className="h-14 w-14 shrink-0">
-                        <StaticWheel tread={product.tread} />
+                        <ProductThumb
+                          brand={product.brand}
+                          model={product.model}
+                          tread={product.tread}
+                        />
                       </div>
 
                       <div className="min-w-0 flex-1">
@@ -337,19 +349,26 @@ function AxlePicker() {
                           {product.brand} {product.model}
                         </p>
                         <p className="font-mono text-xs text-muted-foreground">
-                          {product.size} · {product.treadDepthMm}mm ·{' '}
-                          {product.ply}
+                          {[
+                            product.size,
+                            product.treadDepthMm != null ? `${product.treadDepthMm}mm` : null,
+                            product.ply,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </p>
-                        <Rating
-                          value={product.rating}
-                          count={product.reviewCount}
-                          size="sm"
-                          className="mt-1"
-                        />
+                        {product.reviewCount > 0 ? (
+                          <Rating
+                            value={product.rating}
+                            count={product.reviewCount}
+                            size="sm"
+                            className="mt-1"
+                          />
+                        ) : null}
                       </div>
 
                       <span className="shrink-0 font-heading text-base font-black">
-                        {money(effectivePrice(product))}
+                        {priceLabel(effectivePrice(product))}
                       </span>
                     </Link>
                   </li>
@@ -409,29 +428,46 @@ function FeaturedRange() {
  * Anatomy — scroll-pinned teardown
  * ================================================================== */
 
+/* The anatomy figures are read off the catalogue, so adding a line can never
+   leave a stale range on the home page. Unpublished figures are left out. */
+const published = (values: Array<number | null>) =>
+  values.filter((value): value is number => value != null)
+
+const treadDepths = published(products.map((p) => p.treadDepthMm))
+const deepest = products.find((p) => p.treadDepthMm === Math.max(...treadDepths))
+const plies = products.map((p) => Number.parseInt(p.ply, 10))
+const rims = [...new Set(products.map((p) => p.rim))].sort((a, b) => Number(a) - Number(b))
+const loads = published(products.map((p) => p.maxLoadKg))
+const RANGE = {
+  tread: `${Math.min(...treadDepths)} – ${Math.max(...treadDepths)}mm`,
+  ply: `${Math.min(...plies)} – ${Math.max(...plies)}PR`,
+  rim: { min: rims[0], max: rims[rims.length - 1] },
+  load: `${Math.min(...loads).toLocaleString('en-AU')} – ${Math.max(...loads).toLocaleString('en-AU')}kg`,
+}
+
 const ANATOMY_STEPS = [
   {
     title: 'Tread & cap compound',
-    body: 'The wearing surface, and the number you are really buying. Our range runs from 12.5mm on a light-truck steer rib to 23.5mm on the HD02 drive lug — and tread depth is what sets removal mileage.',
-    stat: '12.5 – 23.5mm',
+    body: `The wearing surface, and the number you are really buying. Our range runs from ${Math.min(...treadDepths)}mm on a light-truck rib to ${Math.max(...treadDepths)}mm on the ${deepest?.model ?? 'deepest'} drive lug — and tread depth is what sets removal mileage.`,
+    stat: RANGE.tread,
     statLabel: 'Tread depth across the range',
   },
   {
     title: 'Belt package & casing',
     body: 'Steel belts over a radial ply casing. This is the structural part: it carries the load, survives the heat, and decides whether the tyre is worth retreading when the tread is gone.',
-    stat: '16 – 24PR',
+    stat: RANGE.ply,
     statLabel: 'Ply ratings we stock',
   },
   {
     title: 'Bead & rim seat',
-    body: 'The bead locks against the rim flange to hold air. Rim width has to match the tyre, which is why every one of our spec sheets lists the correct measuring rim — from 6.00 up to 11.75.',
-    stat: '6.00 – 11.75',
+    body: `The bead locks against the rim flange to hold air. Rim width has to match the tyre, which is why every one of our spec sheets lists the correct measuring rim — from ${RANGE.rim.min} up to ${RANGE.rim.max}.`,
+    stat: `${RANGE.rim.min} – ${RANGE.rim.max}`,
     statLabel: 'Measuring rim widths',
   },
   {
     title: 'Load & speed rating',
     body: 'The two markings that decide legality. A 164 load index on our GR666 super-single carries 5000kg on a single fitment; an M speed symbol allows 130km/h. Get these wrong and the tyre is wrong.',
-    stat: '1,750 – 5,000kg',
+    stat: RANGE.load,
     statLabel: 'Load capacity per tyre',
   },
 ]

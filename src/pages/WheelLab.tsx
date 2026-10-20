@@ -15,13 +15,14 @@ import {
   Zap,
 } from 'lucide-react'
 import { site } from '@/config/site'
-import { cn, money, pluralise } from '@/lib/utils'
+import { cn, money, pluralise, specValue } from '@/lib/utils'
 import { useAxle, useRenderQuality, toast } from '@/store/ui'
 import { useCart } from '@/store/cart'
 import {
   POSITION_LABELS,
   allSizes,
-  effectivePrice,
+  hasPrice,
+  lowestPrice,
   products,
 } from '@/data/products'
 import type { AxlePosition, Product, TreadFamily } from '@/data/types'
@@ -30,9 +31,11 @@ import { Badge, Button, Card, Select, Tooltip } from '@/components/ui'
 import { ProductCard } from '@/components/shop/ProductCard'
 import {
   EXPLODED_PARTS,
+  NOMINAL_TREAD_DEPTH_MM,
   StaticWheel,
   TREAD_SPECS,
   WheelConfigurator,
+  drawnTreadDepth,
   wheelProportions,
 } from '@/components/three'
 import { Reveal, Stagger } from '@/components/motion'
@@ -95,17 +98,31 @@ export default function WheelLab() {
   /** The tyre whose markings are stamped on the 3D sidewall. */
   const reference: Product | undefined = exact[0] ?? closest[0]
 
-  const treadDepthMm = reference?.treadDepthMm ?? TREAD_DEPTH_FALLBACK[tread]
+  // Drawn with the family's nominal depth when the reference tyre has no
+  // published figure; the readout below says so rather than show it.
+  const treadDepthMm = reference ? drawnTreadDepth(reference) : NOMINAL_TREAD_DEPTH_MM[tread]
 
+  // A reference tyre's own markings, even where they are unpublished — the
+  // stand-in marking is only for a build with no catalogue match at all.
   const sidewall = useMemo(
-    () => ({
-      brand: reference?.brand ?? 'Greforce',
-      model: reference?.model ?? TREAD_SPECS[tread].label,
-      size,
-      loadIndex: reference?.loadIndex ?? '148/145',
-      speedRating: reference?.speedRating ?? 'M',
-      ply: reference?.ply ?? '18PR',
-    }),
+    () =>
+      reference
+        ? {
+            brand: reference.brand,
+            model: reference.model,
+            size,
+            loadIndex: reference.loadIndex,
+            speedRating: reference.speedRating,
+            ply: reference.ply,
+          }
+        : {
+            brand: 'Greforce',
+            model: TREAD_SPECS[tread].label,
+            size,
+            loadIndex: '148/145',
+            speedRating: 'M',
+            ply: '18PR',
+          },
     [reference, size, tread],
   )
 
@@ -179,14 +196,22 @@ export default function WheelLab() {
                 <Metric
                   icon={Layers}
                   label="Tread depth"
-                  value={`${treadDepthMm}mm`}
+                  value={
+                    reference && reference.treadDepthMm == null
+                      ? 'TBC'
+                      : `${treadDepthMm}mm`
+                  }
                 />
                 <Metric
                   icon={Scale}
                   label="Max load"
                   value={
                     reference
-                      ? `${reference.maxLoadKg.toLocaleString('en-AU')}kg`
+                      ? specValue(
+                          reference.maxLoadKg,
+                          (kg) => `${kg.toLocaleString('en-AU')}kg`,
+                          'TBC',
+                        )
                       : '—'
                   }
                 />
@@ -392,14 +417,6 @@ export default function WheelLab() {
   )
 }
 
-/** Representative tread depth when no catalogue tyre matches the build. */
-const TREAD_DEPTH_FALLBACK: Record<TreadFamily, number> = {
-  rib: 14,
-  lug: 21.5,
-  block: 15.5,
-  trailer: 12.5,
-}
-
 /* ================================================================== *
  * Intro
  * ================================================================== */
@@ -533,11 +550,13 @@ function Matches({
   axle: AxlePosition
 }) {
   const add = useCart((s) => s.add)
+  // Price-on-application matches are quoted from their own cards, not bulk-added.
+  const buyable = exact.filter(hasPrice)
 
   const addAll = () => {
-    exact.forEach((product) => add(product))
+    buyable.forEach((product) => add(product))
     toast({
-      title: `${exact.length} ${pluralise(exact.length, 'tyre')} added`,
+      title: `${buyable.length} ${pluralise(buyable.length, 'tyre')} added`,
       description: 'Volume discounts apply automatically from four tyres up.',
       variant: 'success',
     })
@@ -561,10 +580,10 @@ function Matches({
             </p>
           </div>
 
-          {exact.length > 1 ? (
+          {buyable.length > 1 ? (
             <Button onClick={addAll}>
               <ShoppingCart className="mr-2 h-4 w-4" />
-              Add all {exact.length} to cart
+              Add all {buyable.length} to cart
             </Button>
           ) : null}
         </Reveal>
@@ -651,13 +670,9 @@ function PatternCompare({
           {TREAD_FAMILIES.map((family, index) => {
             const spec = TREAD_SPECS[family]
             const isActive = active === family
-            const count = products.filter((p) => p.tread === family).length
-            const cheapest = products
-              .filter((p) => p.tread === family)
-              .reduce<number | null>((min, p) => {
-                const price = effectivePrice(p)
-                return min === null || price < min ? price : min
-              }, null)
+            const inFamily = products.filter((p) => p.tread === family)
+            const count = inFamily.length
+            const cheapest = lowestPrice(inFamily)
 
             return (
               <Reveal key={family} delay={index * 0.08}>

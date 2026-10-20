@@ -4,6 +4,7 @@ import {
   Fuel,
   Gauge,
   Layers,
+  MessageSquareQuote,
   Plus,
   RefreshCw,
   Scale,
@@ -12,14 +13,13 @@ import {
   Volume2,
 } from 'lucide-react'
 import type { Product } from '@/data/types'
-import { effectivePrice, POSITION_LABELS } from '@/data/products'
-import { cn, money } from '@/lib/utils'
+import { effectivePrice, hasPrice, POSITION_LABELS } from '@/data/products'
+import { cn, money, specValue } from '@/lib/utils'
 import { useCart } from '@/store/cart'
-import { useCompare } from '@/store/ui'
-import { toast } from '@/store/ui'
+import { requestQuote, toast, useCompare } from '@/store/ui'
 import { Badge, Button, Rating, Tooltip } from '@/components/ui'
 import { StaticWheel } from '@/components/three'
-import { productGallery } from '@/data/media'
+import { productCardPhoto, productGallery } from '@/data/media'
 import { Tilt } from '@/components/motion'
 
 export interface ProductCardProps {
@@ -40,12 +40,14 @@ export function ProductCard({
   const compareIds = useCompare((s) => s.ids)
   const toggleCompare = useCompare((s) => s.toggle)
 
+  const priced = hasPrice(product)
   const price = effectivePrice(product)
+  const photo = productCardPhoto(product)
   const inCompare = compareIds.includes(product.id)
   const compareFull = compareIds.length >= 4 && !inCompare
 
-  const outOfStock = product.stock <= 0
-  const lowStock = product.stock > 0 && product.stock <= 5
+  const outOfStock = priced && product.stock <= 0
+  const lowStock = priced && product.stock > 0 && product.stock <= 5
 
   const handleAdd = () => {
     add(product)
@@ -70,7 +72,11 @@ export function ProductCard({
             Save {product.discount}%
           </Badge>
         ) : null}
-        {outOfStock ? (
+        {!priced ? (
+          <Badge variant="charcoal" size="sm">
+            Built to order
+          </Badge>
+        ) : outOfStock ? (
           <Badge variant="charcoal" size="sm">
             Pre-order
           </Badge>
@@ -111,37 +117,61 @@ export function ProductCard({
       {/* Visual */}
       <Link
         to={`/product/${product.id}`}
-        className="relative block overflow-hidden bg-muted"
+        className={cn('relative block overflow-hidden', photo ? 'bg-white' : 'bg-muted')}
         aria-label={`View ${product.brand} ${product.model} ${product.size}`}
       >
-        {/* Tread photography as the backdrop, with the generated wheel in
-            front. The photograph gives the card real texture; the wheel is
-            what stays accurate to this SKU's brand, size and pattern, so the
-            two are layered rather than one replacing the other. */}
-        <img
-          src={productGallery[0].src}
-          alt=""
-          aria-hidden="true"
-          width={productGallery[0].width}
-          height={productGallery[0].height}
-          loading="lazy"
-          decoding="async"
-          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-[1px] transition-transform duration-700 group-hover:scale-125 dark:opacity-25"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/40 to-background/80" />
+        {photo ? (
+          /* The catalogue photograph of this pattern, on the white it was
+             shot on — in either colour scheme, the way a buyer expects a
+             product shot to look. */
+          <div className={cn('relative p-4', compact ? 'h-36' : 'h-48')}>
+            <img
+              src={photo.src}
+              alt={photo.alt}
+              width={photo.width}
+              height={photo.height}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.06]"
+            />
+          </div>
+        ) : (
+          <>
+            {/* No photograph of this pattern yet: tread photography as the
+                backdrop, with the generated wheel in front. The wheel is what
+                stays accurate to this SKU's brand, size and pattern, so the
+                two are layered rather than one replacing the other. */}
+            <img
+              src={productGallery[0].src}
+              alt=""
+              aria-hidden="true"
+              width={productGallery[0].width}
+              height={productGallery[0].height}
+              loading="lazy"
+              decoding="async"
+              className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-[1px] transition-transform duration-700 group-hover:scale-125 dark:opacity-25"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/40 to-background/80" />
 
-        <Tilt max={7} className={cn('relative p-5', compact ? 'h-36' : 'h-48')}>
-          <StaticWheel
-            tread={product.tread}
-            label={product.brand}
-            size={product.size}
-            className="h-full w-full drop-shadow-[0_8px_24px_rgba(0,0,0,0.55)] transition-transform duration-500 group-hover:scale-[1.06]"
-            title={`${product.brand} ${product.model} ${product.size}`}
-          />
-        </Tilt>
+            <Tilt max={7} className={cn('relative p-5', compact ? 'h-36' : 'h-48')}>
+              <StaticWheel
+                tread={product.tread}
+                label={product.brand}
+                size={product.size}
+                className="h-full w-full drop-shadow-[0_8px_24px_rgba(0,0,0,0.55)] transition-transform duration-500 group-hover:scale-[1.06]"
+                title={`${product.brand} ${product.model} ${product.size}`}
+              />
+            </Tilt>
+          </>
+        )}
 
-        {/* Tread family caption */}
-        <span className="absolute bottom-2 left-3 font-heading text-[0.6rem] font-bold uppercase tracking-brand text-muted-foreground">
+        {/* Fitment caption */}
+        <span
+          className={cn(
+            'absolute bottom-2 left-3 font-heading text-[0.6rem] font-bold uppercase tracking-brand',
+            photo ? 'text-neutral-500' : 'text-muted-foreground',
+          )}
+        >
           {product.positionLabel}
         </span>
       </Link>
@@ -167,35 +197,53 @@ export function ProductCard({
 
         {!compact ? (
           <>
-            <div className="mt-2.5 flex items-center gap-2">
-              <Rating value={product.rating} count={product.reviewCount} size="sm" />
-            </div>
+            {product.reviewCount > 0 ? (
+              <div className="mt-2.5 flex items-center gap-2">
+                <Rating value={product.rating} count={product.reviewCount} size="sm" />
+              </div>
+            ) : null}
 
             {/* Spec chips — the four numbers a buyer actually compares. */}
             <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
               <SpecChip
                 icon={Layers}
                 label="Tread"
-                value={`${product.treadDepthMm}mm`}
-                hint="Tread depth when new — sets removal mileage"
+                value={specValue(product.treadDepthMm, (mm) => `${mm}mm`, 'TBC')}
+                hint={
+                  product.treadDepthMm != null
+                    ? 'Tread depth when new — sets removal mileage'
+                    : 'Tread depth not published — confirmed with your order'
+                }
               />
               <SpecChip
                 icon={Scale}
                 label="Load"
-                value={`${product.maxLoadKg.toLocaleString('en-AU')}kg`}
-                hint={`Load index ${product.loadIndex} — maximum per tyre, single fitment`}
+                value={specValue(product.maxLoadKg, (kg) => `${kg.toLocaleString('en-AU')}kg`, 'TBC')}
+                hint={
+                  product.loadIndex != null
+                    ? `Load index ${product.loadIndex} — maximum per tyre, single fitment`
+                    : 'Load index not published — confirmed with your order'
+                }
               />
               <SpecChip
                 icon={Gauge}
                 label="Speed"
-                value={`${product.maxSpeedKmh}km/h`}
-                hint={`Speed symbol ${product.speedRating}`}
+                value={specValue(product.maxSpeedKmh, (kmh) => `${kmh}km/h`, 'TBC')}
+                hint={
+                  product.speedRating != null
+                    ? `Speed symbol ${product.speedRating}`
+                    : 'Speed symbol not published — confirmed with your order'
+                }
               />
               <SpecChip
                 icon={Fuel}
                 label="Fuel"
-                value={product.fuelRating}
-                hint="Rolling resistance rating, A best to G worst"
+                value={product.fuelRating ?? '—'}
+                hint={
+                  product.fuelRating != null
+                    ? 'Rolling resistance rating, A best to G worst'
+                    : 'No EU tyre label published for this line'
+                }
               />
             </dl>
 
@@ -224,12 +272,14 @@ export function ProductCard({
                   </Badge>
                 </Tooltip>
               ) : null}
-              <Tooltip content={`${product.noiseDb}dB pass-by noise`}>
-                <Badge variant="outline" size="sm">
-                  <Volume2 className="mr-1 h-2.5 w-2.5" />
-                  {product.noiseDb}dB
-                </Badge>
-              </Tooltip>
+              {product.noiseDb != null ? (
+                <Tooltip content={`${product.noiseDb}dB pass-by noise`}>
+                  <Badge variant="outline" size="sm">
+                    <Volume2 className="mr-1 h-2.5 w-2.5" />
+                    {product.noiseDb}dB
+                  </Badge>
+                </Tooltip>
+              ) : null}
             </div>
           </>
         ) : null}
@@ -237,21 +287,30 @@ export function ProductCard({
         {/* Price & actions */}
         <div className="mt-auto pt-4">
           <div className="flex items-end justify-between gap-2">
-            <div>
-              <div className="flex items-baseline gap-2">
-                <span className="font-heading text-2xl font-black leading-none">
-                  {money(price)}
-                </span>
-                {product.discountPrice ? (
-                  <span className="text-sm text-muted-foreground line-through">
-                    {money(product.price)}
+            {price != null ? (
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <span className="font-heading text-2xl font-black leading-none">
+                    {money(price)}
                   </span>
-                ) : null}
+                  {product.discountPrice != null && product.price != null ? (
+                    <span className="text-sm text-muted-foreground line-through">
+                      {money(product.price)}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
+                  per tyre, inc. GST
+                </p>
               </div>
-              <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
-                per tyre, inc. GST
-              </p>
-            </div>
+            ) : (
+              <div>
+                <span className="font-heading text-2xl font-black leading-none">POA</span>
+                <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
+                  Price on application
+                </p>
+              </div>
+            )}
 
             {onQuickView ? (
               <button
@@ -264,14 +323,25 @@ export function ProductCard({
             ) : null}
           </div>
 
-          <Button
-            onClick={handleAdd}
-            className="mt-3 w-full"
-            variant={outOfStock ? 'outline' : 'primary'}
-          >
-            <ShoppingCart className="mr-2 h-4 w-4" />
-            {outOfStock ? 'Pre-order' : 'Add to cart'}
-          </Button>
+          {priced ? (
+            <Button
+              onClick={handleAdd}
+              className="mt-3 w-full"
+              variant={outOfStock ? 'outline' : 'primary'}
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              {outOfStock ? 'Pre-order' : 'Add to cart'}
+            </Button>
+          ) : (
+            <Button
+              onClick={() => requestQuote(product)}
+              className="mt-3 w-full"
+              variant="outline"
+            >
+              <MessageSquareQuote className="mr-2 h-4 w-4" />
+              Request a quote
+            </Button>
+          )}
         </div>
       </div>
     </article>

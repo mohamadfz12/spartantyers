@@ -7,7 +7,9 @@ import {
   Check,
   ChevronRight,
   Clock,
+  Factory,
   MapPin,
+  MessageSquareQuote,
   Package,
   Phone,
   RotateCcw,
@@ -26,10 +28,10 @@ import {
 import { averageRating, reviewsForProduct } from '@/data/reviews'
 import { deliveryZones, warrantyTerms } from '@/data/content'
 import { site } from '@/config/site'
-import { cn, formatDate, formatNumber, money, pluralise } from '@/lib/utils'
+import { cn, formatDate, formatNumber, money, pluralise, specValue } from '@/lib/utils'
 import { useCart } from '@/store/cart'
-import { toast, useRecentlyViewed, useRenderQuality } from '@/store/ui'
-import { productGallery } from '@/data/media'
+import { requestQuote, toast, useRecentlyViewed, useRenderQuality } from '@/store/ui'
+import { productGallery, productPhotoFor, type GalleryShot } from '@/data/media'
 import {
   Badge,
   Button,
@@ -46,9 +48,22 @@ import { ProductCard } from '@/components/shop/ProductCard'
 import { QuantityStepper } from '@/components/shop/QuantityStepper'
 import { SpecTable } from '@/components/shop/SpecTable'
 
-/** The client's pre-order wording, reproduced exactly. */
+/**
+ * The client's pre-order wording. It used to promise stock "1–7 August",
+ * which had long passed; the date is gone until there is a real one to give.
+ */
 const PRE_ORDER_COPY =
-  'This tyre is currently out of stock. We expect to receive stock 1–7 August. Pre-order now to secure yours — normal shipping and handling times apply once stock is received.'
+  'This tyre is currently out of stock. Pre-order now to secure yours — we will confirm the expected arrival with you, and normal shipping and handling times apply once stock is received.'
+
+/** The gallery for one product: its own photograph first, stock shots only when it has none. */
+function galleryFor(product: Product): { shots: GalleryShot[]; leadWithPhoto: boolean } {
+  const own = productPhotoFor(product)
+  if (!own) return { shots: productGallery, leadWithPhoto: false }
+  return {
+    shots: [{ ...own, label: own.wholeTyre ? 'Photo' : 'Tread', illustrative: false }],
+    leadWithPhoto: own.wholeTyre,
+  }
+}
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>()
@@ -69,29 +84,32 @@ function Detail({ product }: { product: Product }) {
   const setQuality = useRenderQuality((state) => state.setQuality)
 
   const [quantity, setQuantity] = useState(4)
+  const { shots, leadWithPhoto } = useMemo(() => galleryFor(product), [product])
   /** Which gallery image is showing: the generated wheel, or a photo index. */
-  const [shot, setShot] = useState<'wheel' | number>('wheel')
+  const [shot, setShot] = useState<'wheel' | number>(leadWithPhoto ? 0 : 'wheel')
 
   useEffect(() => record(product.id), [record, product.id])
 
   const price = effectivePrice(product)
-  const outOfStock = product.stock <= 0
-  const lowStock = product.stock > 0 && product.stock <= 5
-  const maxQuantity = outOfStock ? 200 : Math.max(product.stock, 1)
+  const outOfStock = price != null && product.stock <= 0
+  const lowStock = price != null && product.stock > 0 && product.stock <= 5
+  const maxQuantity = price == null || outOfStock ? 200 : Math.max(product.stock, 1)
 
   const band = priceBreakFor(quantity)
-  const unitPrice = band ? price * (1 - band.discount) : price
   const nextBreak = PRICE_BREAKS.find((entry) => quantity < entry.min) ?? null
 
   const reviews = useMemo(() => reviewsForProduct(product.id), [product.id])
   const average = useMemo(() => averageRating(product.id), [product.id])
   const related = useMemo(() => relatedProducts(product), [product])
   const tread = TREAD_SPECS[product.tread]
+  const photo = shot === 'wheel' ? null : shots[shot]
 
   const jsonLd = useMemo(() => {
     const validUntil = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
       .toISOString()
       .slice(0, 10)
+
+    const own = productPhotoFor(product)
 
     const productLd: Record<string, unknown> = {
       '@context': 'https://schema.org',
@@ -102,18 +120,24 @@ function Detail({ product }: { product: Product }) {
       description: product.description,
       category: 'Commercial truck tyres',
       brand: { '@type': 'Brand', name: product.brand },
-      offers: {
+      ...(own ? { image: `${site.url}${own.src}` } : {}),
+    }
+
+    // A price-on-application line has no price to put in an Offer, and an
+    // Offer without one is invalid — so POA lines simply carry none.
+    if (price != null) {
+      productLd.offers = {
         '@type': 'Offer',
         url: `${site.url}/product/${product.id}`,
         priceCurrency: 'AUD',
-        price: effectivePrice(product).toFixed(2),
+        price: price.toFixed(2),
         priceValidUntil: validUntil,
         availability: outOfStock
           ? 'https://schema.org/PreOrder'
           : 'https://schema.org/InStock',
         itemCondition: 'https://schema.org/NewCondition',
         seller: { '@type': 'Organization', name: site.legalName },
-      },
+      }
     }
 
     const reviewed = reviewsForProduct(product.id)
@@ -135,7 +159,7 @@ function Detail({ product }: { product: Product }) {
         { name: `${product.brand} ${product.model} ${product.size}`, path: `/product/${product.id}` },
       ]),
     ]
-  }, [product, outOfStock])
+  }, [product, price, outOfStock])
 
   const handleAdd = () => {
     add(product, quantity)
@@ -146,11 +170,22 @@ function Detail({ product }: { product: Product }) {
     })
   }
 
+  const specFacts = [
+    `${product.ply} casing`,
+    product.treadDepthMm != null ? `${product.treadDepthMm}mm tread` : null,
+    product.maxLoadKg != null ? `${formatNumber(product.maxLoadKg)}kg per tyre` : null,
+  ].filter(Boolean)
+  const specSummary = `${product.headline}. ${specFacts.join(', ')}.`
+
   return (
     <>
       <Seo
-        title={`${product.brand} ${product.model} ${product.size} — ${money(price)} | ${site.name}`}
-        description={`${product.headline}. ${product.ply} casing, ${product.treadDepthMm}mm tread, ${formatNumber(product.maxLoadKg)}kg per tyre. ${money(price)} per tyre inc. GST, ${outOfStock ? 'available to pre-order' : 'in stock at Yennora'}.`}
+        title={`${product.brand} ${product.model} ${product.size} — ${price != null ? money(price) : 'Price on application'} | ${site.name}`}
+        description={
+          price != null
+            ? `${specSummary} ${money(price)} per tyre inc. GST, ${outOfStock ? 'available to pre-order' : 'in stock at Yennora'}.`
+            : `${specSummary} Built to order — request a quote for price and lead time.`
+        }
         canonicalPath={`/product/${product.id}`}
         type="product"
         jsonLd={jsonLd}
@@ -190,8 +225,15 @@ function Detail({ product }: { product: Product }) {
       <section className="shell grid gap-8 py-8 lg:grid-cols-2 lg:gap-12 lg:py-14">
         {/* Wheel */}
         <div>
-          <div className="relative overflow-hidden rounded-lg border border-border bg-gradient-to-b from-muted/60 to-muted">
-            {shot === 'wheel' ? (
+          <div
+            className={cn(
+              'relative overflow-hidden rounded-lg border border-border',
+              photo && !photo.illustrative
+                ? 'bg-white'
+                : 'bg-gradient-to-b from-muted/60 to-muted',
+            )}
+          >
+            {photo == null ? (
               <>
                 <ProductWheel
                   product={product}
@@ -207,18 +249,22 @@ function Detail({ product }: { product: Product }) {
             ) : (
               <>
                 <img
-                  key={productGallery[shot].src}
-                  src={productGallery[shot].src}
-                  alt={productGallery[shot].alt}
-                  width={productGallery[shot].width}
-                  height={productGallery[shot].height}
+                  key={photo.src}
+                  src={photo.src}
+                  alt={photo.alt}
+                  width={photo.width}
+                  height={photo.height}
                   decoding="async"
-                  className="h-[18rem] w-full animate-in fade-in object-cover duration-300 sm:h-[24rem] lg:h-[30rem]"
+                  className={cn(
+                    'h-[18rem] w-full animate-in fade-in duration-300 sm:h-[24rem] lg:h-[30rem]',
+                    photo.illustrative ? 'object-cover' : 'object-contain p-6',
+                  )}
                 />
                 {/* A buyer should never have to guess whether a photo is of
-                    the exact item. These two shots are shared across the
-                    range, so say so rather than imply otherwise. */}
-                {productGallery[shot].illustrative ? (
+                    the exact item. The stock shots are shared across lines
+                    with no photograph of their own, so say so rather than
+                    imply otherwise. */}
+                {photo.illustrative ? (
                   <p className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-charcoal/90 to-transparent px-4 pb-3 pt-8 text-center text-[0.68rem] text-white/75">
                     Illustrative photograph. Switch to the 3D model for this
                     tyre's actual {product.brand} {product.model} sidewall and{' '}
@@ -229,13 +275,18 @@ function Detail({ product }: { product: Product }) {
             )}
           </div>
 
-          {/* Gallery thumbnails. The generated wheel leads because it is the
-              only view accurate to this exact SKU. */}
+          {/* Gallery thumbnails. The catalogue photograph leads where there is
+              one; otherwise the generated wheel does, as the only view that
+              is accurate to this exact SKU. */}
           <div
             role="group"
             aria-label="Product images"
             className="mt-3 flex items-center gap-2"
           >
+            {leadWithPhoto ? (
+              <GalleryThumb image={shots[0]} active={shot === 0} onSelect={() => setShot(0)} />
+            ) : null}
+
             <button
               type="button"
               aria-pressed={shot === 'wheel'}
@@ -260,32 +311,16 @@ function Detail({ product }: { product: Product }) {
               </span>
             </button>
 
-            {productGallery.map((image, index) => (
-              <button
-                key={image.src}
-                type="button"
-                aria-pressed={shot === index}
-                onClick={() => setShot(index)}
-                title={`${image.label} photograph (illustrative)`}
-                className={cn(
-                  'h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                  shot === index
-                    ? 'border-primary'
-                    : 'border-border hover:border-primary/40',
-                )}
-              >
-                <img
-                  src={image.src}
-                  alt=""
-                  width={image.width}
-                  height={image.height}
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover"
+            {shots.map((image, index) =>
+              leadWithPhoto && index === 0 ? null : (
+                <GalleryThumb
+                  key={image.src}
+                  image={image}
+                  active={shot === index}
+                  onSelect={() => setShot(index)}
                 />
-                <span className="sr-only">{image.label} photograph</span>
-              </button>
-            ))}
+              ),
+            )}
 
             {/* The 3D renderer stays optional for anyone who would rather not
                 run WebGL at all. */}
@@ -333,15 +368,19 @@ function Detail({ product }: { product: Product }) {
           </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Rating
-              value={product.rating}
-              count={product.reviewCount}
-              size="md"
-              showValue
-            />
-            <span aria-hidden="true" className="text-border">
-              |
-            </span>
+            {product.reviewCount > 0 ? (
+              <>
+                <Rating
+                  value={product.rating}
+                  count={product.reviewCount}
+                  size="md"
+                  showValue
+                />
+                <span aria-hidden="true" className="text-border">
+                  |
+                </span>
+              </>
+            ) : null}
             <span className="font-mono text-xs text-muted-foreground">
               SKU {product.sku}
             </span>
@@ -349,13 +388,21 @@ function Detail({ product }: { product: Product }) {
 
           <p className="lede mt-5">{product.description}</p>
 
-          {/* Price */}
+          {price == null ? (
+            <PoaPanel
+              product={product}
+              quantity={quantity}
+              onQuantityChange={setQuantity}
+              maxQuantity={maxQuantity}
+            />
+          ) : (
+          /* Price */
           <div className="mt-6 rounded-lg border border-border bg-card p-5">
             <div className="flex flex-wrap items-end gap-3">
               <span className="font-heading text-4xl font-black leading-none">
                 {money(price)}
               </span>
-              {product.discountPrice ? (
+              {product.discountPrice != null && product.price != null ? (
                 <span className="text-lg text-muted-foreground line-through">
                   {money(product.price)}
                 </span>
@@ -440,7 +487,7 @@ function Detail({ product }: { product: Product }) {
 
               <p className="mt-2 text-sm">
                 <span className="font-heading text-lg font-black">
-                  {money(unitPrice)}
+                  {money(band ? price * (1 - band.discount) : price)}
                 </span>{' '}
                 <span className="text-muted-foreground">
                   each at {quantity} {pluralise(quantity, 'tyre')}
@@ -500,6 +547,7 @@ function Detail({ product }: { product: Product }) {
               )}
             </div>
           </div>
+          )}
 
           {/* Highlights */}
           <ul className="mt-6 flex flex-col gap-2.5">
@@ -552,22 +600,44 @@ function Detail({ product }: { product: Product }) {
                 </h2>
                 <dl className="mt-3 flex flex-col gap-4 text-sm">
                   <div>
-                    <dt className="font-semibold">Load index {product.loadIndex}</dt>
+                    <dt className="font-semibold">
+                      Load index {product.loadIndex ?? 'to be confirmed'}
+                    </dt>
                     <dd className="mt-1 leading-relaxed text-muted-foreground">
-                      {formatNumber(product.maxLoadKg)}kg per tyre on a single
-                      fitment. Multiply by the number of tyres on the axle, then
-                      check it against the axle rating on your plate — not the other
-                      way round.
+                      {product.maxLoadKg != null ? (
+                        <>
+                          {formatNumber(product.maxLoadKg)}kg per tyre on a single
+                          fitment. Multiply by the number of tyres on the axle, then
+                          check it against the axle rating on your plate — not the
+                          other way round.
+                        </>
+                      ) : (
+                        <>
+                          Not in the published data for this line. We confirm it
+                          with your order — check it against the axle rating on
+                          your plate before anything is fitted.
+                        </>
+                      )}
                     </dd>
                   </div>
                   <div>
                     <dt className="font-semibold">
-                      Speed symbol {product.speedRating}
+                      Speed symbol {product.speedRating ?? 'to be confirmed'}
                     </dt>
                     <dd className="mt-1 leading-relaxed text-muted-foreground">
-                      Rated to {product.maxSpeedKmh}km/h sustained. Every Australian
-                      highway limit sits inside that, but a lower symbol is worth
-                      knowing about if the truck is governed higher.
+                      {product.maxSpeedKmh != null ? (
+                        <>
+                          Rated to {product.maxSpeedKmh}km/h sustained. Every
+                          Australian highway limit sits inside that, but a lower
+                          symbol is worth knowing about if the truck is governed
+                          higher.
+                        </>
+                      ) : (
+                        <>
+                          Not in the published data for this line. We confirm the
+                          rated speed with your order.
+                        </>
+                      )}
                     </dd>
                   </div>
                   <div>
@@ -581,7 +651,10 @@ function Detail({ product }: { product: Product }) {
                     </dd>
                   </div>
                   <div>
-                    <dt className="font-semibold">Tread {product.treadDepthMm}mm</dt>
+                    <dt className="font-semibold">
+                      Tread{' '}
+                      {specValue(product.treadDepthMm, (mm) => `${mm}mm`, 'to be confirmed')}
+                    </dt>
                     <dd className="mt-1 leading-relaxed text-muted-foreground">
                       Depth when new. Legal minimum is 1.6mm, so this is the usable
                       rubber you are buying — and what decides whether the casing is
@@ -612,12 +685,24 @@ function Detail({ product }: { product: Product }) {
                 <p className="lede mt-3">{tread.detail}</p>
 
                 <dl className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  <Stat label="Tread depth" value={`${product.treadDepthMm}mm`} />
-                  <Stat label="Pass-by noise" value={`${product.noiseDb}dB`} />
-                  <Stat label="Fuel rating" value={product.fuelRating} />
+                  <Stat
+                    label="Tread depth"
+                    value={specValue(product.treadDepthMm, (mm) => `${mm}mm`, 'TBC')}
+                  />
+                  <Stat
+                    label="Pass-by noise"
+                    value={specValue(product.noiseDb, (db) => `${db}dB`, 'Not published')}
+                  />
+                  <Stat label="Fuel rating" value={product.fuelRating ?? 'Not published'} />
                   <Stat
                     label="Retreadable"
-                    value={product.retreadable ? 'Yes' : 'No'}
+                    value={
+                      product.retreadable == null
+                        ? 'Not published'
+                        : product.retreadable
+                          ? 'Yes'
+                          : 'No'
+                    }
                   />
                   <Stat
                     label="Severe service"
@@ -646,10 +731,16 @@ function Detail({ product }: { product: Product }) {
                   No reviews on this line yet
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  This pattern carries a {product.rating.toFixed(1)} average from{' '}
-                  {formatNumber(product.reviewCount)} ratings across our catalogue,
-                  but nobody has written us a full review of it yet. Run a set and
-                  tell us how they went — call{' '}
+                  {product.reviewCount > 0 ? (
+                    <>
+                      This pattern carries a {product.rating.toFixed(1)} average from{' '}
+                      {formatNumber(product.reviewCount)} ratings across our catalogue,
+                      but nobody has written us a full review of it yet.
+                    </>
+                  ) : (
+                    <>Nobody has rated or reviewed this line with us yet.</>
+                  )}{' '}
+                  Run a set and tell us how they went — call{' '}
                   <a
                     href={site.phone.href}
                     className="font-semibold text-primary hover:underline"
@@ -887,6 +978,118 @@ function Detail({ product }: { product: Product }) {
 }
 
 /* ------------------------------------------------------------------ */
+
+/**
+ * The buy box for a price-on-application line. Same quantity control as a
+ * priced line, but it feeds a quote request instead of the cart — there is
+ * no price to put a volume break against.
+ */
+function PoaPanel({
+  product,
+  quantity,
+  onQuantityChange,
+  maxQuantity,
+}: {
+  product: Product
+  quantity: number
+  onQuantityChange: (quantity: number) => void
+  maxQuantity: number
+}) {
+  return (
+    <div className="mt-6 rounded-lg border border-border bg-card p-5">
+      <div className="flex flex-wrap items-end gap-3">
+        <span className="font-heading text-4xl font-black leading-none">POA</span>
+        <span className="pb-1 text-sm text-muted-foreground">Price on application</span>
+      </div>
+
+      <div className="mt-4 rounded-md border border-border bg-muted/60 p-4">
+        <p className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-wide">
+          <Factory aria-hidden="true" className="h-4 w-4 text-primary" />
+          Built to order
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          This line is built to order rather than held on the floor, so it is
+          priced per order. Tell us how many you need and we will come back with
+          price and lead time, usually within one business day.
+        </p>
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <div>
+          <label
+            htmlFor="detail-quantity"
+            className="mb-1.5 block font-heading text-xs font-bold uppercase tracking-brand text-muted-foreground"
+          >
+            Quantity
+          </label>
+          <QuantityStepper
+            id="detail-quantity"
+            label={`Quantity of ${product.brand} ${product.model} ${product.size}`}
+            value={quantity}
+            onChange={onQuantityChange}
+            max={maxQuantity}
+          />
+        </div>
+
+        <Button
+          onClick={() => requestQuote(product, quantity)}
+          size="lg"
+          className="mt-6 flex-1 sm:mt-6"
+        >
+          <MessageSquareQuote aria-hidden="true" className="mr-2 h-5 w-5" />
+          Request a quote
+        </Button>
+      </div>
+
+      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+        Rather talk it through? Call{' '}
+        <a href={site.phone.href} className="font-semibold text-primary hover:underline">
+          {site.phone.display}
+        </a>{' '}
+        — {site.hours.short}.
+      </p>
+    </div>
+  )
+}
+
+function GalleryThumb({
+  image,
+  active,
+  onSelect,
+}: {
+  image: GalleryShot
+  active: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      title={
+        image.illustrative
+          ? `${image.label} photograph (illustrative)`
+          : `${image.label} — manufacturer photograph`
+      }
+      className={cn(
+        'h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        image.illustrative ? null : 'bg-white p-0.5',
+        active ? 'border-primary' : 'border-border hover:border-primary/40',
+      )}
+    >
+      <img
+        src={image.src}
+        alt=""
+        width={image.width}
+        height={image.height}
+        loading="lazy"
+        decoding="async"
+        className={cn('h-full w-full', image.illustrative ? 'object-cover' : 'object-contain')}
+      />
+      <span className="sr-only">{image.label} photograph</span>
+    </button>
+  )
+}
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (

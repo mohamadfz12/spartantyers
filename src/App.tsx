@@ -4,6 +4,7 @@ import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
 import { CartDrawer } from '@/components/layout/CartDrawer'
 import { CompareTray } from '@/components/shop/CompareTray'
+import { QuoteDialog } from '@/components/shop/QuoteDialog'
 import { ChatWidget } from '@/components/ChatWidget'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Toaster } from '@/components/ui'
@@ -99,6 +100,7 @@ export default function App() {
       <Footer />
 
       <CartDrawer />
+      <QuoteDialog />
 
       {/* Non-essential chrome. If any of it throws, drop it silently rather
           than letting it take the page down — the storefront still works. */}

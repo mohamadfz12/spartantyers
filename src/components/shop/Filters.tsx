@@ -6,6 +6,7 @@ import {
   allBrands,
   allRimDiameters,
   allSizes,
+  comparePrice,
   effectivePrice,
   POSITION_LABELS,
   priceRange,
@@ -20,12 +21,12 @@ import { AxleSelector } from './AxleSelector'
  *
  * The URL is the source of truth for the whole browse experience, so the
  * parse/serialise pair below is the only place that knows the query-string
- * contract. Everything else â€” the rail, the mobile sheet, the chips, the
- * empty state â€” reads the same `ShopFilters` object.
+ * contract. Everything else — the rail, the mobile sheet, the chips, the
+ * empty state — reads the same `ShopFilters` object.
  *
  *   q            free text (brand, model, size, application, SKU)
  *   brand        repeatable, comma-tolerant: Greforce | Lionshead
- *   size         repeatable, comma-tolerant, fuzzy on read: 11R22.5, 11r225 â€¦
+ *   size         repeatable, comma-tolerant, fuzzy on read: 11R22.5, 11r225 …
  *   position     single: steer | drive | trailer
  *   application  repeatable, comma-tolerant
  *   rim          repeatable, comma-tolerant rim diameters in inches
@@ -138,7 +139,7 @@ export function matchSizes(query: string): SizeFacet[] {
 }
 
 /* ------------------------------------------------------------------ *
- * URL â‡„ filters
+ * URL ⇄ filters
  * ------------------------------------------------------------------ */
 
 export const EMPTY_FILTERS: ShopFilters = {
@@ -345,13 +346,16 @@ const MATCHERS: Record<FacetKey, (product: Product, filters: ShopFilters) => boo
     filters.applications.length === 0 ||
     filters.applications.includes(product.application),
   price: (product, filters) => {
+    if (filters.minPrice == null && filters.maxPrice == null) return true
+    // A price range is a question a price-on-application line cannot answer.
     const price = effectivePrice(product)
+    if (price == null) return false
     if (filters.minPrice != null && price < filters.minPrice) return false
     if (filters.maxPrice != null && price > filters.maxPrice) return false
     return true
   },
   inStock: (product, filters) => !filters.inStock || product.stock > 0,
-  retreadable: (product, filters) => !filters.retreadable || product.retreadable,
+  retreadable: (product, filters) => !filters.retreadable || product.retreadable === true,
 }
 
 export function isFacetActive(facet: FacetKey, filters: ShopFilters): boolean {
@@ -451,9 +455,9 @@ export function blockingFacets(
  * Sorting
  * ------------------------------------------------------------------ */
 
-const FUEL_ORDER: Record<Product['fuelRating'], number> = { A: 0, B: 1, C: 2, D: 3 }
+const FUEL_ORDER: Record<NonNullable<Product['fuelRating']>, number> = { A: 0, B: 1, C: 2, D: 3 }
 
-/** Position in the published spec sheet â€” the only ordering the data carries. */
+/** Position in the published spec sheet — the only ordering the data carries. */
 const CATALOGUE_INDEX = new Map(products.map((product, index) => [product.id, index]))
 
 function cataloguePosition(product: Product): number {
@@ -492,7 +496,10 @@ function relevanceScore(product: Product, query: string): number {
 
 export function sortProducts(list: Product[], filters: ShopFilters): Product[] {
   const sorted = [...list]
-  const byPrice = (a: Product, b: Product) => effectivePrice(a) - effectivePrice(b)
+  // Price-on-application lines sort after every priced line, either direction.
+  const byPrice = (a: Product, b: Product) => comparePrice(a, b)
+  // An unpublished figure ranks below every published one.
+  const known = (value: number | null) => value ?? -1
 
   switch (filters.sort) {
     case 'relevance':
@@ -501,11 +508,13 @@ export function sortProducts(list: Product[], filters: ShopFilters): Product[] {
           relevanceScore(b, filters.q) - relevanceScore(a, filters.q) || byPrice(a, b),
       )
     case 'price-desc':
-      return sorted.sort((a, b) => -byPrice(a, b))
+      return sorted.sort((a, b) => comparePrice(a, b, 'desc'))
     case 'tread-desc':
-      return sorted.sort((a, b) => b.treadDepthMm - a.treadDepthMm || byPrice(a, b))
+      return sorted.sort(
+        (a, b) => known(b.treadDepthMm) - known(a.treadDepthMm) || byPrice(a, b),
+      )
     case 'load-desc':
-      return sorted.sort((a, b) => b.maxLoadKg - a.maxLoadKg || byPrice(a, b))
+      return sorted.sort((a, b) => known(b.maxLoadKg) - known(a.maxLoadKg) || byPrice(a, b))
     case 'rating-desc':
       return sorted.sort(
         (a, b) => b.rating - a.rating || b.reviewCount - a.reviewCount || byPrice(a, b),
@@ -519,8 +528,8 @@ export function sortProducts(list: Product[], filters: ShopFilters): Product[] {
 }
 
 /** Secondary ordering helper reused by the compare page's fuel column. */
-export function fuelRank(rating: Product['fuelRating']): number {
-  return FUEL_ORDER[rating]
+export function fuelRank(rating: Product['fuelRating']): number | null {
+  return rating == null ? null : FUEL_ORDER[rating]
 }
 
 /* ------------------------------------------------------------------ *
@@ -573,7 +582,7 @@ export function facetCounts(filters: ShopFilters): FacetCounts {
 /* ------------------------------------------------------------------ *
  * The filter rail
  *
- * One component serves both the sticky desktop rail and the mobile sheet â€”
+ * One component serves both the sticky desktop rail and the mobile sheet —
  * `idPrefix` keeps the two mounted copies' control ids distinct.
  * ------------------------------------------------------------------ */
 
@@ -778,7 +787,7 @@ export function Filters({
       <Group
         id={`${idPrefix}-price`}
         title="Price per tyre"
-        hint={`Our range runs ${money(priceRange.min)} to ${money(priceRange.max)} per tyre, inc. GST.`}
+        hint={`Published prices run ${money(priceRange.min)} to ${money(priceRange.max)} per tyre, inc. GST. Price-on-application lines drop out while a price is set.`}
       >
         <div className="flex items-end gap-3">
           <div className="flex-1">
@@ -801,7 +810,7 @@ export function Filters({
             />
           </div>
           <span aria-hidden="true" className="pb-3 text-muted-foreground">
-            â€“
+            –
           </span>
           <div className="flex-1">
             <Label htmlFor={`${idPrefix}-max-price`}>Max</Label>
@@ -862,8 +871,9 @@ export function Filters({
           </li>
         </ul>
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          Out-of-stock lines stay listed so you can pre-order them â€”{' '}
-          {pluralise(counts.inStock, 'line', 'lines')} ship from Yennora today.
+          Out-of-stock lines stay listed so you can pre-order them, and
+          built-to-order lines are quoted on request — {counts.inStock}{' '}
+          {pluralise(counts.inStock, 'line ships', 'lines ship')} from Yennora today.
         </p>
       </Group>
     </div>

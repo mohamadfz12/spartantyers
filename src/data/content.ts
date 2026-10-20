@@ -1,5 +1,5 @@
 import { site } from '../config/site'
-import { allSizes, products } from './products'
+import { allSizes, poaProducts, pricedProducts, products } from './products'
 
 /* ------------------------------------------------------------------ *
  * Structured marketing and educational copy.
@@ -46,6 +46,15 @@ const totalStockUnits = products.reduce((sum, product) => sum + product.stock, 0
 /** Rounded down to the nearest hundred so the headline figure is never overstated. */
 const stockHeadline = Math.floor(totalStockUnits / 100) * 100
 
+/** Published figures only — a line with no published value is left out of a range. */
+function publishedRange(values: Array<number | null>): { min: number; max: number } {
+  const known = values.filter((value): value is number => value != null)
+  return { min: Math.min(...known), max: Math.max(...known) }
+}
+
+const treadRange = publishedRange(products.map((product) => product.treadDepthMm))
+const noiseRange = publishedRange(products.map((product) => product.noiseDb))
+
 /* ---------------- home page ---------------- */
 
 export const homeStats: Stat[] = [
@@ -53,14 +62,14 @@ export const homeStats: Stat[] = [
     value: stockHeadline,
     suffix: '+',
     label: 'Tyres on the floor',
-    detail: `Live on-hand count across all ${products.length} Greforce and Lionshead lines at our Yennora warehouse.`,
+    detail: `On-hand count across the ${pricedProducts.length} Greforce and Lionshead lines we sell from stock at our Yennora warehouse.`,
   },
   {
     value: allSizes.length,
     suffix: '',
-    label: 'Sizes stocked',
+    label: 'Sizes in the range',
     detail:
-      'From 215/75R17.5 light truck through to the 385/65R22.5 super-single, held in depth rather than ordered in.',
+      'From 215/75R17.5 light truck through to the 385/65R22.5 super-single — most held at Yennora, the rest built to order.',
   },
   {
     value: site.commerce.metroCities.length,
@@ -85,7 +94,7 @@ export const valueProps: IconCard[] = [
   },
   {
     title: 'Deep stock, not a catalogue',
-    body: `We hold ${products.length} Greforce and Lionshead lines at Yennora, with the volume fitments carried in the hundreds. A fleet re-order on a stocked size ships the same week rather than waiting on a container.`,
+    body: `We hold ${pricedProducts.length} Greforce and Lionshead lines at Yennora and build ${poaProducts.length} more to order. A fleet re-order on a stocked line ships the same week rather than waiting on a container.`,
     icon: 'Warehouse',
   },
   {
@@ -192,7 +201,7 @@ export const wholesaleBenefits: IconCard[] = [
   },
   {
     title: 'Stock you can resell with confidence',
-    body: `${products.length} lines held at Yennora with consistent batch-to-batch specification, so a repeat order for a customer fits the same way as the first one.`,
+    body: `${pricedProducts.length} lines held at Yennora and ${poaProducts.length} more built to order, with consistent batch-to-batch specification, so a repeat order for a customer fits the same way as the first one.`,
     icon: 'Warehouse',
   },
   {
@@ -335,15 +344,15 @@ export const tyreGuide: TyreGuide = {
     },
     {
       title: 'Tread depth and duty cycle',
-      body: 'Deeper tread buys removal mileage and damage resistance but costs fuel, because more rubber flexes per revolution. Our range spans 12.5mm economy ribs to a 23.5mm off-highway drive lug. For sealed-road linehaul the shallower, quieter pattern usually wins on total cost; for gravel and site work the deep pattern wins on survival.',
+      body: `Deeper tread buys removal mileage and damage resistance but costs fuel, because more rubber flexes per revolution. Our range spans ${treadRange.min}mm economy ribs to a ${treadRange.max}mm off-highway drive lug. For sealed-road linehaul the shallower, quieter pattern usually wins on total cost; for gravel and site work the deep pattern wins on survival.`,
     },
     {
       title: 'Noise',
-      body: 'Measured in decibels. Lower noise improves driver comfort and helps with noise restrictions in built-up areas. Our range runs from 70dB on the light-truck ribs to 76dB on the deep off-highway lugs — the aggressive pattern that survives a quarry access road is always going to be the louder one on the highway.',
+      body: `Measured in decibels. Lower noise improves driver comfort and helps with noise restrictions in built-up areas. Where a figure is published, our range runs from ${noiseRange.min}dB on the light-truck ribs to ${noiseRange.max}dB on the deep off-highway lugs — the aggressive pattern that survives a quarry access road is always going to be the louder one on the highway.`,
     },
     {
       title: 'Retreadability',
-      body: 'Many commercial tyres can be retreaded two to three times, extending total life and reducing cost per kilometre by 25 to 35 per cent. It depends on the casing surviving its first life intact, which in practice means pressure discipline and never running a tyre flat. Every line we stock in 22.5in and 19.5in is specified as retreadable; our 17.5in light-truck lines are not.',
+      body: 'Many commercial tyres can be retreaded two to three times, extending total life and reducing cost per kilometre by 25 to 35 per cent. It depends on the casing surviving its first life intact, which in practice means pressure discipline and never running a tyre flat. Most of our 22.5in and 19.5in lines are specified as retreadable — each product page says which — while the 17.5in light-truck lines are not built for it.',
     },
   ],
   maintenanceTips: [

@@ -25,6 +25,10 @@ function skuCount(name: string): number {
   return products.filter((p) => p.brand === name).length
 }
 
+function patternCount(name: string): number {
+  return new Set(products.filter((p) => p.brand === name).map((p) => p.model)).size
+}
+
 export const brands: BrandEntry[] = [
   {
     name: 'Greforce',
@@ -32,8 +36,7 @@ export const brands: BrandEntry[] = [
     href: '/shop?brand=Greforce',
     external: false,
     origin: 'Manufactured for the Australian commercial market',
-    blurb:
-      'Our core range. Twenty-two patterns across steer, drive, trailer and all-position fitments, from the 13.5mm GRT33 highway rib to the 23.5mm HD02 off-highway drive lug.',
+    blurb: `Our core range: commercial truck and bus radials for long-haul, regional and on/off-road work. ${patternCount('Greforce')} patterns across steer, drive, trailer and all-position fitments, from the G-PILOT linehaul pair to the 23.5mm HD02 off-highway drive lug.`,
     skuCount: skuCount('Greforce'),
   },
   {
@@ -42,8 +45,7 @@ export const brands: BrandEntry[] = [
     href: '/shop?brand=Lionshead',
     external: false,
     origin: 'Manufactured for the Australian commercial market',
-    blurb:
-      'The uprated alternative. The LA301E and LD317E both carry a 149 load index — 3250kg per tyre, a step above the 11R22.5 norm — for operators running at maximum legal axle mass.',
+    blurb: `Value commercial radials for regional and vocational fleets. ${patternCount('Lionshead')} patterns in 11R22.5 and 17.5in, from the versatile LA301E all-position to the 23mm LD330E drive block.`,
     skuCount: skuCount('Lionshead'),
   },
   {

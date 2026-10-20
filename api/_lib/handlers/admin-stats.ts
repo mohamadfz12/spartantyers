@@ -86,8 +86,10 @@ export default withGuard(async (req, res) => {
 
   /* ---- Low stock ------------------------------------------------ */
 
+  // Price-on-application lines are built to order and sit at zero by design,
+  // so they would only bury the stocked lines that genuinely need a re-order.
   const lowStock = products
-    .filter((product) => product.stock <= LOW_STOCK_THRESHOLD)
+    .filter((product) => product.price != null && product.stock <= LOW_STOCK_THRESHOLD)
     .sort((a, b) => a.stock - b.stock)
     .map((product) => ({
       id: product.id,

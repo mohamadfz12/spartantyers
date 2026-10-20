@@ -28,6 +28,20 @@ export function moneyExact(value: number): string {
   return AUD_CENTS.format(value)
 }
 
+/** A per-tyre price, or "POA" for a price-on-application line. */
+export function priceLabel(value: number | null): string {
+  return value == null ? 'POA' : money(value)
+}
+
+/** A manufacturer figure, or a plain "to be confirmed" where none is published. */
+export function specValue<T>(
+  value: T | null,
+  format: (value: T) => string,
+  missing = 'To be confirmed',
+): string {
+  return value == null ? missing : format(value)
+}
+
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-AU').format(value)
 }

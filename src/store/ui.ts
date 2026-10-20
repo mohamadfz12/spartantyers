@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { AxlePosition } from '@/data/types'
+import type { AxlePosition, Product } from '@/data/types'
 
 /* ------------------------------------------------------------------ *
  * Theme
@@ -126,6 +126,32 @@ export const useToasts = create<ToastState>((set) => ({
 
 /** Imperative helper so non-component code can raise a toast. */
 export const toast = (toast: Omit<Toast, 'id'>) => useToasts.getState().push(toast)
+
+/* ------------------------------------------------------------------ *
+ * Quote requests
+ *
+ * Price-on-application lines are quoted rather than sold, from a card, the
+ * quick view, the compare table or the product page. One dialog serves all
+ * of them (mounted in App), so this only records which line and how many.
+ * ------------------------------------------------------------------ */
+
+interface QuoteState {
+  product: Product | null
+  quantity: number
+  open: (product: Product, quantity?: number) => void
+  close: () => void
+}
+
+export const useQuote = create<QuoteState>((set) => ({
+  product: null,
+  quantity: 4,
+  open: (product, quantity = 4) => set({ product, quantity }),
+  close: () => set({ product: null }),
+}))
+
+/** Imperative helper, mirroring `toast`. */
+export const requestQuote = (product: Product, quantity?: number) =>
+  useQuote.getState().open(product, quantity)
 
 /* ------------------------------------------------------------------ *
  * Recently viewed

@@ -2,9 +2,9 @@ import { Link, useLocation } from 'react-router-dom'
 import { ArrowRight, Scale, X } from 'lucide-react'
 import { productById, effectivePrice } from '@/data/products'
 import { MAX_COMPARE, useCompare } from '@/store/ui'
-import { money, pluralise } from '@/lib/utils'
+import { pluralise, priceLabel } from '@/lib/utils'
 import { Button } from '@/components/ui'
-import { StaticWheel } from '@/components/three'
+import { ProductThumb } from './ProductThumb'
 import { AnimatePresence, motion } from '@/components/motion'
 
 /**
@@ -63,14 +63,14 @@ export function CompareTray() {
                   className="relative flex shrink-0 items-center gap-2.5 rounded-md border border-border bg-card py-1.5 pl-1.5 pr-8"
                 >
                   <div className="h-9 w-9 shrink-0">
-                    <StaticWheel tread={product.tread} />
+                    <ProductThumb brand={product.brand} model={product.model} tread={product.tread} />
                   </div>
                   <div className="min-w-0">
                     <p className="truncate font-heading text-xs font-bold">
                       {product.model}
                     </p>
                     <p className="font-mono text-[0.68rem] text-muted-foreground">
-                      {product.size} · {money(effectivePrice(product))}
+                      {product.size} · {priceLabel(effectivePrice(product))}
                     </p>
                   </div>
                   <button
