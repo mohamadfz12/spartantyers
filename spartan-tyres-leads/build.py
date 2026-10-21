@@ -125,6 +125,102 @@ def merge(a, b):
     return a
 
 
+# ---------------------------------------------------------------- contact hygiene
+# Scraping a company site also scrapes its footer, its head office and its
+# web designer. These rules strip what is not a way to reach THIS business in
+# NSW. Each rule only removes; nothing is ever invented or reformatted here.
+
+FREE_MAIL = {
+    "gmail.com", "bigpond.com", "bigpond.net.au", "hotmail.com", "hotmail.com.au", "outlook.com",
+    "outlook.com.au", "yahoo.com", "yahoo.com.au", "live.com", "live.com.au", "icloud.com",
+    "optusnet.com.au", "iinet.net.au", "tpg.com.au", "westnet.com.au", "internode.on.net",
+    "skymesh.com.au", "activ8.net.au", "aapt.net.au", "dodo.com.au", "exetel.com.au", "me.com",
+}
+PLACEHOLDER_EMAIL = re.compile(r"^(mymail@mailservice\.com|email@|name@|your|test@|example@)", re.I)
+ROLE_JUNK = re.compile(r"^(careers?|jobs?|recruit\w*|hr|privacy|no-?reply|donotreply|webmaster|"
+                       r"integrations?|compliance|marketing|media|press|abuse|postmaster)[@.]", re.I)
+INTERSTATE = re.compile(r"(^|[._-])(melbourne|melb|vic|victoria|brisbane|bris|qld|queensland|perth|wa|"
+                        r"adelaide|sa|tas|tasmania|hobart|darwin|nt)(depot|warehouse|office|containers?)?"
+                        r"([._-]|@)", re.I)
+GENERIC_TOKENS = {"transport", "transports", "logistics", "group", "tyres", "tyre", "australia",
+                  "australian", "freight", "services", "service", "trucks", "truck", "haulage", "pty",
+                  "ltd", "and", "the", "nsw", "sydney", "auto", "automotive", "co", "company",
+                  "carriers", "distribution", "express", "national", "solutions", "hire"}
+
+
+def _domain_label(d):
+    d = d.lower().split("@")[-1]
+    d = re.sub(r"^(www|mail)\.", "", d)
+    return d.split(".")[0]
+
+
+def _related_domain(email_domain, lead):
+    """True when an off-site email domain plausibly belongs to the same business."""
+    label = _domain_label(email_domain)
+    site = _domain_label(re.sub(r"^https?://", "", lead["website"]).split("/")[0]) if lead["website"] else ""
+    if site and (label in site or site in label):
+        return True
+    tokens = [t for t in re.findall(r"[a-z0-9]+", lead["name"].lower())
+              if len(t) >= 3 and t not in GENERIC_TOKENS]
+    return any(t in label for t in tokens)
+
+
+LOCAL_INTERSTATE_CODES = {
+    "Murray": ("03",),
+    "Far West": ("03", "08"),
+    "Northern Rivers": ("07",),
+    "North West": ("07",),
+    "New England": ("07",),
+}
+
+
+def _phone_digits(p):
+    return re.sub(r"\D", "", p.split(":")[-1])
+
+
+def sanitise(rows):
+    removed = {"shared": 0, "interstate": 0, "email": 0}
+    owners = {}
+    for r in rows:
+        for p in r["phones"]:
+            owners.setdefault(_phone_digits(p), set()).add(norm_name(r["name"]).split()[0] if r["name"] else "")
+    for r in rows:
+        digits = [_phone_digits(p) for p in r["phones"]]
+        has_nsw_number = any(d[:2] in ("02", "04", "13", "18") for d in digits)
+        keep = []
+        for p, d in zip(r["phones"], digits):
+            shared = len(owners.get(d, ())) >= 3
+            # Parts of NSW are on other states' area codes: the Murray towns
+            # (Deniliquin, Moama, Finley, Barham…) and Wentworth are 03, the
+            # Tweed and the Queensland border towns are 07, Broken Hill is 08.
+            local_code = LOCAL_INTERSTATE_CODES.get(r["area"], ())
+            interstate = d[:2] in ("03", "07", "08") and d[:2] not in local_code
+            if shared:
+                removed["shared"] += 1
+                continue
+            # Only strip an interstate number when the lead has an NSW one to
+            # fall back on; otherwise it may well be the business's own line.
+            if interstate and has_nsw_number:
+                removed["interstate"] += 1
+                continue
+            keep.append(p)
+        # Never strip a lead down to nothing: if every number was filtered,
+        # keep the first original so the lead can still be called.
+        r["phones"] = keep or r["phones"][:1]
+
+        good = []
+        for e in r["emails"]:
+            domain = e.split("@")[-1]
+            bad = (PLACEHOLDER_EMAIL.search(e) or ROLE_JUNK.search(e) or INTERSTATE.search(e)
+                   or (domain not in FREE_MAIL and not _related_domain(domain, r)))
+            if bad:
+                removed["email"] += 1
+            else:
+                good.append(e)
+        r["emails"] = good[:6]
+    return removed
+
+
 def load():
     rows = []
     for f in sorted(glob.glob(os.path.join(SRC, "*.json"))):
@@ -155,6 +251,9 @@ def load():
             if k2:
                 by_key[k2] = r
     uniq = list({id(v): v for v in by_key.values()}.values())
+    removed = sanitise(uniq)
+    print(f"hygiene: removed {removed['shared']} shared head-office numbers, "
+          f"{removed['interstate']} interstate numbers, {removed['email']} unrelated/junk emails")
     for r in uniq:
         p, e = bool(r["phones"]), bool(r["emails"])
         r["reach"] = "Phone + Email" if p and e else "Phone only" if p else "Email only" if e else "Website only"
@@ -164,6 +263,13 @@ def load():
         r["priority"] = "A" if score >= 5 else "B" if score >= 4 else "C"
         # chain stores that only list light-truck tyres are weak truck-tyre prospects
         if re.search(r"light truck only|light-truck only", r["description"] + " " + r["subtype"], re.I):
+            r["priority"] = "C"
+        # Resellers not confirmed to do truck tyres, and operators seen in a
+        # single directory listing only, are real but unproven: they never
+        # outrank a lead that has been confirmed.
+        if re.search(r"truck service unverified|truck/ag unverified", r["description"] + " " + r["subtype"], re.I):
+            r["priority"] = "C"
+        if re.search(r"single directory listing", r["size_basis"], re.I):
             r["priority"] = "C"
     uniq.sort(key=lambda r: (r["category"], REGIONS.index(r["region"]), r["area"], r["city"], r["name"]))
     # `id` is a row number for the spreadsheet and changes whenever leads are

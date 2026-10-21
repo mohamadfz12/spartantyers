@@ -14,7 +14,14 @@ sys.path.insert(0, HERE)
 from scrape import scrape  # noqa: E402
 
 leads = json.load(open(os.path.join(ROOT, "leads.json"), encoding="utf-8"))
-todo = [l for l in leads if l.get("website") and (not l["emails"] or len(l["phones"]) < 2)]
+# A website shared by several leads is a chain or multi-depot site that lists
+# every branch's numbers on every page; nothing scraped from it can be pinned to
+# one branch, so those leads are left as researched.
+import collections, re
+_host = lambda u: re.sub(r"^https?://(www\.)?", "", u or "").split("/")[0].lower()
+_uses = collections.Counter(_host(l["website"]) for l in leads if l.get("website"))
+todo = [l for l in leads if l.get("website") and _uses[_host(l["website"])] < 2
+        and (not l["emails"] or len(l["phones"]) < 2)]
 print(f"{len(todo)} of {len(leads)} leads have a website and are missing an email or a second phone")
 
 

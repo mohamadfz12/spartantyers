@@ -76,7 +76,9 @@ def search(q, pages=1):
     key = hashlib.sha1(f"{q}|{pages}".encode()).hexdigest()
     path = os.path.join(CACHE, key + ".json")
     if os.path.exists(path):
-        return json.load(open(path, encoding="utf-8"))
+        cached = json.load(open(path, encoding="utf-8"))
+        if cached:
+            return cached
     results = []
     for page in range(pages):
         got = []
@@ -99,7 +101,11 @@ def search(q, pages=1):
         seen.add(u)
         r["dir"] = bool(DIRECTORY.search(u))
         uniq.append(r)
-    json.dump(uniq, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+    # Never cache an empty answer: with several researchers searching at once,
+    # "no results" is almost always rate limiting, and caching it would make
+    # that query return nothing for good.
+    if uniq:
+        json.dump(uniq, open(path, "w", encoding="utf-8"), ensure_ascii=False)
     return uniq
 
 
