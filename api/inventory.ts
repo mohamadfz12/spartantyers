@@ -6,9 +6,9 @@
  * has; callers fall back to bundled data when it fails.
  */
 
-import { mergeCatalogue } from './_lib/catalogue'
-import { methodGuard, ok, withGuard } from './_lib/http'
-import { getOverrides } from './_lib/store'
+import { mergeCatalogue } from './_lib/catalogue.js'
+import { methodGuard, ok, withGuard } from './_lib/http.js'
+import { getOverrides } from './_lib/store.js'
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET'])) return

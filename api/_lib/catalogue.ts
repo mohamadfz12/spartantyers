@@ -21,8 +21,8 @@ import {
   poaProducts,
   PRICE_BREAKS,
   priceBreakFor,
-} from '../../src/data/products'
-import type { Product } from '../../src/data/types'
+} from '../../src/data/products.js'
+import type { Product } from '../../src/data/types.js'
 
 export { products, getProduct, effectivePrice, hasPrice, PRICE_BREAKS, priceBreakFor }
 export type { Product }

@@ -14,8 +14,8 @@ import {
   readBody,
   safeMessage,
   withGuard,
-} from './_lib/http'
-import { saveSubscriber } from './_lib/store'
+} from './_lib/http.js'
+import { saveSubscriber } from './_lib/store.js'
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['POST'])) return

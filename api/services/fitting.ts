@@ -5,7 +5,7 @@
  * the endpoint needs no environment variables and cannot be unavailable.
  */
 
-import { site } from '../../src/config/site'
+import { site } from '../../src/config/site.js'
 import {
   asPositiveInt,
   fail,
@@ -14,7 +14,7 @@ import {
   readBody,
   round2,
   withGuard,
-} from '../_lib/http'
+} from '../_lib/http.js'
 
 const MAX_TYRES = 500
 

@@ -8,6 +8,7 @@
     "build": "npm run sitemap && vite build",
     "sitemap": "node scripts/generate-sitemap.mjs",
     "check": "node scripts/check-data.mjs",
+    "check:api": "node scripts/check-api.mjs",
     "smoke": "node scripts/smoke.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",

@@ -12,10 +12,10 @@
  *   POST /api/square/create-payment
  */
 
-import type { ApiRequest, ApiResponse } from '../_lib/http'
-import { applyCors, fail } from '../_lib/http'
-import config from '../_lib/handlers/square-config'
-import createPayment from '../_lib/handlers/square-create-payment'
+import type { ApiRequest, ApiResponse } from '../_lib/http.js'
+import { applyCors, fail } from '../_lib/http.js'
+import config from '../_lib/handlers/square-config.js'
+import createPayment from '../_lib/handlers/square-create-payment.js'
 
 type Handler = (req: ApiRequest, res: ApiResponse) => Promise<void> | void
 

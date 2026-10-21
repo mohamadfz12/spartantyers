@@ -20,6 +20,7 @@ key — see [Environment](#environment).
 
 ```bash
 npm run typecheck    # tsc --noEmit, strict
+npm run check:api    # loads every API function the way Vercel does — run before deploying
 npm run build        # regenerates sitemap.xml, then builds to dist/
 npm run preview      # serve the production build locally
 ```

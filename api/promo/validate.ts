@@ -9,8 +9,8 @@
  * passes here can still be dropped at checkout if its minimum is not met.
  */
 
-import { fail, methodGuard, ok, readBody, withGuard } from '../_lib/http'
-import { resolvePromo } from '../_lib/promos'
+import { fail, methodGuard, ok, readBody, withGuard } from '../_lib/http.js'
+import { resolvePromo } from '../_lib/promos.js'
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['POST'])) return

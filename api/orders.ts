@@ -17,8 +17,8 @@ import {
   ok,
   queryParam,
   withGuard,
-} from './_lib/http'
-import { findOrder, isPersistent } from './_lib/store'
+} from './_lib/http.js'
+import { findOrder, isPersistent } from './_lib/store.js'
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET'])) return

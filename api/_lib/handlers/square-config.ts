@@ -8,9 +8,9 @@
  * mounting a card form that could never succeed.
  */
 
-import { site } from '../../../src/config/site'
-import { methodGuard, ok, fail, withGuard } from '../http'
-import { getSquareConfig, missingSquareVars } from '../square'
+import { site } from '../../../src/config/site.js'
+import { methodGuard, ok, fail, withGuard } from '../http.js'
+import { getSquareConfig, missingSquareVars } from '../square.js'
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET'])) return

@@ -7,7 +7,7 @@
  * against Square.
  */
 
-import { requireAdmin } from '../auth'
+import { requireAdmin } from '../auth.js'
 import {
   asString,
   fail,
@@ -15,8 +15,8 @@ import {
   ok,
   readBody,
   withGuard,
-} from '../http'
-import { listOrders, updateOrderStatus, type StoredOrder } from '../store'
+} from '../http.js'
+import { listOrders, updateOrderStatus, type StoredOrder } from '../store.js'
 
 const STATUSES: StoredOrder['status'][] = [
   'pending',

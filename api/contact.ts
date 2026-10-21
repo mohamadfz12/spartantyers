@@ -18,9 +18,9 @@ import {
   readBody,
   safeMessage,
   withGuard,
-} from './_lib/http'
-import { newEnquiryId } from './_lib/ids'
-import { saveEnquiry, type StoredEnquiry } from './_lib/store'
+} from './_lib/http.js'
+import { newEnquiryId } from './_lib/ids.js'
+import { saveEnquiry, type StoredEnquiry } from './_lib/store.js'
 
 const ENQUIRY_TYPES = [
   'general',

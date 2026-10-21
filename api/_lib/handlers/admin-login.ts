@@ -12,8 +12,8 @@ import {
   ok,
   readBody,
   withGuard,
-} from '../http'
-import { checkPassword, isAdminConfigured, issueToken } from '../auth'
+} from '../http.js'
+import { checkPassword, isAdminConfigured, issueToken } from '../auth.js'
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['POST'])) return

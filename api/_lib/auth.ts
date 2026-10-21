@@ -21,7 +21,7 @@
  */
 
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
-import { fail, header, type ApiRequest, type ApiResponse } from './http'
+import { fail, header, type ApiRequest, type ApiResponse } from './http.js'
 
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000
 

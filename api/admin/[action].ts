@@ -17,13 +17,13 @@
  *   GET    /api/admin/enquiries
  */
 
-import type { ApiRequest, ApiResponse } from '../_lib/http'
-import { applyCors, fail } from '../_lib/http'
-import login from '../_lib/handlers/admin-login'
-import stats from '../_lib/handlers/admin-stats'
-import products from '../_lib/handlers/admin-products'
-import orders from '../_lib/handlers/admin-orders'
-import enquiries from '../_lib/handlers/admin-enquiries'
+import type { ApiRequest, ApiResponse } from '../_lib/http.js'
+import { applyCors, fail } from '../_lib/http.js'
+import login from '../_lib/handlers/admin-login.js'
+import stats from '../_lib/handlers/admin-stats.js'
+import products from '../_lib/handlers/admin-products.js'
+import orders from '../_lib/handlers/admin-orders.js'
+import enquiries from '../_lib/handlers/admin-enquiries.js'
 
 type Handler = (req: ApiRequest, res: ApiResponse) => Promise<void> | void
 

@@ -8,8 +8,8 @@
  * clearing the override.
  */
 
-import { requireAdmin } from '../auth'
-import { mergeCatalogue, mergeOverride, getProduct } from '../catalogue'
+import { requireAdmin } from '../auth.js'
+import { mergeCatalogue, mergeOverride, getProduct } from '../catalogue.js'
 import {
   asString,
   fail,
@@ -17,8 +17,8 @@ import {
   ok,
   readBody,
   withGuard,
-} from '../http'
-import { getOverrides, setOverride, type StoredOverride } from '../store'
+} from '../http.js'
+import { getOverrides, setOverride, type StoredOverride } from '../store.js'
 
 const MAX_PRICE = 20000
 const MAX_STOCK = 100000

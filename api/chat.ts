@@ -17,10 +17,10 @@
  * that errors is worse than one that hands over the phone number.
  */
 
-import { site } from '../src/config/site'
-import { catalogueSummary } from './_lib/catalogue'
-import { fail, methodGuard, ok, readBody, safeMessage, withGuard } from './_lib/http'
-import { promoTable } from './_lib/promos'
+import { site } from '../src/config/site.js'
+import { catalogueSummary } from './_lib/catalogue.js'
+import { fail, methodGuard, ok, readBody, safeMessage, withGuard } from './_lib/http.js'
+import { promoTable } from './_lib/promos.js'
 
 const MODEL = 'claude-haiku-5-5'
 const MAX_TOKENS = 600

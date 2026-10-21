@@ -18,11 +18,11 @@
  * so keep the two in lockstep.
  */
 
-import { site } from '../../src/config/site'
-import { effectivePrice, priceBreakFor, resolveProduct } from './catalogue'
-import { resolvePromo } from './promos'
-import type { StoredOverride } from './store'
-import { round2 } from './http'
+import { site } from '../../src/config/site.js'
+import { effectivePrice, priceBreakFor, resolveProduct } from './catalogue.js'
+import { resolvePromo } from './promos.js'
+import type { StoredOverride } from './store.js'
+import { round2 } from './http.js'
 
 export interface PriceRequestLine {
   id: string
