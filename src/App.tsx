@@ -1,11 +1,10 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
 import { CartDrawer } from '@/components/layout/CartDrawer'
 import { CompareTray } from '@/components/shop/CompareTray'
 import { QuoteDialog } from '@/components/shop/QuoteDialog'
-import { ChatWidget } from '@/components/ChatWidget'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Toaster } from '@/components/ui'
 import { WheelSpinner } from '@/components/three'
@@ -46,6 +45,9 @@ const OrderConfirmation = lazy(() => import('@/pages/OrderConfirmation'))
 const Compare = lazy(() => import('@/pages/Compare'))
 const Admin = lazy(() => import('@/pages/admin/Admin'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
+
+// The customer assistant is loaded after the page has painted, so it adds nothing to the first paint.
+const Assistant = lazy(() => import('@/components/assistant/Assistant'))
 
 export default function App() {
   const theme = useTheme((s) => s.theme)
@@ -88,6 +90,7 @@ export default function App() {
               <Route path="/terms" element={<Terms />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/order" element={<OrderConfirmation />} />
               <Route path="/order/:reference" element={<OrderConfirmation />} />
               <Route path="/compare" element={<Compare />} />
               <Route path="/admin/*" element={<Admin />} />
@@ -108,7 +111,7 @@ export default function App() {
         <CompareTray />
       </ErrorBoundary>
       <ErrorBoundary fallback={null}>
-        <ChatWidget />
+        <AssistantLoader />
       </ErrorBoundary>
 
       <Toaster />
@@ -143,6 +146,30 @@ function ScrollToTop() {
   }, [pathname, hash])
 
   return null
+}
+
+/** Mounts the assistant once the browser is idle (or after a short wait), never during first paint. */
+function AssistantLoader() {
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    const idle = (window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+      cancelIdleCallback?: (handle: number) => void
+    })
+    if (idle.requestIdleCallback) {
+      const handle = idle.requestIdleCallback(() => setReady(true), { timeout: 2000 })
+      return () => idle.cancelIdleCallback?.(handle)
+    }
+    const timer = window.setTimeout(() => setReady(true), 800)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  return ready ? (
+    <Suspense fallback={null}>
+      <Assistant />
+    </Suspense>
+  ) : null
 }
 
 function RouteFallback() {

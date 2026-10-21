@@ -1,5 +1,5 @@
-import { site } from '../config/site'
-import { allSizes, poaProducts, pricedProducts, products } from './products'
+import { site } from '../config/site.js'
+import { allSizes, poaProducts, pricedProducts, products } from './products.js'
 
 /* ------------------------------------------------------------------ *
  * Structured marketing and educational copy.

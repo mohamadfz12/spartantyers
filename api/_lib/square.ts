@@ -51,6 +51,14 @@ export function squareBaseUrl(environment = squareEnvironment()): string {
 }
 
 /**
+ * Whether checkout offers Afterpay: on unless SQUARE_AFTERPAY_ENABLED is 'false'. The checkout's
+ * config and the AI assistant's facts both read it here, so they always agree.
+ */
+export function afterpayEnabled(): boolean {
+  return process.env.SQUARE_AFTERPAY_ENABLED !== 'false'
+}
+
+/**
  * Returns null when Square is not configured, so callers can answer 503 with a
  * "card payment unavailable, call us" message instead of crashing.
  */

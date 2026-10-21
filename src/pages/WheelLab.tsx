@@ -147,7 +147,7 @@ export default function WheelLab() {
 
       <section className="section-tight">
         <div className="shell">
-          <div className="grid gap-8 lg:grid-cols-[1.15fr_1fr] lg:gap-10">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.15fr_1fr] lg:gap-10">
             {/* Stage */}
             <div className="lg:sticky lg:top-24 lg:self-start">
               <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-b from-charcoal to-steel-950">

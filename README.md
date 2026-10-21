@@ -25,8 +25,17 @@ npm run build        # regenerates sitemap.xml, then builds to dist/
 npm run preview      # serve the production build locally
 ```
 
-> Serverless functions under `api/` do **not** run under `vite dev`. To exercise
-> the API locally, use `npx vercel dev` instead of `npm run dev`.
+`npm run dev` starts everything the site needs locally, in one terminal:
+
+| Name | What | Port |
+| ---- | ---- | ---- |
+| `web` | Vite, the storefront | 5173 |
+| `api` | the functions in `api/`, run the way Vercel runs them (`scripts/dev-api.ts`); Vite proxies `/api` to it | 3110 (`API_PORT`) |
+| `ai` | the free practice AI, a stand-in for the real model (`scripts/practice-ai.ts`) | 3410 (`PRACTICE_AI_PORT`) |
+
+Edits to anything under `api/` apply on their own; no restart is needed. The AI
+keeps its records in a local database under `.data/` (git-ignored). `npm test`
+runs the unit tests with no network.
 
 ---
 
@@ -66,11 +75,14 @@ Full annotated list in [`.env.example`](./.env.example). Summary:
 |---|---|---|
 | `SQUARE_ACCESS_TOKEN` `SQUARE_APPLICATION_ID` `SQUARE_LOCATION_ID` | for card checkout | `/api/square/*` returns 503; checkout shows "phone your order through" |
 | `SQUARE_ENVIRONMENT` | no (`sandbox`) | Sandbox SDK + sandbox API host |
-| `SQUARE_AFTERPAY_ENABLED` | no (`false`) | Afterpay option hidden |
+| `SQUARE_AFTERPAY_ENABLED` | no (on) | Set to `false` to hide the Afterpay option; the AI assistant then stops mentioning it too |
 | `ADMIN_PASSWORD` | for `/admin` | Admin endpoints 503; panel shows a setup guide. **Never falls open.** |
 | `ADMIN_SESSION_SECRET` | recommended | Derived from `ADMIN_PASSWORD`, so rotating the password logs everyone out |
 | `KV_REST_API_URL` `KV_REST_API_TOKEN` | **strongly recommended** | In-memory store, wiped every cold start |
-| `ANTHROPIC_API_KEY` | no | Chat falls back to a keyword responder built from the same real data |
+| `AI_GATEWAY_URL` `AI_GATEWAY_KEY` `AI_MODEL` | for the AI chat | The chat shows quick keyword answers from the real site data (see `.env.example`) |
+| `OPENAI_API_KEY` | for voice calls | No Call button |
+| `DATABASE_URL` or `POSTGRES_URL` | for the AI on Vercel | The AI keeps its chats, calls and spending in **Postgres, even when the store above uses KV**; without it the AI is off |
+| `ADMIN_SESSION_SECRET` | for the AI on Vercel | Keys the hash that identifies a visitor for the limits; without it the AI is off |
 | `PROMO_CODES` | no | Built-in code table |
 | `LOW_STOCK_THRESHOLD` | no (`24`) | — |
 | `PUBLIC_SITE_URL` | no | Falls back to the Vercel deployment URL |
@@ -84,8 +96,11 @@ api/                    Vercel serverless functions (Node) — 9 routable files
   _lib/                 http, auth, pricing, promos, square, store, catalogue
     handlers/           the admin + square handlers, kept out of routing
   square/[action].ts    -> /api/square/config, /api/square/create-payment
-  admin/[action].ts     -> /api/admin/{login,stats,products,orders,enquiries}
-  inventory, contact, newsletter, chat, orders, promo/, services/
+  admin/[action].ts     -> /api/admin/{login,stats,products,orders,enquiries,
+                           ai-status,ai-settings,ai-conversations,ai-conversation}
+  ai/[action].ts        -> /api/ai/{chat,outcome,status,voice}, the customer assistant
+                           (chat and voice calls; the code is in api/_lib/ai/)
+  inventory, contact, newsletter, orders, promo/, services/
 src/
   config/site.ts        SINGLE SOURCE OF TRUTH for every business fact
   data/                 catalogue, brands, content, blog, faq, reviews, types
@@ -219,6 +234,34 @@ in-memory map otherwise.
 **The in-memory path is development-only.** Serverless instances are recycled,
 so without KV configured, orders, enquiries, subscribers and stock overrides are
 lost on every cold start. Set up KV before taking real orders.
+
+## The AI assistant (chat and voice)
+
+The customer assistant is one function, `api/ai/[action].ts`, with its code in
+`api/_lib/ai/`. Staff see every chat and call, and switch the chat and voice on
+and off and set the daily and monthly US$ limits, in the admin panel (AI
+assistant and AI conversations).
+
+- **Database.** It needs Postgres (`DATABASE_URL` or `POSTGRES_URL`) **even when
+  the store above uses KV**, and `ADMIN_SESSION_SECRET` on Vercel. Without them
+  the AI is off and the site shows quick keyword answers. Locally it keeps its
+  records in `.data/` and needs neither.
+- **Chat.** An OpenAI-compatible gateway (`AI_GATEWAY_*`, `AI_MODEL`). It only
+  mentions Afterpay while checkout offers it (`SQUARE_AFTERPAY_ENABLED`).
+- **Voice.** OpenAI Realtime (`OPENAI_API_KEY`), connected from the customer's
+  browser. The function that opens a call also watches it and hangs it up, so it
+  needs a long `maxDuration` (`vercel.json` sets 300 s, the Hobby plan's limit,
+  and **Fluid compute should be on in the Vercel project settings** so a long
+  duration is allowed). A call is shortened to fit: about 4 minutes on 300 s.
+  **10-minute calls need Vercel Pro** with `maxDuration` raised to 800 in
+  `vercel.json` (and `AI_FUNCTION_MAX_SECONDS=800`, `VOICE_MAX_SECONDS=600`).
+  **Each live call keeps one function instance busy for as long as the call
+  lasts**, so several calls at once (three at most, one per visitor) mean several
+  instances running at the same time, and that is billed as function time.
+  A call ends after 120 seconds with no speech from the customer, and as soon as
+  voice is switched off in the admin panel (within about 10 seconds).
+- **Local testing.** `npm run dev` also starts a free practice AI, so nothing
+  real is called. `npm test` needs no network.
 
 ## Dependencies
 

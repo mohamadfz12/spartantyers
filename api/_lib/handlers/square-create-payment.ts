@@ -25,6 +25,7 @@
  */
 
 import { site } from '../../../src/config/site.js'
+import { isConversationId } from '../../../src/lib/ai/protocol.js'
 import {
   asEmail,
   asPhone,
@@ -36,6 +37,7 @@ import {
   safeMessage,
   withGuard,
 } from '../http.js'
+import { linkOrderInBackground } from '../ai/orders.js'
 import { newOrderId, newOrderReference } from '../ids.js'
 import { priceOrder, toCents } from '../pricing.js'
 import { resolveProduct } from '../catalogue.js'
@@ -56,6 +58,8 @@ interface PaymentBody {
   lines?: unknown
   notes?: unknown
   expectedTotal?: unknown
+  /** The AI chat the order came from, if the customer used it (only used to link the two). */
+  conversationId?: unknown
 }
 
 export default withGuard(async (req, res) => {
@@ -293,6 +297,12 @@ export default withGuard(async (req, res) => {
         `[create-payment] stock decrement failed for ${line.id}: ${safeMessage(error)}`,
       )
     }
+  }
+
+  // The AI assistant's chat, if the customer used it: in the background with a short time limit,
+  // so it never delays or affects the payment's answer.
+  if (isConversationId(body.conversationId)) {
+    void linkOrderInBackground(body.conversationId, reference)
   }
 
   ok(res, {

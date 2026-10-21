@@ -13,6 +13,7 @@ import {
   products,
 } from '@/data/products'
 import { cn, money, pluralise } from '@/lib/utils'
+import { sizeKey } from '@/lib/size'
 import { Badge, Checkbox, Input, Label } from '@/components/ui'
 import { AxleSelector } from './AxleSelector'
 
@@ -85,9 +86,7 @@ export function defaultSort(q: string): SortKey {
  * customer is concerned, so every size comparison runs through this key.
  * ------------------------------------------------------------------ */
 
-export function sizeKey(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
-}
+export { sizeKey }
 
 export interface SizeFacet {
   size: string

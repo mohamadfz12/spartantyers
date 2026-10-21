@@ -10,7 +10,7 @@
 
 import { site } from '../../../src/config/site.js'
 import { methodGuard, ok, fail, withGuard } from '../http.js'
-import { getSquareConfig, missingSquareVars } from '../square.js'
+import { afterpayEnabled, getSquareConfig, missingSquareVars } from '../square.js'
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET'])) return
@@ -39,7 +39,7 @@ export default withGuard(async (req, res) => {
     environment: config.environment,
     // Afterpay rides on the same Square account; the cap is a business rule
     // from site config, not a Square setting.
-    afterpayEnabled: process.env.SQUARE_AFTERPAY_ENABLED !== 'false',
+    afterpayEnabled: afterpayEnabled(),
     afterpayMaxOrder: site.commerce.afterpayMaxOrder,
   })
 })

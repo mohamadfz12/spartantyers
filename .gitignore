@@ -3,9 +3,12 @@ dist
 dist-ssr
 .vercel
 *.local
-.env
-.env.local
-.env.*.local
+# Every env file stays out of the public repo; only the template is committed.
+.env*
+!.env.example
+
+# Local AI database (PGlite)
+.data
 
 # Build/editor noise
 .DS_Store

@@ -14,6 +14,7 @@ import { Seo, breadcrumbJsonLd, localBusinessJsonLd } from '@/components/Seo'
 import { Badge, Button } from '@/components/ui'
 import { Reveal, Stagger } from '@/components/motion'
 import { CtaBand, EnquiryForm, PageHero, SectionHeading } from '@/components/marketing'
+import { AssistantCallCard } from '@/components/assistant/CallCard'
 
 /* ------------------------------------------------------------------ *
  * /contact
@@ -141,6 +142,10 @@ export default function Contact() {
               </p>
             </div>
           </Stagger>
+
+          <div className="mt-5">
+            <AssistantCallCard />
+          </div>
         </div>
       </section>
 

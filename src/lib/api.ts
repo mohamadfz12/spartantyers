@@ -20,6 +20,111 @@ export class ApiError extends Error {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * Admin: the AI assistant (what the server answers; see
+ * api/_lib/handlers/admin-ai-*.ts). No addresses or hashes in any of it.
+ * ------------------------------------------------------------------ */
+
+export type AiMode = 'real' | 'practice' | 'off' | 'not_configured'
+
+export interface AiSettingsView {
+  enabled: boolean
+  voiceEnabled: boolean
+  dailyLimitUsd: number
+  monthlyLimitUsd: number
+}
+
+export interface AiStatus {
+  chat: { mode: AiMode; reason: string; model: string | null }
+  voice: {
+    mode: AiMode
+    reason: string
+    model: string | null
+    /** The length calls really get here (fitted to the server's time limit), and the length that is set. */
+    callSeconds: number
+    configuredSeconds: number
+    /** The smallest daily limit, in dollars, that lets a call start (null for practice calls). */
+    minDailyUsd: number | null
+  }
+  limits: {
+    dailyUsd: number
+    monthlyUsd: number
+    savedDailyUsd: number
+    savedMonthlyUsd: number
+    dailyCapUsd: number | null
+    monthlyCapUsd: number | null
+  }
+  spend: { todayUsd: number; monthUsd: number; day: string }
+  database: { connected: boolean }
+  disabledByEnv: boolean
+  settings: AiSettingsView
+  warnings: string[]
+}
+
+export type AiConversationFilter = 'all' | 'chat' | 'call' | 'person'
+
+export interface AiConversationRow {
+  id: string
+  startedAt: string
+  lastAt: string
+  messages: number
+  hasCall: boolean
+  hasChat: boolean
+  askedForPerson: boolean
+  cardsShown: number
+  cardsAdded: number
+  cardsSent: number
+  orderRef: string | null
+  preview: string
+}
+
+export type AiCardOutcome = 'added' | 'sent' | 'dismissed' | 'failed' | 'none'
+
+export interface AiCardView {
+  id: string
+  kind: 'cart' | 'quote' | 'handover'
+  summary: string
+  outcome: AiCardOutcome
+}
+
+export type AiTranscriptEntry =
+  | {
+      kind: 'message'
+      id: number
+      role: 'customer' | 'assistant'
+      text: string
+      at: string
+      onCall: boolean
+      did: string[]
+      pages: Array<{ to: string; note: string }>
+      cards: AiCardView[]
+      buttons: boolean
+      emergency: boolean
+      fallback: string | null
+    }
+  | { kind: 'event'; id: number; text: string; at: string }
+  | {
+      kind: 'call'
+      id: string
+      at: string
+      endedAt: string | null
+      status: string
+      seconds: number
+      endReason: string
+      lines: number
+      practice: boolean
+    }
+
+export interface AiConversationDetail {
+  id: string
+  startedAt: string
+  lastAt: string
+  orderRef: string | null
+  askedForPerson: boolean
+  entries: AiTranscriptEntry[]
+  truncated: boolean
+}
+
 async function request<T>(
   path: string,
   init: RequestInit & { timeoutMs?: number } = {},
@@ -126,6 +231,8 @@ export const api = {
     notes?: string
     /** The total the customer was shown. Compared, never used to price. */
     expectedTotal?: number
+    /** The assistant chat that filled the cart, so staff see it with the order. */
+    conversationId?: string
   }) =>
     request<{
       ok: true
@@ -169,10 +276,6 @@ export const api = {
       '/api/newsletter',
       json({ email }),
     ),
-
-  chat: (body: {
-    messages: Array<{ role: 'user' | 'assistant'; content: string }>
-  }) => request<{ reply: string }>('/api/chat', { ...json(body), timeoutMs: 30000 }),
 
   lookupOrder: (reference: string, email: string) =>
     request<{ order: Order }>(
@@ -244,6 +347,45 @@ export const api = {
         }>
         subscribers: Array<{ email: string; createdAt: string }>
       }>('/api/admin/enquiries', { headers: auth(token) }),
+
+    aiStatus: (token: string) =>
+      request<AiStatus>('/api/admin/ai-status', { headers: auth(token) }),
+
+    aiSettings: (token: string) =>
+      request<{ settings: AiSettingsView; disabledByEnv: boolean }>(
+        '/api/admin/ai-settings',
+        { headers: auth(token) },
+      ),
+
+    saveAiSettings: (token: string, patch: Partial<AiSettingsView>) =>
+      request<{ settings: AiSettingsView; disabledByEnv: boolean }>(
+        '/api/admin/ai-settings',
+        {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+          headers: { ...auth(token), 'Content-Type': 'application/json' },
+        },
+      ),
+
+    aiConversations: (
+      token: string,
+      params: { filter: AiConversationFilter; q: string; cursor?: string },
+    ) => {
+      const query = new URLSearchParams({ filter: params.filter })
+      if (params.q) query.set('q', params.q)
+      if (params.cursor) query.set('cursor', params.cursor)
+      return request<{
+        conversations: AiConversationRow[]
+        next: string | null
+        total: number
+      }>(`/api/admin/ai-conversations?${query.toString()}`, { headers: auth(token) })
+    },
+
+    aiConversation: (token: string, id: string) =>
+      request<{ conversation: AiConversationDetail }>(
+        `/api/admin/ai-conversation?id=${encodeURIComponent(id)}`,
+        { headers: auth(token) },
+      ),
   },
 }
 

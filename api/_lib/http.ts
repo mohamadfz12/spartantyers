@@ -7,6 +7,9 @@
  * `VercelResponse`, so swapping in the real types later is a drop-in change.
  */
 
+import { site } from '../../src/config/site.js'
+import { EMAIL_MAX, isEmail } from '../../src/lib/email.js'
+
 export interface ApiRequest {
   method?: string
   body?: any
@@ -19,6 +22,14 @@ export interface ApiResponse {
   json(body: unknown): void
   setHeader(k: string, v: string): void
   end(): void
+  /** Streaming (newline-delimited JSON, one event per line); present on Vercel's response, used by the AI chat. */
+  write?(chunk: string): boolean
+  flushHeaders?(): void
+  /** Node's response events; the AI chat uses 'close' to notice a visitor who left mid-answer. */
+  on?(event: 'close', listener: () => void): unknown
+  readonly headersSent?: boolean
+  readonly writableEnded?: boolean
+  readonly destroyed?: boolean
 }
 
 export type Handler = (req: ApiRequest, res: ApiResponse) => Promise<void>
@@ -159,6 +170,17 @@ function allowedOrigins(): string[] {
   return list
 }
 
+/**
+ * True when the request's `Origin` header names this site: one of the origins above, or the
+ * production domain with or without `www`. For the endpoints that cost money (the AI chat), which
+ * only the site's own pages may use. A request with no `Origin` (not a browser POST) is refused.
+ */
+export function isAllowedOrigin(req: ApiRequest): boolean {
+  const origin = header(req, 'origin')
+  if (!origin) return false
+  return [...allowedOrigins(), `https://${site.domain}`, `https://www.${site.domain}`].includes(origin)
+}
+
 export function applyCors(req: ApiRequest, res: ApiResponse): void {
   res.setHeader('Vary', 'Origin')
   const origin = header(req, 'origin')
@@ -209,12 +231,10 @@ export function asString(value: unknown, maxLength = 2000): string | null {
   return trimmed
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/
-
 export function asEmail(value: unknown): string | null {
-  const text = asString(value, 254)
+  const text = asString(value, EMAIL_MAX)
   if (!text) return null
-  return EMAIL_RE.test(text) ? text : null
+  return isEmail(text) ? text : null
 }
 
 export function asPhone(value: unknown): string | null {
@@ -235,4 +255,19 @@ export function asPositiveInt(value: unknown, max = 100000): number | null {
 
 export function round2(value: number): number {
   return Math.round(value * 100) / 100
+}
+
+/* ------------------------------------------------------------------ *
+ * Client address
+ * ------------------------------------------------------------------ */
+
+/**
+ * The visitor's address as the platform reports it: the first
+ * `x-forwarded-for` value (the client, then each proxy after it), then
+ * `x-real-ip`. Empty when neither is present. Only ever hash it (see
+ * `hashIp` in `_lib/ai/spend.ts`); never store or log it raw.
+ */
+export function clientIp(req: ApiRequest): string {
+  const forwarded = header(req, 'x-forwarded-for')?.split(',')[0]?.trim()
+  return forwarded || header(req, 'x-real-ip')?.trim() || ''
 }

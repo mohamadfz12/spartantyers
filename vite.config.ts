@@ -47,5 +47,9 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    // The functions in api/ run in a small local server (scripts/dev-api.ts).
+    proxy: {
+      '/api': `http://localhost:${process.env.API_PORT ?? 3110}`,
+    },
   },
 })
