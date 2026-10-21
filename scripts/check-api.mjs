@@ -20,8 +20,12 @@ import { tmpdir } from 'node:os'
 import { rmSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
-const root = process.argv[2] ?? process.cwd()
-const out = process.argv[3] ?? join(tmpdir(), 'spartan-api-check')
+const root = process.cwd()
+const LIVE = process.argv.includes('--live')
+// Inside node_modules so the transpiled functions resolve their npm imports
+// (the Neon driver) exactly as they do on Vercel.
+const out = join(root, 'node_modules', '.cache', 'spartan-api-check')
+void tmpdir
 
 rmSync(out, { recursive: true, force: true })
 
@@ -41,6 +45,14 @@ await build({
   platform: 'node', target: 'node22', logLevel: 'silent',
 })
 writeFileSync(join(out, 'package.json'), JSON.stringify({ type: 'module' }))
+
+// Every database variable is cleared so the offline run starts from "no
+// database", whatever happens to be in this shell.
+const DB_VARS = [
+  'KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_URL',
+  'UPSTASH_REDIS_REST_TOKEN', 'DATABASE_URL', 'POSTGRES_URL',
+]
+for (const name of DB_VARS) delete process.env[name]
 
 process.env.ADMIN_PASSWORD = 'test-password'
 process.env.ADMIN_SESSION_SECRET = 'test-secret-test-secret-test-secret'
@@ -67,6 +79,38 @@ for (const fn of fns) {
   }
 }
 if (crashed) process.exit(1)
+
+/* ---- --live: prove the real database round-trips, touching nothing else ---- */
+if (LIVE) {
+  const { readFileSync, existsSync } = await import('node:fs')
+  const envFile = ['.env.local', '.env'].map((f) => join(root, f)).find((f) => existsSync(f))
+  if (!envFile) {
+    console.error('\n--live needs a .env or .env.local file (Vercel: Settings → Environment Variables → Download).')
+    process.exit(1)
+  }
+  // Load values into this process only. Names are printed; values never are.
+  const found = []
+  for (const line of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/)
+    if (!m || !DB_VARS.includes(m[1])) continue
+    process.env[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, '')
+    found.push(m[1])
+  }
+  console.log(`\n--- live database (${envFile.split(/[\\/]/).pop()}) ---`)
+  console.log('database variables found:', found.length ? found.join(', ') : 'none')
+
+  const store = await import(pathToFileURL(join(out, 'api/_lib/store.js')).href)
+  console.log('backend selected        :', store.storeBackend())
+  const health = await store.storeHealth()
+  console.log('health                  :', health)
+  if (health !== 'connected') process.exit(1)
+  const test = await store.storeSelfTest()
+  console.log('write → read back       :', test.readBack ? 'ok' : 'FAILED')
+  console.log('delete test record      :', test.removed ? 'ok' : 'FAILED')
+  if (!test.readBack || !test.removed) process.exit(1)
+  console.log('\n✓ the real database works for orders, enquiries and edits')
+  process.exit(0)
+}
 
 /* ---- drive the admin flow end to end ---- */
 function call(fn, method, query = {}, body, headers = {}) {
@@ -164,6 +208,14 @@ for (const [scheme, urlKey, tokenKey] of [
   delete process.env[tokenKey]
 }
 redis.close()
+
+// Postgres configured but unreachable must say so, not fall back to memory.
+process.env.DATABASE_URL = 'postgresql://user:pass@unreachable.invalid/db?sslmode=require'
+expectStorage('Postgres (DATABASE_URL), unreachable', await call(admin, 'GET', { action: 'stats' }, undefined, auth), 503)
+delete process.env.DATABASE_URL
+process.env.POSTGRES_URL = 'postgresql://user:pass@unreachable.invalid/db?sslmode=require'
+expectStorage('Postgres (POSTGRES_URL), unreachable', await call(admin, 'GET', { action: 'stats' }, undefined, auth), 503)
+delete process.env.POSTGRES_URL
 
 if (storageFailures) {
   console.error(`\n✗ ${storageFailures} storage check(s) failed`)

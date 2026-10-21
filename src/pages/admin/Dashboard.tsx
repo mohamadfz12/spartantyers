@@ -365,8 +365,8 @@ function StorageStatus({ storage }: { storage: 'connected' | 'memory' }) {
       <p className="mt-1.5 leading-relaxed text-foreground/85">
         Orders, enquiries, newsletter sign-ups and any price or stock edits are
         held in temporary memory and will disappear when the site restarts. In
-        the Vercel project, open Storage, connect an Upstash Redis (KV)
-        database to this project, then redeploy.
+        the Vercel project, open Storage and connect a Neon Postgres or Upstash Redis
+        database to this project (with Production ticked), then redeploy.
       </p>
     </div>
   )

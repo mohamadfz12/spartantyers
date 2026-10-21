@@ -1,25 +1,35 @@
 /**
  * Persistence for orders, enquiries, subscribers and product overrides.
  *
- * TWO BACKENDS, CHOSEN AT RUNTIME
+ * THREE BACKENDS, CHOSEN AT RUNTIME, ONE SHAPE
  *
- * 1. Vercel KV / Upstash Redis, when both `KV_REST_API_URL` and
- *    `KV_REST_API_TOKEN` are present. Talked to over its REST API with plain
- *    `fetch` so no SDK dependency is introduced. Every collection is a Redis
- *    HASH keyed by id, which gives us cheap single-field updates (an order
- *    status change rewrites one field, not the whole collection) and a single
- *    `HGETALL` for listing.
+ * Every collection is a set of records keyed by id ("bucket" → "field" →
+ * JSON value). Only four operations exist — read all, read one, write one,
+ * delete one — so the order, enquiry and admin logic below never knows which
+ * database it is talking to.
  *
- * 2. An in-memory fallback cached on `globalThis`.
+ * 1. Upstash / Vercel KV Redis, when REST credentials are present
+ *    (`KV_REST_API_URL` + `KV_REST_API_TOKEN`, or Upstash's own
+ *    `UPSTASH_REDIS_REST_*` names). Plain `fetch`, no SDK. A bucket is a HASH.
+ *
+ * 2. Neon Postgres, when `DATABASE_URL` or `POSTGRES_URL` is present — what
+ *    Vercel's Neon integration injects. Uses Neon's serverless driver over
+ *    HTTPS, which suits short-lived functions: no connection pool to exhaust.
+ *    One table, `spartan_store (bucket, field, value jsonb)`, created on first
+ *    use, so nothing has to be run by hand.
+ *
+ * 3. An in-memory fallback cached on `globalThis`.
  *
  *    !! DEVELOPMENT ONLY !!
  *    Serverless filesystems and process memory are ephemeral: the fallback
  *    survives only while a single lambda instance stays warm, is NOT shared
  *    between concurrent instances, and is wiped on every cold start and every
- *    new deployment. It exists so `vercel dev` and preview builds work without
- *    provisioning a database — never rely on it for real orders. Provision KV
- *    before taking payments.
+ *    new deployment. It exists so local development works without a
+ *    database — never rely on it for real orders. The admin dashboard says
+ *    plainly when it is in use.
  */
+
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 
 export interface StoredOrder {
   id: string
@@ -90,6 +100,7 @@ const KEY_ORDERS = 'spartan:orders'
 const KEY_ENQUIRIES = 'spartan:enquiries'
 const KEY_SUBSCRIBERS = 'spartan:subscribers'
 const KEY_OVERRIDES = 'spartan:overrides'
+const KEY_SELFTEST = 'spartan:selftest'
 
 /* ------------------------------------------------------------------ *
  * Backend selection
@@ -101,8 +112,6 @@ const KEY_OVERRIDES = 'spartan:overrides'
  * Vercel's storage integration injects `KV_REST_API_URL` / `KV_REST_API_TOKEN`;
  * connecting Upstash directly injects `UPSTASH_REDIS_REST_URL` /
  * `UPSTASH_REDIS_REST_TOKEN`. They are the same service, so either works.
- * Missing both is not an error — it silently selects the in-memory fallback,
- * which is exactly why `storeHealth()` below reports which one is live.
  */
 function kvConfig(): { url: string; token: string } | null {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
@@ -111,35 +120,132 @@ function kvConfig(): { url: string; token: string } | null {
   return { url: url.replace(/\/+$/, ''), token }
 }
 
-export function isPersistent(): boolean {
-  return kvConfig() !== null
+/**
+ * Postgres connection string. Vercel's Neon integration injects several; the
+ * pooled `DATABASE_URL` is preferred and `POSTGRES_URL` is the same database.
+ */
+function postgresUrl(): string | null {
+  return process.env.DATABASE_URL || process.env.POSTGRES_URL || null
 }
 
-/** Human-readable backend name, for the admin UI / health checks. */
-export function storeBackend(): 'kv' | 'memory' {
-  return isPersistent() ? 'kv' : 'memory'
+export type StoreBackend = 'redis' | 'postgres' | 'memory'
+
+/**
+ * Redis wins when both are configured, purely so the choice is deterministic.
+ * Missing both is not an error — it silently selects the in-memory fallback,
+ * which is exactly why `storeHealth()` below reports which one is live.
+ */
+export function storeBackend(): StoreBackend {
+  if (kvConfig()) return 'redis'
+  if (postgresUrl()) return 'postgres'
+  return 'memory'
+}
+
+export function isPersistent(): boolean {
+  return storeBackend() !== 'memory'
 }
 
 export type StoreHealth =
   /** Credentials present and the database answered. */
   | 'connected'
-  /** Credentials present but the database did not answer — wrong token, paused or deleted database. */
+  /** Credentials present but the database did not answer — wrong credentials, paused or deleted database. */
   | 'error'
   /** No credentials: data lives in temporary memory and is lost on restart. */
   | 'memory'
 
 /**
  * Proves the database is reachable rather than merely configured: a typo in a
- * token looks identical to a working setup until the first write is lost.
- * Shown on the admin dashboard so staff can see it without reading logs.
+ * credential looks identical to a working setup until the first write is lost.
+ * For Postgres it also creates the table if needed, so a database without
+ * write permission fails here, on the dashboard, rather than at checkout.
  */
 export async function storeHealth(): Promise<StoreHealth> {
-  if (!isPersistent()) return 'memory'
+  const backend = storeBackend()
+  if (backend === 'memory') return 'memory'
   try {
-    const reply = await kvCommand<string>(['PING'])
-    return reply === 'PONG' ? 'connected' : 'error'
+    if (backend === 'redis') {
+      const reply = await kvCommand<string>(['PING'])
+      return reply === 'PONG' ? 'connected' : 'error'
+    }
+    await pgReady()
+    const rows = await pg().query('SELECT 1 AS ok')
+    return rows[0]?.ok === 1 ? 'connected' : 'error'
   } catch {
     return 'error'
+  }
+}
+
+/**
+ * Writes, reads back and deletes a throwaway record in its own bucket. Used by
+ * `npm run check:api -- --live` to prove a real database round-trips without
+ * touching orders, enquiries or stock.
+ */
+export async function storeSelfTest(): Promise<{
+  backend: StoreBackend
+  readBack: boolean
+  removed: boolean
+}> {
+  const backend = storeBackend()
+  const field = `selftest-${Date.now()}`
+  const value = { ok: true, at: new Date().toISOString() }
+  await hashSet(KEY_SELFTEST, field, value)
+  const back = await hashGet<typeof value>(KEY_SELFTEST, field)
+  await hashDelete(KEY_SELFTEST, field)
+  const after = await hashGet<typeof value>(KEY_SELFTEST, field)
+  return { backend, readBack: back?.at === value.at, removed: after === null }
+}
+
+/* ------------------------------------------------------------------ *
+ * The four operations every collection is built from
+ * ------------------------------------------------------------------ */
+
+async function hashAll<T>(bucket: string): Promise<Record<string, T>> {
+  switch (storeBackend()) {
+    case 'redis':
+      return kvHashAll<T>(bucket)
+    case 'postgres':
+      return pgHashAll<T>(bucket)
+    default:
+      return { ...(memoryBucket(bucket) as Record<string, T>) }
+  }
+}
+
+async function hashGet<T>(bucket: string, field: string): Promise<T | null> {
+  switch (storeBackend()) {
+    case 'redis':
+      return kvHashGet<T>(bucket, field)
+    case 'postgres':
+      return pgHashGet<T>(bucket, field)
+    default:
+      return (memoryBucket(bucket)[field] as T | undefined) ?? null
+  }
+}
+
+async function hashSet(bucket: string, field: string, value: unknown): Promise<void> {
+  switch (storeBackend()) {
+    case 'redis':
+      return kvHashSet(bucket, field, value)
+    case 'postgres':
+      return pgHashSet(bucket, field, value)
+    default:
+      memoryBucket(bucket)[field] = value
+  }
+}
+
+async function hashDelete(bucket: string, field: string): Promise<void> {
+  switch (storeBackend()) {
+    case 'redis':
+      await kvCommand(['HDEL', bucket, field])
+      return
+    case 'postgres':
+      await pgReady()
+      await pg().query('DELETE FROM spartan_store WHERE bucket = $1 AND field = $2', [
+        bucket,
+        field,
+      ])
+      return
+    default:
+      delete memoryBucket(bucket)[field]
   }
 }
 
@@ -213,51 +319,107 @@ function parseJson<T>(value: unknown): T | null {
 }
 
 /* ------------------------------------------------------------------ *
+ * Neon Postgres over HTTPS
+ * ------------------------------------------------------------------ */
+
+let pgClient: { url: string; sql: NeonQueryFunction<false, false> } | null = null
+
+function pg(): NeonQueryFunction<false, false> {
+  const url = postgresUrl()
+  if (!url) throw new Error('Postgres is not configured')
+  // Rebuilt only if the URL changes, which happens between test cases.
+  if (!pgClient || pgClient.url !== url) pgClient = { url, sql: neon(url) }
+  return pgClient.sql
+}
+
+/** Per-instance memo, so the table check costs one round trip per cold start. */
+let pgSchema: { url: string; ready: Promise<void> } | null = null
+
+function pgReady(): Promise<void> {
+  const url = postgresUrl() ?? ''
+  if (!pgSchema || pgSchema.url !== url) {
+    const ready = pg()
+      .query(
+        `CREATE TABLE IF NOT EXISTS spartan_store (
+           bucket     text        NOT NULL,
+           field      text        NOT NULL,
+           value      jsonb       NOT NULL,
+           updated_at timestamptz NOT NULL DEFAULT now(),
+           PRIMARY KEY (bucket, field)
+         )`,
+      )
+      .then(() => undefined)
+    // A failed attempt must not be cached, or one network blip would poison
+    // this instance until its next cold start.
+    ready.catch(() => {
+      if (pgSchema?.ready === ready) pgSchema = null
+    })
+    pgSchema = { url, ready }
+  }
+  return pgSchema.ready
+}
+
+async function pgHashAll<T>(bucket: string): Promise<Record<string, T>> {
+  await pgReady()
+  const rows = await pg().query('SELECT field, value FROM spartan_store WHERE bucket = $1', [
+    bucket,
+  ])
+  const out: Record<string, T> = {}
+  for (const row of rows) {
+    const parsed = parseJson<T>(row.value)
+    if (parsed !== null) out[String(row.field)] = parsed
+  }
+  return out
+}
+
+async function pgHashGet<T>(bucket: string, field: string): Promise<T | null> {
+  await pgReady()
+  const rows = await pg().query(
+    'SELECT value FROM spartan_store WHERE bucket = $1 AND field = $2',
+    [bucket, field],
+  )
+  return rows.length ? parseJson<T>(rows[0].value) : null
+}
+
+async function pgHashSet(bucket: string, field: string, value: unknown): Promise<void> {
+  await pgReady()
+  await pg().query(
+    `INSERT INTO spartan_store (bucket, field, value, updated_at)
+     VALUES ($1, $2, $3::jsonb, now())
+     ON CONFLICT (bucket, field)
+     DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [bucket, field, JSON.stringify(value)],
+  )
+}
+
+/* ------------------------------------------------------------------ *
  * In-memory fallback (development only — see file header)
  * ------------------------------------------------------------------ */
 
-interface MemoryStore {
-  orders: Record<string, StoredOrder>
-  enquiries: Record<string, StoredEnquiry>
-  subscribers: Record<string, StoredSubscriber>
-  overrides: Record<string, StoredOverride>
-}
-
 const MEMORY_KEY = '__spartanMemoryStore__'
 
-function memory(): MemoryStore {
+function memoryBucket(bucket: string): Record<string, unknown> {
   const g = globalThis as typeof globalThis & {
-    [MEMORY_KEY]?: MemoryStore
+    [MEMORY_KEY]?: Record<string, Record<string, unknown>>
   }
-  if (!g[MEMORY_KEY]) {
-    g[MEMORY_KEY] = {
-      orders: {},
-      enquiries: {},
-      subscribers: {},
-      overrides: {},
-    }
-  }
-  return g[MEMORY_KEY]
+  const store = (g[MEMORY_KEY] ??= {})
+  return (store[bucket] ??= {})
 }
+
+const newestFirst = <T extends { createdAt: string }>(map: Record<string, T>): T[] =>
+  Object.values(map).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
 /* ------------------------------------------------------------------ *
  * Orders
  * ------------------------------------------------------------------ */
 
 export async function listOrders(): Promise<StoredOrder[]> {
-  const map = isPersistent()
-    ? await kvHashAll<StoredOrder>(KEY_ORDERS)
-    : memory().orders
-
-  return Object.values(map).sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt),
-  )
+  return newestFirst(await hashAll<StoredOrder>(KEY_ORDERS))
 }
 
 export async function getOrder(id: string): Promise<StoredOrder | null> {
   if (!id) return null
-  if (isPersistent()) return kvHashGet<StoredOrder>(KEY_ORDERS, id)
-  return memory().orders[id] ?? null
+  return hashGet<StoredOrder>(KEY_ORDERS, id)
 }
 
 /**
@@ -285,11 +447,7 @@ export async function findOrder(
 }
 
 export async function saveOrder(order: StoredOrder): Promise<StoredOrder> {
-  if (isPersistent()) {
-    await kvHashSet(KEY_ORDERS, order.id, order)
-  } else {
-    memory().orders[order.id] = order
-  }
+  await hashSet(KEY_ORDERS, order.id, order)
   return order
 }
 
@@ -309,23 +467,11 @@ export async function updateOrderStatus(
  * ------------------------------------------------------------------ */
 
 export async function listEnquiries(): Promise<StoredEnquiry[]> {
-  const map = isPersistent()
-    ? await kvHashAll<StoredEnquiry>(KEY_ENQUIRIES)
-    : memory().enquiries
-
-  return Object.values(map).sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt),
-  )
+  return newestFirst(await hashAll<StoredEnquiry>(KEY_ENQUIRIES))
 }
 
-export async function saveEnquiry(
-  enquiry: StoredEnquiry,
-): Promise<StoredEnquiry> {
-  if (isPersistent()) {
-    await kvHashSet(KEY_ENQUIRIES, enquiry.id, enquiry)
-  } else {
-    memory().enquiries[enquiry.id] = enquiry
-  }
+export async function saveEnquiry(enquiry: StoredEnquiry): Promise<StoredEnquiry> {
+  await hashSet(KEY_ENQUIRIES, enquiry.id, enquiry)
   return enquiry
 }
 
@@ -334,13 +480,7 @@ export async function saveEnquiry(
  * ------------------------------------------------------------------ */
 
 export async function listSubscribers(): Promise<StoredSubscriber[]> {
-  const map = isPersistent()
-    ? await kvHashAll<StoredSubscriber>(KEY_SUBSCRIBERS)
-    : memory().subscribers
-
-  return Object.values(map).sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt),
-  )
+  return newestFirst(await hashAll<StoredSubscriber>(KEY_SUBSCRIBERS))
 }
 
 /**
@@ -353,22 +493,14 @@ export async function saveSubscriber(
 ): Promise<{ subscriber: StoredSubscriber; alreadySubscribed: boolean }> {
   const key = email.trim().toLowerCase()
 
-  const existing = isPersistent()
-    ? await kvHashGet<StoredSubscriber>(KEY_SUBSCRIBERS, key)
-    : (memory().subscribers[key] ?? null)
-
+  const existing = await hashGet<StoredSubscriber>(KEY_SUBSCRIBERS, key)
   if (existing) return { subscriber: existing, alreadySubscribed: true }
 
   const subscriber: StoredSubscriber = {
     email: key,
     createdAt: new Date().toISOString(),
   }
-
-  if (isPersistent()) {
-    await kvHashSet(KEY_SUBSCRIBERS, key, subscriber)
-  } else {
-    memory().subscribers[key] = subscriber
-  }
+  await hashSet(KEY_SUBSCRIBERS, key, subscriber)
 
   return { subscriber, alreadySubscribed: false }
 }
@@ -378,29 +510,21 @@ export async function saveSubscriber(
  * ------------------------------------------------------------------ */
 
 export async function getOverrides(): Promise<Record<string, StoredOverride>> {
-  if (isPersistent()) return kvHashAll<StoredOverride>(KEY_OVERRIDES)
-  return { ...memory().overrides }
+  return hashAll<StoredOverride>(KEY_OVERRIDES)
 }
 
 export async function setOverride(
   id: string,
   patch: StoredOverride,
 ): Promise<StoredOverride> {
-  const current = isPersistent()
-    ? ((await kvHashGet<StoredOverride>(KEY_OVERRIDES, id)) ?? {})
-    : (memory().overrides[id] ?? {})
+  const current = (await hashGet<StoredOverride>(KEY_OVERRIDES, id)) ?? {}
 
   const next: StoredOverride = {
     ...current,
     ...patch,
     updatedAt: new Date().toISOString(),
   }
-
-  if (isPersistent()) {
-    await kvHashSet(KEY_OVERRIDES, id, next)
-  } else {
-    memory().overrides[id] = next
-  }
+  await hashSet(KEY_OVERRIDES, id, next)
 
   return next
 }
