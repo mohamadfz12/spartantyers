@@ -30,3 +30,7 @@ spartan-tyres-leads/*.html
 spartan-tyres-leads/research/
 spartan-tyres-leads/tools/.cache/
 spartan-tyres-leads/**/__pycache__/
+
+# Researchers' scratch / download folders
+_dl*/
+_scratch*/
