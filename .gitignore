@@ -20,3 +20,13 @@ npm-debug.log*
 _research
 _tools
 _smoke
+
+# NSW lead research. The repository is public, so lead data never goes in it:
+# it lives on this machine and in the database (npm run import:leads).
+# Only the tooling (build.py, tools/*.py) is committed.
+spartan-tyres-leads/*.json
+spartan-tyres-leads/*.xlsx
+spartan-tyres-leads/*.html
+spartan-tyres-leads/research/
+spartan-tyres-leads/tools/.cache/
+spartan-tyres-leads/**/__pycache__/

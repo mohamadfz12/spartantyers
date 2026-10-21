@@ -9,6 +9,7 @@ import {
   Package,
   Receipt,
   ShieldCheck,
+  Target,
 } from 'lucide-react'
 import { Logo, LogoMark } from '@/components/brand/Logo'
 import { Button, Sheet, SheetClose, SheetHeader, SheetTitle } from '@/components/ui'
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { useAdmin, useAdminSession } from '@/store/admin'
 import Dashboard from './Dashboard'
 import Enquiries from './Enquiries'
+import Leads from './Leads'
 import Login from './Login'
 import Orders from './Orders'
 import Products from './Products'
@@ -50,6 +52,7 @@ const NAV: NavItem[] = [
   { to: '/admin/products', label: 'Products', icon: Package },
   { to: '/admin/orders', label: 'Orders', icon: Receipt },
   { to: '/admin/enquiries', label: 'Enquiries', icon: Mail },
+  { to: '/admin/leads', label: 'Leads', icon: Target },
 ]
 
 const TITLES: Record<string, string> = {
@@ -164,6 +167,7 @@ export default function Admin() {
               <Route path="products" element={<Products />} />
               <Route path="orders" element={<Orders />} />
               <Route path="enquiries" element={<Enquiries />} />
+              <Route path="leads" element={<Leads />} />
               {/* Anything else inside /admin belongs at the dashboard. */}
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Routes>

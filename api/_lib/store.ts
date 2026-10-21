@@ -96,6 +96,57 @@ export interface StoredOverride {
   updatedAt?: string
 }
 
+/**
+ * A prospect from the NSW lead research. Imported in bulk with
+ * `npm run import:leads`; never shipped in the site bundle or the repo.
+ */
+export interface StoredLead {
+  /** Stable across re-imports, so a lead keeps its status and notes. */
+  key: string
+  name: string
+  category: 'Transport' | 'Truck Tyre Reseller'
+  subtype: string
+  website: string
+  description: string
+  region: 'Metro' | 'N NSW' | 'W NSW' | 'S NSW'
+  area: string
+  city: string
+  address: string
+  phones: string[]
+  emails: string[]
+  contact_page: string
+  other_contacts: string
+  size: 'Large' | 'Medium' | 'Small' | ''
+  employees: string
+  fleet: string
+  size_basis: string
+  source: string
+  reach: string
+  priority: 'A' | 'B' | 'C'
+}
+
+export const LEAD_STATUSES = [
+  'New',
+  'Called',
+  'Interested',
+  'Quote sent',
+  'Customer',
+  'Not interested',
+  'Wrong number',
+] as const
+
+export type LeadStatusValue = (typeof LEAD_STATUSES)[number]
+
+/** Sales progress on a lead — kept apart from the lead so re-imports never wipe it. */
+export interface StoredLeadStatus {
+  status: LeadStatusValue
+  notes: string
+  updatedAt: string
+}
+
+const KEY_LEADS = 'spartan:leads'
+const KEY_LEAD_STATUS = 'spartan:lead-status'
+const KEY_META = 'spartan:meta'
 const KEY_ORDERS = 'spartan:orders'
 const KEY_ENQUIRIES = 'spartan:enquiries'
 const KEY_SUBSCRIBERS = 'spartan:subscribers'
@@ -527,4 +578,44 @@ export async function setOverride(
   await hashSet(KEY_OVERRIDES, id, next)
 
   return next
+}
+
+/* ------------------------------------------------------------------ *
+ * Leads (sales prospects) and their status
+ * ------------------------------------------------------------------ */
+
+export async function listLeads(): Promise<StoredLead[]> {
+  return Object.values(await hashAll<StoredLead>(KEY_LEADS))
+}
+
+export async function getLead(key: string): Promise<StoredLead | null> {
+  if (!key) return null
+  return hashGet<StoredLead>(KEY_LEADS, key)
+}
+
+export async function getLeadStatuses(): Promise<Record<string, StoredLeadStatus>> {
+  return hashAll<StoredLeadStatus>(KEY_LEAD_STATUS)
+}
+
+export async function setLeadStatus(
+  key: string,
+  patch: Partial<Pick<StoredLeadStatus, 'status' | 'notes'>>,
+): Promise<StoredLeadStatus> {
+  const current = (await hashGet<StoredLeadStatus>(KEY_LEAD_STATUS, key)) ?? {
+    status: 'New' as const,
+    notes: '',
+    updatedAt: '',
+  }
+  const next: StoredLeadStatus = {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  }
+  await hashSet(KEY_LEAD_STATUS, key, next)
+  return next
+}
+
+/** Small bookkeeping values, e.g. when the leads were last imported. */
+export async function getMeta<T>(field: string): Promise<T | null> {
+  return hashGet<T>(KEY_META, field)
 }

@@ -108,7 +108,10 @@ if (LIVE) {
   console.log('write → read back       :', test.readBack ? 'ok' : 'FAILED')
   console.log('delete test record      :', test.removed ? 'ok' : 'FAILED')
   if (!test.readBack || !test.removed) process.exit(1)
-  console.log('\n✓ the real database works for orders, enquiries and edits')
+  const liveLeads = await store.listLeads()
+  const liveStatuses = await store.getLeadStatuses()
+  console.log('leads in database       :', liveLeads.length, `(${Object.keys(liveStatuses).length} with a status/notes)`)
+  console.log('\n✓ the real database works for orders, enquiries, edits and leads')
   process.exit(0)
 }
 
@@ -151,6 +154,21 @@ const orders = await call(admin, 'GET', { action: 'orders' }, undefined, auth)
 console.log('orders              ', orders.status, `${orders.body?.orders?.length} orders`)
 const enq = await call(admin, 'GET', { action: 'enquiries' }, undefined, auth)
 console.log('enquiries           ', enq.status, `${enq.body?.enquiries?.length} enquiries, ${enq.body?.subscribers?.length} subscribers`)
+const leadsList = await call(admin, 'GET', { action: 'leads' }, undefined, auth)
+console.log('leads list          ', leadsList.status, `${leadsList.body?.leads?.length} leads, statuses: ${leadsList.body?.statusOptions?.join('/')}`)
+const leadBad = await call(admin, 'PATCH', { action: 'leads' }, { key: 'abc', status: 'Bogus' }, auth)
+console.log('lead bad status     ', leadBad.status, JSON.stringify(leadBad.body).slice(0, 80))
+const leadMissing = await call(admin, 'PATCH', { action: 'leads' }, { key: 'no-such-lead', status: 'Called' }, auth)
+console.log('lead unknown key    ', leadMissing.status, JSON.stringify(leadMissing.body))
+const leadsNoAuth = await call(admin, 'GET', { action: 'leads' })
+console.log('leads without token ', leadsNoAuth.status)
+const leadChecks = [
+  [leadsList.status, 200], [leadBad.status, 400], [leadMissing.status, 404], [leadsNoAuth.status, 401],
+]
+if (leadChecks.some(([got, want]) => got !== want)) {
+  console.error('✗ leads endpoint did not behave as expected')
+  process.exit(1)
+}
 const noAuth = await call(admin, 'GET', { action: 'stats' })
 console.log('no token            ', noAuth.status, JSON.stringify(noAuth.body))
 

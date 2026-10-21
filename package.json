@@ -9,6 +9,7 @@
     "sitemap": "node scripts/generate-sitemap.mjs",
     "check": "node scripts/check-data.mjs",
     "check:api": "node scripts/check-api.mjs",
+    "import:leads": "node scripts/import-leads.mjs",
     "smoke": "node scripts/smoke.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
@@ -26,6 +27,7 @@
     "react-router-dom": "6.27.0",
     "tailwind-merge": "2.5.4",
     "three": "0.169.0",
+    "write-excel-file": "2.3.10",
     "zustand": "4.5.5"
   },
   "devDependencies": {

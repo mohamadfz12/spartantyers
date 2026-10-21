@@ -244,7 +244,75 @@ export const api = {
         }>
         subscribers: Array<{ email: string; createdAt: string }>
       }>('/api/admin/enquiries', { headers: auth(token) }),
+
+    leads: (token: string) =>
+      request<{
+        leads: Lead[]
+        statuses: Record<string, LeadStatus>
+        importedAt: string | null
+        statusOptions: LeadStatusValue[]
+      }>('/api/admin/leads', { headers: auth(token), timeoutMs: 45000 }),
+
+    updateLead: (
+      token: string,
+      key: string,
+      patch: Partial<Pick<LeadStatus, 'status' | 'notes'>>,
+    ) =>
+      request<{ key: string; status: LeadStatus }>('/api/admin/leads', {
+        method: 'PATCH',
+        body: JSON.stringify({ key, ...patch }),
+        headers: { ...auth(token), 'Content-Type': 'application/json' },
+      }),
   },
+}
+
+/* ------------------------------------------------------------------ *
+ * Leads (admin only — never bundled into the public site)
+ * ------------------------------------------------------------------ */
+
+export type LeadRegion = 'Metro' | 'N NSW' | 'W NSW' | 'S NSW'
+export type LeadCategory = 'Transport' | 'Truck Tyre Reseller'
+
+export interface Lead {
+  /** Stable across re-imports; statuses and notes are stored against it. */
+  key: string
+  name: string
+  category: LeadCategory
+  subtype: string
+  website: string
+  description: string
+  region: LeadRegion
+  area: string
+  city: string
+  address: string
+  phones: string[]
+  emails: string[]
+  contact_page: string
+  other_contacts: string
+  /** Potential as a truck-tyre customer. */
+  size: 'Large' | 'Medium' | 'Small' | ''
+  /** '<10' | '10–30' | '30–50' | '50+' */
+  employees: string
+  fleet: string
+  size_basis: string
+  source: string
+  reach: string
+  priority: 'A' | 'B' | 'C'
+}
+
+export type LeadStatusValue =
+  | 'New'
+  | 'Called'
+  | 'Interested'
+  | 'Quote sent'
+  | 'Customer'
+  | 'Not interested'
+  | 'Wrong number'
+
+export interface LeadStatus {
+  status: LeadStatusValue
+  notes: string
+  updatedAt: string
 }
 
 function auth(token: string): Record<string, string> {
