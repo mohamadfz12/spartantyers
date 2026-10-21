@@ -1,7 +1,12 @@
 /**
  * GET /api/admin/stats (bearer token)
  *   -> { revenue, orderCount, unitsSold, averageOrderValue,
- *        lowStock, revenueByDay, topProducts }
+ *        lowStock, revenueByDay, topProducts, storage }
+ *
+ * `storage` is the live database state ('connected' | 'memory'), so the
+ * dashboard can warn when orders are not being kept. A database that is
+ * configured but not answering is a 503 with a plain explanation, not a vague
+ * failure halfway through reading orders.
  *
  * Everything is derived from stored orders and the merged catalogue — there is
  * no separate analytics store to fall out of sync. Cancelled orders are
@@ -11,8 +16,8 @@
 
 import { requireAdmin } from '../auth.js'
 import { mergeCatalogue } from '../catalogue.js'
-import { methodGuard, ok, round2, withGuard } from '../http.js'
-import { getOverrides, listOrders } from '../store.js'
+import { fail, methodGuard, ok, round2, withGuard } from '../http.js'
+import { getOverrides, listOrders, storeHealth } from '../store.js'
 
 const REVENUE_DAYS = 14
 const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD ?? 24)
@@ -22,6 +27,16 @@ export default withGuard(async (req, res) => {
   if (!requireAdmin(req, res)) return
 
   res.setHeader('Cache-Control', 'private, no-store')
+
+  const storage = await storeHealth()
+  if (storage === 'error') {
+    fail(
+      res,
+      503,
+      'The database is set up but not responding, so orders and edits cannot be saved. Check the database connection in the Vercel project (Storage), then redeploy.',
+    )
+    return
+  }
 
   const [orders, overrides] = await Promise.all([listOrders(), getOverrides()])
   const products = mergeCatalogue(overrides)
@@ -106,5 +121,6 @@ export default withGuard(async (req, res) => {
     lowStock,
     revenueByDay,
     topProducts,
+    storage,
   })
 })

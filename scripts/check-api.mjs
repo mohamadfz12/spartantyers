@@ -122,3 +122,51 @@ const inv = await call(loaded['api/inventory.js'], 'GET')
 console.log('inventory           ', inv.status, `${inv.body?.products?.length} products`)
 const sq = await call(loaded['api/square/[action].js'], 'GET', { action: 'config' })
 console.log('square config       ', sq.status, JSON.stringify(sq.body).slice(0, 90))
+
+/* ---- storage health, as the dashboard reports it ---- */
+console.log('\n--- storage health ---')
+let storageFailures = 0
+const expectStorage = (label, result, wantStatus, wantStorage) => {
+  const good = result.status === wantStatus && (wantStorage == null || result.body?.storage === wantStorage)
+  if (!good) storageFailures++
+  console.log(`${good ? 'ok  ' : 'FAIL'} ${label.padEnd(44)} ${result.status} ${result.body?.storage ?? result.body?.error ?? ''}`)
+}
+
+const s1 = await call(admin, 'GET', { action: 'stats' }, undefined, auth)
+expectStorage('no database configured', s1, 200, 'memory')
+
+// A real Redis REST server, stood up locally, so 'connected' is proven rather than assumed.
+const { createServer } = await import('node:http')
+const redis = createServer((req, res) => {
+  let body = ''
+  req.on('data', (c) => (body += c))
+  req.on('end', () => {
+    const ok = req.headers.authorization === 'Bearer good-token'
+    const cmd = ok ? JSON.parse(body || '[]') : []
+    res.writeHead(ok ? 200 : 401, { 'Content-Type': 'application/json' })
+    if (!ok) return res.end(JSON.stringify({ error: 'unauthorized' }))
+    const verb = String(cmd[0] ?? '').toUpperCase()
+    res.end(JSON.stringify({ result: verb === 'PING' ? 'PONG' : verb === 'HGETALL' ? [] : null }))
+  })
+})
+const redisPort = await new Promise((r) => redis.listen(0, '127.0.0.1', () => r(redis.address().port)))
+
+for (const [scheme, urlKey, tokenKey] of [
+  ['Vercel naming (KV_REST_API_*)', 'KV_REST_API_URL', 'KV_REST_API_TOKEN'],
+  ['Upstash naming (UPSTASH_REDIS_REST_*)', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'],
+]) {
+  process.env[urlKey] = `http://127.0.0.1:${redisPort}`
+  process.env[tokenKey] = 'good-token'
+  expectStorage(`${scheme}, working`, await call(admin, 'GET', { action: 'stats' }, undefined, auth), 200, 'connected')
+  process.env[tokenKey] = 'wrong-token'
+  expectStorage(`${scheme}, wrong token`, await call(admin, 'GET', { action: 'stats' }, undefined, auth), 503)
+  delete process.env[urlKey]
+  delete process.env[tokenKey]
+}
+redis.close()
+
+if (storageFailures) {
+  console.error(`\n✗ ${storageFailures} storage check(s) failed`)
+  process.exit(1)
+}
+console.log('\n✓ all API checks passed')

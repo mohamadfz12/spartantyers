@@ -95,9 +95,18 @@ const KEY_OVERRIDES = 'spartan:overrides'
  * Backend selection
  * ------------------------------------------------------------------ */
 
+/**
+ * Redis-over-REST credentials, under either naming scheme.
+ *
+ * Vercel's storage integration injects `KV_REST_API_URL` / `KV_REST_API_TOKEN`;
+ * connecting Upstash directly injects `UPSTASH_REDIS_REST_URL` /
+ * `UPSTASH_REDIS_REST_TOKEN`. They are the same service, so either works.
+ * Missing both is not an error — it silently selects the in-memory fallback,
+ * which is exactly why `storeHealth()` below reports which one is live.
+ */
 function kvConfig(): { url: string; token: string } | null {
-  const url = process.env.KV_REST_API_URL
-  const token = process.env.KV_REST_API_TOKEN
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
   if (!url || !token) return null
   return { url: url.replace(/\/+$/, ''), token }
 }
@@ -109,6 +118,29 @@ export function isPersistent(): boolean {
 /** Human-readable backend name, for the admin UI / health checks. */
 export function storeBackend(): 'kv' | 'memory' {
   return isPersistent() ? 'kv' : 'memory'
+}
+
+export type StoreHealth =
+  /** Credentials present and the database answered. */
+  | 'connected'
+  /** Credentials present but the database did not answer — wrong token, paused or deleted database. */
+  | 'error'
+  /** No credentials: data lives in temporary memory and is lost on restart. */
+  | 'memory'
+
+/**
+ * Proves the database is reachable rather than merely configured: a typo in a
+ * token looks identical to a working setup until the first write is lost.
+ * Shown on the admin dashboard so staff can see it without reading logs.
+ */
+export async function storeHealth(): Promise<StoreHealth> {
+  if (!isPersistent()) return 'memory'
+  try {
+    const reply = await kvCommand<string>(['PING'])
+    return reply === 'PONG' ? 'connected' : 'error'
+  } catch {
+    return 'error'
+  }
 }
 
 /* ------------------------------------------------------------------ *

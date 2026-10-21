@@ -53,6 +53,8 @@ export default function Dashboard() {
         <AdminError message="No data was returned." onRetry={stats.reload} />
       ) : (
         <div className="flex flex-col gap-6">
+          <StorageStatus storage={stats.data.storage} />
+
           {stats.data.orderCount === 0 ? (
             <AdminEmpty
               title="No orders yet"
@@ -327,6 +329,45 @@ function DashboardSkeleton() {
           </Card>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Whether orders, enquiries and edits are actually being kept.
+ *
+ * Without a database the store falls back to temporary memory that Vercel
+ * wipes whenever it recycles a function — often within minutes. That failure
+ * is silent everywhere else, so it is stated plainly at the top of the
+ * dashboard: staff should never discover it by losing an order.
+ */
+function StorageStatus({ storage }: { storage: 'connected' | 'memory' }) {
+  if (storage === 'connected') {
+    return (
+      <p
+        role="status"
+        className="flex items-center gap-2 text-sm text-muted-foreground"
+      >
+        <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-500" />
+        Database connected — orders, enquiries and edits are being saved.
+      </p>
+    )
+  }
+
+  return (
+    <div
+      role="alert"
+      className="rounded-lg border-2 border-amber-500/60 bg-amber-500/10 p-4 text-sm"
+    >
+      <p className="font-heading font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+        No database connected — nothing is being kept
+      </p>
+      <p className="mt-1.5 leading-relaxed text-foreground/85">
+        Orders, enquiries, newsletter sign-ups and any price or stock edits are
+        held in temporary memory and will disappear when the site restarts. In
+        the Vercel project, open Storage, connect an Upstash Redis (KV)
+        database to this project, then redeploy.
+      </p>
     </div>
   )
 }

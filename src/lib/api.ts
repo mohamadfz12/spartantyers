@@ -199,6 +199,8 @@ export const api = {
         lowStock: Array<{ id: string; model: string; size: string; stock: number }>
         revenueByDay: Array<{ date: string; revenue: number }>
         topProducts: Array<{ id: string; model: string; size: string; units: number }>
+        /** Live database state: 'memory' means nothing is being kept. */
+        storage: 'connected' | 'memory'
       }>('/api/admin/stats', { headers: auth(token) }),
 
     products: (token: string) =>
