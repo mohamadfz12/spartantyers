@@ -178,7 +178,7 @@ export const fleetServices: IconCard[] = [
   },
   {
     title: 'Custom sourcing for rare sizes',
-    body: `Cannot find the fitment you need? We source specialty and hard-to-find sizes through our partner ${site.partner.name} and our wider supplier network, and come back to you with availability, lead time and price before you commit.`,
+    body: `Cannot find the fitment you need? We source specialty and hard-to-find sizes through our supplier network and come back to you with availability, lead time and price before you commit.`,
     icon: 'Search',
   },
   {
@@ -237,8 +237,8 @@ export const aboutStory: {
   paragraphs: [
     'We supply a focused range of high-quality tyres chosen for performance, durability and value rather than breadth for its own sake. Greforce and Lionshead are stocked in our own warehouse at Yennora, which is why we can quote a real stock figure instead of a lead time.',
     'From independent workshops to national fleet operators, we deliver tyres that keep Australia moving — quickly, competitively and without the runaround. Orders are dispatched within one business day, metro delivery is free with no minimum spend, and non-metro freight is arranged and confirmed with you before anything leaves the warehouse.',
-    `We are a supplier rather than a fitting workshop. Warehouse pickup customers can add professional wheel fitting at $${site.commerce.fittingFeePerTyre} per tyre at our Yennora site, and our sister business ${site.partner.name} operates from the same address for fitting, wheel alignment, truck wash and RTA wash and inspection.`,
-    `Brands we do not hold ourselves — Bridgestone, Michelin, Goodyear, Continental, Pirelli, Dunlop, Hankook and Yokohama — are available through ${site.partner.name} on ${site.partner.phone.display}. We would rather point you to the right supplier than pretend we have something on the shelf.`,
+    `We are a supplier rather than a fitting workshop. Warehouse pickup customers can add professional wheel fitting at $${site.commerce.fittingFeePerTyre} per tyre at our Yennora site.`,
+    `Brands we do not hold ourselves — Bridgestone, Michelin, Goodyear, Continental, Pirelli, Dunlop, Hankook and Yokohama — are available to order on request: call us on ${site.phone.display} or email ${site.email.sales}. We would rather tell you the lead time up front than pretend we have something on the shelf.`,
     'Our commitment to service, combined with practical industry knowledge and a reliable logistics network, is what keeps businesses that demand straight answers coming back.',
   ],
   pillars: [

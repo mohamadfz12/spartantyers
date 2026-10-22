@@ -5,7 +5,7 @@ import { Marquee } from '@/components/motion'
 
 /**
  * A quiet ticker of every brand name, used as a supporting device rather than
- * a claim: stocked brands and partner-sourced brands are not distinguished
+ * a claim: stocked brands and brands ordered in on request are not distinguished
  * here, because this is decoration. The /brands page makes the distinction
  * explicitly and is the only place that should.
  */

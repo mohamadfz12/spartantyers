@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Clock,
   CreditCard,
-  ExternalLink,
   Mail,
   MapPin,
   Phone,
@@ -92,42 +91,6 @@ export function Footer() {
               </ul>
             </div>
           ))}
-        </div>
-
-        {/* Partner callout */}
-        <div className="mt-12 rounded-lg border border-white/10 bg-white/[0.03] p-6">
-          <div className="flex flex-col items-start justify-between gap-5 md:flex-row md:items-center">
-            <div>
-              <p className="font-heading text-xs font-bold uppercase tracking-brand text-primary">
-                Our partner site
-              </p>
-              <h3 className="mt-1.5 font-heading text-lg font-bold">
-                {site.partner.name}
-              </h3>
-              <p className="mt-1.5 max-w-xl text-sm text-white/65">
-                Need fitting, a truck wash, an RTA inspection or a wheel
-                alignment — or a brand we don't stock? Our sister business
-                operates from the same Yennora site.
-              </p>
-              <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/50">
-                {site.partner.services.map((service) => (
-                  <span key={service}>{service}</span>
-                ))}
-              </p>
-            </div>
-
-            <Button asChild variant="outline" className="shrink-0">
-              <a
-                href={site.partner.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`Visit our partner ${site.partner.name} website (opens in a new tab)`}
-              >
-                Visit {site.partner.name}
-                <ExternalLink className="ml-2 h-4 w-4" />
-              </a>
-            </Button>
-          </div>
         </div>
 
         {/* Trust strip */}

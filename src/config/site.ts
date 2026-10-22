@@ -61,21 +61,6 @@ export const site = {
     days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
   },
 
-  /** Sister business that covers fitting, washing and the brands we don't stock. */
-  partner: {
-    name: '1 Truck Stop',
-    url: 'https://1truckstop.com.au',
-    tyresUrl: 'https://1truckstop.com.au/truck-tyres/',
-    phone: { display: '1300 376 304', href: 'tel:1300376304' },
-    address: '12 Pine Road, Yennora NSW 2161',
-    services: [
-      'Truck Wash',
-      'RTA Wash & Inspection',
-      'Wheel Alignment',
-      'Tyre Fitting',
-    ],
-  },
-
   commerce: {
     currency: 'AUD',
     currencySymbol: '$',
@@ -118,7 +103,6 @@ export const nav = {
   primary: [
     { label: 'Shop', href: '/shop' },
     { label: 'Deals', href: '/deals' },
-    { label: 'Wheel Lab', href: '/wheel-lab', badge: '3D' },
     { label: 'Tyre Finder', href: '/finder' },
     { label: 'Fleet', href: '/fleet-solutions' },
     { label: 'Wholesale', href: '/wholesale' },
@@ -150,7 +134,6 @@ export const nav = {
         { label: 'Wholesale', href: '/wholesale' },
         { label: 'Brands', href: '/brands' },
         { label: 'Full Range', href: '/products' },
-        { label: 'Wheel Lab', href: '/wheel-lab' },
       ],
     },
     {

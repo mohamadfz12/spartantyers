@@ -14,12 +14,12 @@ export interface BrandEntry {
 }
 
 /**
- * Two brands are stocked; everything else is sourced through the partner
- * business. That distinction is the single most important thing a visitor
- * needs to understand on this page, so it is modelled explicitly rather than
- * left to the copy.
+ * Two brands are stocked; everything else is ordered in on request. That
+ * distinction is the single most important thing a visitor needs to
+ * understand on this page, so it is modelled explicitly rather than left to
+ * the copy.
  */
-const SOURCED_HREF = site.partner.tyresUrl
+const SOURCED_HREF = '/contact'
 
 function skuCount(name: string): number {
   return products.filter((p) => p.brand === name).length
@@ -52,72 +52,72 @@ export const brands: BrandEntry[] = [
     name: 'Bridgestone',
     stocked: false,
     href: SOURCED_HREF,
-    external: true,
+    external: false,
     origin: 'Japan',
-    blurb: 'Premium commercial range, available to order through our partner network.',
+    blurb: 'Premium commercial range, available to order on request.',
     skuCount: 0,
   },
   {
     name: 'Michelin',
     stocked: false,
     href: SOURCED_HREF,
-    external: true,
+    external: false,
     origin: 'France',
-    blurb: 'Premium commercial range, available to order through our partner network.',
+    blurb: 'Premium commercial range, available to order on request.',
     skuCount: 0,
   },
   {
     name: 'Goodyear',
     stocked: false,
     href: SOURCED_HREF,
-    external: true,
+    external: false,
     origin: 'United States',
-    blurb: 'Premium commercial range, available to order through our partner network.',
+    blurb: 'Premium commercial range, available to order on request.',
     skuCount: 0,
   },
   {
     name: 'Continental',
     stocked: false,
     href: SOURCED_HREF,
-    external: true,
+    external: false,
     origin: 'Germany',
-    blurb: 'Premium commercial range, available to order through our partner network.',
+    blurb: 'Premium commercial range, available to order on request.',
     skuCount: 0,
   },
   {
     name: 'Pirelli',
     stocked: false,
     href: SOURCED_HREF,
-    external: true,
+    external: false,
     origin: 'Italy',
-    blurb: 'Premium commercial range, available to order through our partner network.',
+    blurb: 'Premium commercial range, available to order on request.',
     skuCount: 0,
   },
   {
     name: 'Dunlop',
     stocked: false,
     href: SOURCED_HREF,
-    external: true,
+    external: false,
     origin: 'United Kingdom',
-    blurb: 'Premium commercial range, available to order through our partner network.',
+    blurb: 'Premium commercial range, available to order on request.',
     skuCount: 0,
   },
   {
     name: 'Hankook',
     stocked: false,
     href: SOURCED_HREF,
-    external: true,
+    external: false,
     origin: 'South Korea',
-    blurb: 'Premium commercial range, available to order through our partner network.',
+    blurb: 'Premium commercial range, available to order on request.',
     skuCount: 0,
   },
   {
     name: 'Yokohama',
     stocked: false,
     href: SOURCED_HREF,
-    external: true,
+    external: false,
     origin: 'Japan',
-    blurb: 'Premium commercial range, available to order through our partner network.',
+    blurb: 'Premium commercial range, available to order on request.',
     skuCount: 0,
   },
 ]
@@ -126,4 +126,4 @@ export const stockedBrands = brands.filter((b) => b.stocked)
 export const sourcedBrands = brands.filter((b) => !b.stocked)
 
 export const BRANDS_SUBTITLE =
-  'Greforce and Lionshead are in stock and ready to ship from Yennora. Every other major brand is available through our partner network at 1 Truck Stop.'
+  `Greforce and Lionshead are in stock and ready to ship from Yennora. Every other major brand is available to order on request: call us on ${site.phone.display}.`

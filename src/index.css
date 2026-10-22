@@ -88,7 +88,7 @@
      * Overflow on the root element propagates to the viewport and makes it the
      * clipping container, which breaks `position: sticky` everywhere on the
      * site — the pinned anatomy section on the home page, the header, the shop
-     * filter rail, the Wheel Lab stage, the checkout summary. `clip` was tried
+     * filter rail, the checkout summary. `clip` was tried
      * here as a "safe" way to contain horizontal bleed and it broke all of
      * them: the anatomy section silently became 340vh of empty space.
      *

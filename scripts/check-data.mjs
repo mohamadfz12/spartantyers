@@ -273,8 +273,9 @@ for (const brand of BR.stockedBrands) {
   check(`${brand.name}: has SKUs`, actual > 0)
 }
 for (const brand of BR.sourcedBrands) {
-  check(`${brand.name}: external link is absolute`, brand.href.startsWith('https://'))
-  check(`${brand.name}: marked external`, brand.external === true)
+  // Ordered in on request: the link goes to our own contact page, never off-site.
+  check(`${brand.name}: links to the contact page`, brand.href === '/contact')
+  check(`${brand.name}: not marked external`, brand.external === false)
 }
 
 /* ------------------------------------------------------------------ *
@@ -299,7 +300,7 @@ check('warehouse address getter works', site.warehouse.full.includes('Yennora'))
 
 // Every nav href must be a route the app actually serves.
 const ROUTES = new Set([
-  '/', '/shop', '/deals', '/finder', '/wheel-lab', '/brands', '/products',
+  '/', '/shop', '/deals', '/finder', '/brands', '/products',
   '/fleet-solutions', '/wholesale', '/about', '/contact', '/faq', '/guide',
   '/blog', '/shipping', '/returns', '/privacy', '/terms', '/cart', '/checkout',
   '/compare',

@@ -224,11 +224,12 @@ describe('search_tyres', () => {
     assert.match(result.note, /sourcing/)
   })
 
-  test('a brand we do not stock points to the partner and a sourcing request', async () => {
+  test('a brand we do not stock is offered as an order-on-request sourcing request', async () => {
     const { result } = await call('search_tyres', { brand: 'Michelin' })
     assert.equal(result.total_matches, 0)
     assert.match(result.note, /Michelin is not in our own stock/)
-    assert.match(result.note, /1 Truck Stop/)
+    assert.match(result.note, /order it in on request/)
+    assert.doesNotMatch(result.note, /1 Truck Stop|partner/)
     assert.match(result.note, /sourcing/)
     assert.match((await call('search_tyres', { brand: 'Nokian' })).result.note, /only stock Greforce and Lionshead/)
   })
@@ -536,7 +537,6 @@ describe('open_page', () => {
     home: '/',
     shop: '/shop',
     finder: '/finder',
-    wheel_lab: '/wheel-lab',
     deals: '/deals',
     brands: '/brands',
     range: '/products',
@@ -556,7 +556,7 @@ describe('open_page', () => {
   }
 
   test('every page in the list opens its address, and a go event says so', async () => {
-    assert.equal(tools.PAGES.length, 22)
+    assert.equal(tools.PAGES.length, 21)
     for (const [page, to] of Object.entries(OPEN)) {
       const { result, events } = await call('open_page', { page }, newTurn('/somewhere-else'))
       assert.equal(result.ok, true, page)
@@ -644,7 +644,6 @@ describe('claimed pages: the model says it opened a page without calling open_pa
 
   test('the page it names is opened, by the same table as the tool', () => {
     assert.equal(to("I've opened the Tyre Finder for you."), '/finder')
-    assert.equal(to("I've opened the Wheel Lab for you."), '/wheel-lab')
     assert.equal(to("I've pulled up the FAQ for you."), '/faq')
     assert.equal(to("I've opened the shipping page for you."), '/shipping')
     assert.equal(to("I have opened the fleet page for you."), '/fleet-solutions')
@@ -676,6 +675,7 @@ describe('claimed pages: the model says it opened a page without calling open_pa
   test('it never leads to /admin or a made-up page', () => {
     assert.equal(to("I've opened the admin panel for you."), null)
     assert.equal(to("I've opened the unicorn page for you."), null)
+    assert.equal(to("I've opened the Wheel Lab for you."), null, 'the Wheel Lab was retired')
     assert.equal(tools.claimsPage("I've opened the admin panel for you."), true)
   })
 

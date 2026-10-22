@@ -79,7 +79,7 @@ What you get from concentrating the volume:
 
 - Stock held in depth on the lines you actually buy, and build-to-order lines scheduled against your forecast instead of ordered in a hurry.
 - One person who knows your fleet and your fitment list, so a re-order is a phone call rather than a specification exercise.
-- Rare sizes through one channel. Brands we do not stock come via our partner 1 Truck Stop, so an odd fitment stays in the same conversation.
+- Rare sizes through one channel. Brands we do not stock can be ordered in on request, so an odd fitment stays in the same conversation.
 
 The honest exception is a sole-supply deal with no price review. Concentrate the volume, but put an annual review in the diary and keep one benchmark quote a year. That is the discipline, not splitting every order three ways.
 
@@ -241,7 +241,7 @@ Get those four right, then buy the rolling resistance. In that order the rating 
 
 Fleets that treat the casing as an asset generally run 25 to 35 per cent lower cost per kilometre than fleets that treat a worn tyre as scrap. That is the whole argument for retreading, and it stands or falls on whether you can actually keep casings intact.
 
-To be clear about our own position: we sell new tyres, not retreads. What we do is stock casings built to be retreaded, and point customers at retreaders through our partner network when a casing is worth processing. The maths below is what we use when customers ask whether it is worth it.
+To be clear about our own position: we sell new tyres, not retreads. What we do is stock casings built to be retreaded, and point customers at a retreader when a casing is worth processing. The maths below is what we use when customers ask whether it is worth it.
 
 ## What a casing is actually worth
 

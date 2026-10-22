@@ -48,7 +48,7 @@ const MIXED_ORDER = [
   `All ${pricedProducts.length} stocked lines across ${allSizes.length} sizes are available in any quantity, and the ${poaProducts.length} built-to-order lines are quoted to your volume. There is no case quantity and no minimum spend.`,
   'Metro delivery is free with no minimum, so a four-tyre top-up order costs no more to move than a forty-tyre one.',
   `Orders of ${site.commerce.bulkThreshold} or more are palletised and moved as bulk freight to your workshop or depot.`,
-  `Sizes we do not hold are sourced through ${site.partner.name} and our wider supplier network — we come back with availability, lead time and price before you commit.`,
+  `Sizes we do not hold are sourced through our supplier network — we come back with availability, lead time and price before you commit.`,
 ]
 
 export default function Wholesale() {
@@ -107,8 +107,8 @@ export default function Wholesale() {
               ))}
             </ul>
             <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
-              Held at {site.warehouse.full}. Other brands are available through{' '}
-              {site.partner.name} rather than from our stock.
+              Held at {site.warehouse.full}. Other brands are ordered in on request rather than
+              supplied from our stock.
             </p>
           </Reveal>
         }

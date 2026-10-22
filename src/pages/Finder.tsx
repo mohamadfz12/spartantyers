@@ -253,8 +253,7 @@ export default function Finder() {
                     </p>
                     <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                       Our range covers {allSizes.length} commercial sizes. If yours
-                      is not one of them we can almost certainly source it through{' '}
-                      {site.partner.name} — call{' '}
+                      is not one of them we can almost certainly source it through our supplier network — call{' '}
                       <a
                         href={site.phone.href}
                         className="font-semibold text-primary hover:underline"

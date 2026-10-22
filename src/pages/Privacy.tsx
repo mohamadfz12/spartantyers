@@ -197,7 +197,7 @@ export default function Privacy() {
                   items={[
                     'Freight and courier companies, who receive the delivery name, address and phone number so they can deliver the consignment and obtain a signature.',
                     'Square, as our payment processor, and Afterpay where you choose it.',
-                    `${site.partner.name}, our sister business at ${site.partner.address}, where you have asked us to source a brand or size we do not stock, or where a fitting or wash booking is involved.`,
+                    'Suppliers we order from on your behalf, where you have asked us to source a brand or size we do not stock — only the details needed to fill the order.',
                     'Service providers who operate parts of our infrastructure — website hosting, email and order management — under confidentiality obligations and only to the extent needed to provide the service.',
                     'Our accountants and professional advisers, and government agencies where we are required to disclose by law.',
                   ]}

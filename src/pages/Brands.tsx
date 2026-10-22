@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, ExternalLink, Phone } from 'lucide-react'
+import { ArrowRight, Phone } from 'lucide-react'
 import { site } from '@/config/site'
 import { BRANDS_SUBTITLE, brands, sourcedBrands, stockedBrands } from '@/data/brands'
 import { allSizes, poaProducts, pricedProducts, products } from '@/data/products'
@@ -10,6 +10,7 @@ import { Badge, Button } from '@/components/ui'
 import { BrandMark } from '@/components/brand/BrandMark'
 import { Reveal, Stagger, Tilt } from '@/components/motion'
 import { CtaBand, PageHero, SectionHeading } from '@/components/marketing'
+import { WhyBrand } from '@/components/marketing/WhyBrand'
 
 /* ------------------------------------------------------------------ *
  * /brands
@@ -53,7 +54,7 @@ export default function Brands() {
 
       <PageHero
         eyebrow="Brands"
-        title="Two brands in our warehouse, the rest through our partner"
+        title="Two brands in our warehouse, the rest ordered in for you"
         lede={BRANDS_SUBTITLE}
         breadcrumb={[{ name: 'Brands', path: '/brands' }]}
         actions={
@@ -137,6 +138,9 @@ export default function Brands() {
       </section>
 
       {/* ---------------- Sourced ---------------- */}
+      <WhyBrand brand="Greforce" dark />
+      <WhyBrand brand="Lionshead" />
+
       <section
         className="section border-y border-border bg-card"
         aria-labelledby="brands-sourced"
@@ -144,37 +148,32 @@ export default function Brands() {
         <div className="shell">
           <SectionHeading
             id="brands-sourced"
-            eyebrow="Through our partner network"
+            eyebrow="Available to order"
             title="Sourced brands"
             lede={
               <>
                 We do not hold these in our warehouse and make no stock claim on them. They
-                are available through our sister business {site.partner.name}, which operates
-                from {site.partner.address} — call{' '}
-                <a
-                  href={site.partner.phone.href}
-                  className="link-underline font-semibold text-primary"
-                >
-                  {site.partner.phone.display}
-                </a>
-                . Each link below opens their truck tyre page.
+                are available to order on request — call{' '}
+                <a href={site.phone.href} className="link-underline font-semibold text-primary">
+                  {site.phone.display}
+                </a>{' '}
+                or send us the size and quantity and we will come back with availability,
+                lead time and price.
               </>
             }
           />
 
           <Stagger className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {sourcedBrands.map((brand) => (
-              <a
+              <Link
                 key={brand.name}
-                href={brand.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`${brand.name} truck tyres at ${site.partner.name} (opens in a new tab)`}
+                to={brand.href}
+                aria-label={`Ask us to order ${brand.name} truck tyres`}
                 className="group flex h-full flex-col items-start gap-4 rounded-lg border border-border bg-background p-5 transition-colors duration-300 ease-brand hover:border-primary/50 focus-visible:border-primary"
               >
                 <div className="flex w-full items-start justify-between gap-2">
                   <BrandMark name={brand.name} size="sm" className="items-start" />
-                  <ExternalLink
+                  <ArrowRight
                     aria-hidden="true"
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors duration-300 group-hover:text-primary"
                   />
@@ -183,9 +182,9 @@ export default function Brands() {
                   {brand.origin}
                 </p>
                 <span className="mt-auto font-heading text-[0.625rem] font-bold uppercase tracking-brand text-muted-foreground">
-                  Order through {site.partner.name}
+                  Order on request
                 </span>
-              </a>
+              </Link>
             ))}
           </Stagger>
 
@@ -196,8 +195,8 @@ export default function Brands() {
               </h3>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
                 Send us the size, load index and speed symbol you need along with the
-                quantity. We source specialty and hard-to-find fitments through{' '}
-                {site.partner.name} and our wider supplier network, and come back to you with
+                quantity. We source specialty and hard-to-find fitments through our supplier
+                network and come back to you with
                 availability, lead time and price before you commit to anything.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
@@ -208,14 +207,9 @@ export default function Brands() {
                   </Link>
                 </Button>
                 <Button asChild variant="outline">
-                  <a
-                    href={site.partner.tyresUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`${site.partner.name} truck tyres (opens in a new tab)`}
-                  >
-                    Visit {site.partner.name}
-                    <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                  <a href={site.phone.href}>
+                    <Phone aria-hidden="true" className="h-4 w-4" />
+                    {site.phone.display}
                   </a>
                 </Button>
               </div>

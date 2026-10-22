@@ -126,12 +126,6 @@ export const photos = {
     612,
     411,
   ),
-  partnerTruckStop: img(
-    'partner-truckstop.webp',
-    '1 Truck Stop facility at Yennora',
-    231,
-    146,
-  ),
 } as const
 
 export const afterpay = {

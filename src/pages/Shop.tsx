@@ -505,7 +505,7 @@ function EmptyState({
         {filters.sizes.length > 0 || filters.rims.length > 0
           ? 'If the size you need is not in our list at all, call us — '
           : 'Looking for a fitment we do not list? Call us — '}
-        we can source most commercial sizes through {site.partner.name}, and we
+        we can source most commercial sizes through our supplier network, and we
         will tell you what is involved before you order. {site.hours.short}.
       </p>
     </section>

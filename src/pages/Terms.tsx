@@ -132,8 +132,8 @@ export default function Terms() {
                 <PolicyText>
                   Stock figures on the site reflect what is on hand in our warehouse at{' '}
                   {site.warehouse.full}. We hold Greforce and Lionshead ourselves. Other
-                  brands shown on our brands page are not held by us and are available through
-                  our sister business {site.partner.name} rather than from our stock.
+                  brands shown on our brands page are not held by us and are ordered in on
+                  request rather than supplied from our stock.
                 </PolicyText>
                 <PolicyList
                   items={[
@@ -175,7 +175,6 @@ export default function Terms() {
                     `Pickup is free. Choose Pickup at checkout and collect from ${site.warehouse.full} — the warehouse, not our head office at ${site.office.street}. We contact you when the order is ready to collect.`,
                     `Pickup orders may add professional wheel fitting at $${site.commerce.fittingFeePerTyre} per tyre, selected at checkout. Fitting is carried out on site at our Yennora premises.`,
                     'Fitting is available on pickup orders only. Delivered orders arrive as loose tyres for your own fitter.',
-                    `For tyre fitting, wheel alignment, truck wash or RTA wash and inspection outside a pickup order, ${site.partner.name} operates from ${site.partner.address} — call ${site.partner.phone.display}.`,
                   ]}
                 />
                 <PolicyNote>

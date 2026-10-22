@@ -247,16 +247,17 @@ describe('instructions', () => {
 
   test('the facts are built from the site: contact, addresses, hours, fitting, bulk, Afterpay, discounts', () => {
     const facts = buildFacts()
-    for (const v of [site.phone.display, site.email.sales, site.email.accounts, site.warehouse.full, site.office.full, site.partner.phone.display]) {
+    for (const v of [site.phone.display, site.email.sales, site.email.accounts, site.warehouse.full, site.office.full]) {
       assert.ok(facts.includes(v), `facts miss ${v}`)
     }
     assert.ok(facts.includes('Monday to Friday, 8:00 AM to 6:00 PM AEST'), 'hours, dash turned into words')
     assert.ok(facts.includes(`$${site.commerce.fittingFeePerTyre} per tyre`))
+    assert.ok(!/1 Truck Stop|1300 376 304|sister business/i.test(facts), 'no partner business in the facts')
     assert.ok(facts.includes('$2,000'), 'Afterpay limit')
     assert.ok(facts.includes('20 tyres or more') || facts.includes('Orders of 20'), 'bulk threshold')
     assert.ok(facts.includes('3% off') && facts.includes('11% off'), 'volume breaks')
     assert.ok(facts.includes('Greforce') && facts.includes('Lionshead'))
-    for (const brand of ['Michelin', 'Bridgestone', 'Yokohama']) assert.ok(facts.includes(brand), `partner brand ${brand}`)
+    for (const brand of ['Michelin', 'Bridgestone', 'Yokohama']) assert.ok(facts.includes(brand), `order-on-request brand ${brand}`)
     assert.ok(facts.includes('Free delivery on all metro orders'), 'delivery')
     assert.ok(facts.includes('Manufacturer warranty'), 'warranty')
     assert.equal(facts.includes('Road hazard protection'), false)
@@ -356,5 +357,22 @@ describe('the payment fact follows the Afterpay setting (the rule checkout uses)
       })
     }
     assert.notEqual(withSetting(undefined, fixedInstructions), withSetting('false', fixedInstructions))
+  })
+})
+
+describe('brand knowledge', () => {
+  test('the facts explain both stocked brands and every pattern we sell', () => {
+    const facts = buildFacts()
+    assert.match(facts, /Shandong Greforce Tire/)
+    assert.match(facts, /Lionshead Group/)
+    assert.match(facts, /LionsHead Specialty Tire & Wheel of Indiana, USA, an unrelated company/)
+    for (const model of new Set(products.map((p) => p.model))) {
+      assert.ok(facts.includes(` ${model} (`), `pattern ${model} missing from the AI's facts`)
+    }
+    // No prices: those come live from the tools.
+    for (const p of products) {
+      const price = effectivePrice(p)
+      if (price != null) assert.equal(facts.includes(`$${price}`), false, `price for ${p.model} leaked into the facts`)
+    }
   })
 })

@@ -80,13 +80,13 @@ export const faqs: FaqItem[] = [
     category: 'Products & Fitment',
     question: 'Do you fit tyres?',
     answer:
-      'We are an online and phone supplier, not a fitting workshop, so delivered orders arrive as loose tyres for your own fitter. The one exception is warehouse pickup: choose Pickup at checkout and you can add professional wheel fitting at $70 per tyre at our Yennora site. Our sister business 1 Truck Stop operates from the same Yennora address and does tyre fitting, wheel alignment, truck wash and RTA wash and inspection - call them on 1300 376 304.',
+      'We are an online and phone supplier, not a fitting workshop, so delivered orders arrive as loose tyres for your own fitter. The one exception is warehouse pickup: choose Pickup at checkout and you can add professional wheel fitting at $70 per tyre at our Yennora site.',
   },
   {
     category: 'Products & Fitment',
     question: 'Which brands do you stock, and can you get the ones you do not?',
     answer:
-      `We carry Greforce and Lionshead ourselves - ${products.length} lines across ${allSizes.length} sizes from 17.5in light truck up to 385/65R22.5 super-singles, with ${pricedProducts.length} held in our own warehouse ready to ship and ${poaProducts.length} built to order. Bridgestone, Michelin, Goodyear, Continental, Pirelli, Dunlop, Hankook and Yokohama are available through our partner 1 Truck Stop rather than from our stock. For those, call 1 Truck Stop on 1300 376 304 or go to https://1truckstop.com.au/truck-tyres/.`,
+      `We carry Greforce and Lionshead ourselves - ${products.length} lines across ${allSizes.length} sizes from 17.5in light truck up to 385/65R22.5 super-singles, with ${pricedProducts.length} held in our own warehouse ready to ship and ${poaProducts.length} built to order. Bridgestone, Michelin, Goodyear, Continental, Pirelli, Dunlop, Hankook and Yokohama are not held in our stock but can be ordered in on request - call us on 1300 846 024 or email sales@spartantrucktyres.com.au with the size and quantity and we will come back with availability, lead time and price.`,
   },
   {
     category: 'Products & Fitment',
@@ -110,7 +110,7 @@ export const faqs: FaqItem[] = [
     category: 'Products & Fitment',
     question: 'Can my old casings be retreaded, and do you take old tyres away?',
     answer:
-      'Most of our 22.5in and 19.5in lines are specified as retreadable, typically for two to three cycles on a sound casing - the spec table on each product page says which - while our 17.5in light-truck lines are not built for it. We sell new tyres only - we do not sell retreads or run a used-tyre collection service - but we can point you to retreaders through our partner network if you have casings worth processing. Scrap casings should go to a licensed tyre recycler, which your fitter will usually handle as part of the changeover.',
+      'Most of our 22.5in and 19.5in lines are specified as retreadable, typically for two to three cycles on a sound casing - the spec table on each product page says which - while our 17.5in light-truck lines are not built for it. We sell new tyres only - we do not sell retreads or run a used-tyre collection service - but we can point you to a retreader if you have casings worth processing. Scrap casings should go to a licensed tyre recycler, which your fitter will usually handle as part of the changeover.',
   },
 
   /* ---- Payment ---- */
@@ -194,7 +194,7 @@ export const faqs: FaqItem[] = [
     category: 'Fleet & Wholesale',
     question: 'Can you source rare or hard-to-find sizes?',
     answer:
-      `Usually. Our own range covers ${allSizes.length} sizes across Greforce and Lionshead, and anything outside that we source through our partner 1 Truck Stop and our wider supplier network. Send us the size, load index and speed symbol you need plus the quantity, and we will come back with availability, lead time and price before you commit to anything.`,
+      `Usually. Our own range covers ${allSizes.length} sizes across Greforce and Lionshead, and anything outside that we source through our supplier network. Send us the size, load index and speed symbol you need plus the quantity, and we will come back with availability, lead time and price before you commit to anything.`,
   },
 ]
 

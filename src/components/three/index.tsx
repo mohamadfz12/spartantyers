@@ -32,11 +32,6 @@ const ProductScene = lazy(async () => {
   return { default: module.ProductWheelScene }
 })
 
-const ConfigScene = lazy(async () => {
-  const module = await import('./scene')
-  return { default: module.ConfiguratorScene }
-})
-
 const CompactScene = lazy(async () => {
   const module = await import('./scene')
   return { default: module.CompactWheelScene }
@@ -240,54 +235,6 @@ export function ProductWheel({
         autoRotate={autoRotate}
         density={density}
       />
-    </WheelFrame>
-  )
-}
-
-export interface WheelConfiguratorProps {
-  size: string
-  tread: TreadFamily
-  treadDepthMm: number
-  sidewall: {
-    brand: string
-    model: string
-    size: string
-    loadIndex: string | null
-    speedRating: string | null
-    ply: string
-  }
-  rimStyle: 'alloy' | 'steel'
-  explode: number
-  spinSpeed: number
-  glow?: number
-  visibleParts?: Array<'tread' | 'carcass' | 'rim' | 'hub'>
-  className?: string
-}
-
-export function WheelConfigurator({ className, ...props }: WheelConfiguratorProps) {
-  const { enabled, reducedMotion } = useRenderDecision()
-
-  const fallback = (
-    <div className="flex h-full w-full items-center justify-center p-8">
-      <StaticWheel
-        tread={props.tread}
-        label={props.sidewall.brand}
-        size={props.size}
-        className="max-h-full max-w-full"
-      />
-    </div>
-  )
-
-  if (!enabled) return <div className={cn('relative', className)}>{fallback}</div>
-
-  return (
-    <WheelFrame
-      className={className}
-      fallback={<WheelSpinner label="Loading wheel lab" className="h-full" />}
-      lazyMount={false}
-      label="Interactive 3D tyre configurator — drag to rotate, scroll to zoom"
-    >
-      <ConfigScene {...props} reducedMotion={reducedMotion} />
     </WheelFrame>
   )
 }

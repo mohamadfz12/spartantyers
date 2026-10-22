@@ -17,7 +17,7 @@
  *                                          prepare_quote_request (fleet, wholesale, sourcing)
  *   "talk to a person" / "call me back"    talk_to_person
  *   "order status SPT-AB12-CD34 me@x.com"  order_status
- *   "open the finder / shop / wheel lab / faq ..."   open_page
+ *   "open the finder / shop / faq ..."               open_page
  *   "details of 11R22.5"                   search_tyres, then tyre_details
  *   "phone number"                         show_contact_buttons
  *
@@ -83,7 +83,6 @@ const FLEET_RX = /\bfleet\b|\bwholesale\b|\bbulk\b|\bresell|\bmichelin\b|\bbridg
 const DETAILS_RX = /\b(details?|specs?|specifications?|tell me about)\b/i
 
 const PAGE_WORDS: [RegExp, string][] = [
-  [/\bwheel\s*lab\b/i, 'wheel_lab'],
   [/\b(?:tyre\s+)?finder\b/i, 'finder'],
   [/\bfaq|frequently asked\b/i, 'faq'],
   [/\bdeals?\b/i, 'deals'],

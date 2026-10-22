@@ -119,8 +119,7 @@ scripts/                sitemap generator
 ### Key decisions
 
 **`src/config/site.ts` is the only place business facts live.** Phone, email,
-both addresses, hours, GST rate, fitting fee, delivery promise, partner
-business. Rebranding or changing a phone number is a one-file edit — nothing
+both addresses, hours, GST rate, fitting fee and delivery promise. Rebranding or changing a phone number is a one-file edit — nothing
 else hard-codes them.
 
 **The API never trusts client prices.** `api/_lib/pricing.ts` recomputes the
@@ -176,7 +175,7 @@ computed from the catalogue, so they cannot drift out of sync with it.
 ## The 3D wheel
 
 The wheel is the site's recurring motif — hero, product pages, cart lines, the
-axle diagram, the Wheel Lab. It is **generated from the catalogue**, with no
+axle diagram. It is **generated from the catalogue**, with no
 binary assets at all: no `.glb`, no `.hdr`, no texture files.
 
 | File | Role |

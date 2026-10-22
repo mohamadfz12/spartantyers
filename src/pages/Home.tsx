@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useTransform } from 'framer-motion'
+import { useInView, useTransform } from 'framer-motion'
 import {
   ArrowRight,
   ChevronDown,
@@ -13,17 +13,18 @@ import {
   Truck,
 } from 'lucide-react'
 import { site } from '@/config/site'
-import { cn, pluralise, priceLabel } from '@/lib/utils'
-import { useAxle } from '@/store/ui'
+import { cn, pluralise } from '@/lib/utils'
 import {
-  POSITION_LABELS,
   dealProducts,
   effectivePrice,
   featuredProducts,
   inStockCount,
+  pricedProducts,
   products,
-  productsForPosition,
 } from '@/data/products'
+import { useCatalogueVersion } from '@/lib/live-catalogue'
+import { BrandCompare } from '@/components/marketing/BrandCompare'
+import { WhyBrand } from '@/components/marketing/WhyBrand'
 import { BRANDS_SUBTITLE, brands, stockedBrands } from '@/data/brands'
 import {
   customerSegments,
@@ -37,8 +38,6 @@ import { Seo, localBusinessJsonLd } from '@/components/Seo'
 import { Icon } from '@/components/Icon'
 import { Badge, Button, Card, Rating } from '@/components/ui'
 import { ProductCard } from '@/components/shop/ProductCard'
-import { ProductThumb } from '@/components/shop/ProductThumb'
-import { AxleSelector } from '@/components/shop/AxleSelector'
 import { BrandMark } from '@/components/brand/BrandMark'
 import { HeroWheel, StaticWheel } from '@/components/three'
 import {
@@ -65,8 +64,10 @@ export default function Home() {
 
       <Hero />
       <StatStrip />
-      <AxlePicker />
+      <BrandCompare />
       <FeaturedRange />
+      <WhyBrand brand="Greforce" dark />
+      <WhyBrand brand="Lionshead" />
       <Anatomy />
       <ValueProps />
       <HowItWorks />
@@ -282,127 +283,31 @@ function StatStrip() {
 }
 
 /* ================================================================== *
- * Axle picker
- * ================================================================== */
-
-function AxlePicker() {
-  const axle = useAxle((s) => s.axle)
-  const setAxle = useAxle((s) => s.setAxle)
-
-  const matches = useMemo(
-    () =>
-      productsForPosition(axle)
-        .slice()
-        .sort((a, b) => b.rating - a.rating)
-        .slice(0, 3),
-    [axle],
-  )
-
-  return (
-    <section className="section bg-muted/40">
-      <div className="shell">
-        <Reveal className="mx-auto max-w-2xl text-center">
-          <p className="eyebrow">Start with the axle</p>
-          <h2 className="display-2 mt-3">Which wheel are you replacing?</h2>
-          <p className="lede mt-4">
-            Steer, drive and trailer axles need genuinely different tread. Pick
-            the position and we'll show only the tyres rated for it.
-          </p>
-        </Reveal>
-
-        <div className="mt-12 grid grid-cols-1 gap-10 lg:grid-cols-[1.25fr_1fr] lg:gap-14">
-          <Reveal direction="right">
-            <AxleSelector value={axle} onChange={setAxle} />
-          </Reveal>
-
-          <Reveal direction="left" delay={0.1}>
-            <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-heading text-sm font-bold uppercase tracking-wide">
-                  Top-rated {POSITION_LABELS[axle].toLowerCase()} tyres
-                </h3>
-                <Link
-                  to={`/shop?position=${axle}`}
-                  className="shrink-0 text-xs font-semibold text-primary hover:underline"
-                >
-                  See all →
-                </Link>
-              </div>
-
-              <ul className="mt-4 flex-1 space-y-3" aria-live="polite">
-                {matches.map((product) => (
-                  <li key={product.id}>
-                    <Link
-                      to={`/product/${product.id}`}
-                      className="group flex items-center gap-4 rounded-lg border border-border bg-card p-3.5 transition-all duration-300 ease-brand hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lift"
-                    >
-                      <div className="h-14 w-14 shrink-0">
-                        <ProductThumb
-                          brand={product.brand}
-                          model={product.model}
-                          tread={product.tread}
-                        />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-heading text-sm font-bold group-hover:text-primary">
-                          {product.brand} {product.model}
-                        </p>
-                        <p className="font-mono text-xs text-muted-foreground">
-                          {[
-                            product.size,
-                            product.treadDepthMm != null ? `${product.treadDepthMm}mm` : null,
-                            product.ply,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </p>
-                        {product.reviewCount > 0 ? (
-                          <Rating
-                            value={product.rating}
-                            count={product.reviewCount}
-                            size="sm"
-                            className="mt-1"
-                          />
-                        ) : null}
-                      </div>
-
-                      <span className="shrink-0 font-heading text-base font-black">
-                        {priceLabel(effectivePrice(product))}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-
-              <Button asChild variant="outline" className="mt-4 w-full">
-                <Link to={`/shop?position=${axle}`}>
-                  Browse all {POSITION_LABELS[axle].toLowerCase()} tyres
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-          </Reveal>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ================================================================== *
  * Featured range
  * ================================================================== */
 
+/**
+ * The two cheapest and the two dearest priced tyres, cheapest first, so the
+ * range reads from entry price to flagship at a glance. Recomputed when the
+ * live prices from the admin arrive.
+ */
 function FeaturedRange() {
+  const catalogue = useCatalogueVersion()
+  const lineup = useMemo(() => {
+    const sorted = [...pricedProducts].sort((a, b) => effectivePrice(a) - effectivePrice(b))
+    if (sorted.length <= 4) return sorted
+    return [sorted[0]!, sorted[1]!, sorted[sorted.length - 2]!, sorted[sorted.length - 1]!]
+  }, [catalogue])
+
   return (
     <section className="section">
       <div className="shell">
         <Reveal className="flex flex-wrap items-end justify-between gap-5">
           <div>
-            <p className="eyebrow">Fleet favourites</p>
-            <h2 className="display-2 mt-3">The lines we move most</h2>
+            <p className="eyebrow">Entry price to flagship</p>
+            <h2 className="display-2 mt-3">From budget to best</h2>
             <p className="lede mt-3 max-w-xl">
-              Held in depth year round, so a fleet re-order ships the same week.
+              Our two best-value tyres and our two premium lines, cheapest first.
             </p>
           </div>
 
@@ -415,7 +320,7 @@ function FeaturedRange() {
         </Reveal>
 
         <Stagger className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {featuredProducts.map((product) => (
+          {lineup.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </Stagger>
@@ -444,6 +349,10 @@ const RANGE = {
   rim: { min: rims[0], max: rims[rims.length - 1] },
   load: `${Math.min(...loads).toLocaleString('en-AU')} – ${Math.max(...loads).toLocaleString('en-AU')}kg`,
 }
+
+/** The tyre in the anatomy teardown: the G-PILOT X3 drive, a real Greforce line. */
+const anatomyProduct =
+  products.find((p) => p.id === 'greforce-g-pilot-x3-295-80r22-5') ?? featuredProducts[0]
 
 const ANATOMY_STEPS = [
   {
@@ -478,9 +387,9 @@ function Anatomy() {
     'end end',
   ])
 
-  // One full turn of the wheel across the whole section.
-  const rotate = useTransform(progress, [0, 1], [0, 300])
-  const scale = useTransform(progress, [0, 0.5, 1], [0.86, 1, 0.9])
+  const scale = useTransform(progress, [0, 0.5, 1], [0.9, 1, 0.94])
+  // Mount the WebGL wheel only when the section is near the screen.
+  const near = useInView(ref, { margin: '400px 0px' })
 
   const [active, setActive] = useState(0)
 
@@ -508,15 +417,14 @@ function Anatomy() {
           {/* Wheel */}
           <div className="relative order-2 lg:order-1">
             <motion.div
-              style={{ rotate, scale }}
-              className="mx-auto aspect-square w-full max-w-sm lg:max-w-md"
+              style={{ scale }}
+              className="mx-auto aspect-square w-full max-w-sm lg:max-w-lg"
             >
-              <StaticWheel
-                tread="lug"
-                label="Greforce"
-                size="11R22.5"
-                className="drop-shadow-2xl"
-              />
+              {near && anatomyProduct ? (
+                <HeroWheel product={anatomyProduct} className="h-full w-full" />
+              ) : (
+                <StaticWheel tread="lug" label="Greforce" size="11R22.5" className="drop-shadow-2xl" />
+              )}
             </motion.div>
 
             {/* Progress rail */}
@@ -581,9 +489,9 @@ function Anatomy() {
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg">
-                <Link to="/wheel-lab">
+                <Link to="/guide">
                   <Sparkles className="mr-2 h-4 w-4" />
-                  Open the Wheel Lab
+                  Read the tyre guide
                 </Link>
               </Button>
               <Button
@@ -592,7 +500,7 @@ function Anatomy() {
                 variant="outline"
                 className="border-white/25 bg-white/5 text-white hover:bg-white/10"
               >
-                <Link to="/guide">Read the tyre guide</Link>
+                <Link to="/shop">Shop the range</Link>
               </Button>
             </div>
           </div>

@@ -196,7 +196,6 @@ const ROUTES = [
   ['/product/does-not-exist', 'product-404'],
   ['/deals', 'deals'],
   ['/finder', 'finder'],
-  ['/wheel-lab', 'wheel-lab'],
   ['/brands', 'brands'],
   ['/products', 'range'],
   ['/fleet-solutions', 'fleet'],
@@ -415,22 +414,11 @@ await visit('/shop', 'filter-count', async (page, errors) => {
   }
 })
 
-// Wheel Lab configurator mounts and its controls respond.
-await visit('/wheel-lab', 'wheel-lab-3d', async (page, errors) => {
-  try {
-    await page.locator('canvas').first().waitFor({ state: 'attached', timeout: 20000 })
-  } catch {
-    errors.push('Wheel Lab canvas never mounted')
-  }
-  const sizeSelect = page.locator('select[aria-label="Tyre size"]')
-  if ((await sizeSelect.count()) === 0) {
-    errors.push('Wheel Lab size selector missing')
-  } else {
-    await sizeSelect.selectOption('385/65R22.5')
-    await page.waitForTimeout(600)
-    if (!(await page.locator('text=385/65R22.5').first().isVisible())) {
-      errors.push('Wheel Lab did not reflect the chosen size')
-    }
+// The retired Wheel Lab address lands on the shop rather than a 404.
+await visit('/wheel-lab', 'wheel-lab-redirect', async (page, errors) => {
+  await page.waitForTimeout(400)
+  if (!new URL(page.url()).pathname.startsWith('/shop')) {
+    errors.push(`/wheel-lab did not redirect to the shop (at ${page.url()})`)
   }
 })
 
@@ -471,8 +459,11 @@ await visit('/wheel-lab', 'wheel-lab-3d', async (page, errors) => {
   await page.getByRole('button', { name: /open menu/i }).click()
   await page.waitForTimeout(600)
 
-  if ((await page.getByRole('link', { name: /^wheel lab$/i }).count()) === 0) {
+  if ((await page.getByRole('link', { name: /^tyre finder$/i }).count()) === 0) {
     errors.push('mobile nav did not open')
+  }
+  if ((await page.getByRole('link', { name: /wheel lab/i }).count()) > 0) {
+    errors.push('the retired Wheel Lab is still linked in the nav')
   }
 
   // The drawer, its close button and its call CTA must all be reachable.

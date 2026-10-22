@@ -18,7 +18,7 @@ import { useTheme } from '@/store/ui'
 import { useScrollDirection, useScrolledPast } from '@/hooks'
 import { products, effectivePrice } from '@/data/products'
 import { Logo } from '@/components/brand/Logo'
-import { Badge, Button, Dialog, DialogContent, Input, Sheet, SheetClose } from '@/components/ui'
+import { Button, Dialog, DialogContent, Input, Sheet, SheetClose } from '@/components/ui'
 import { AnimatePresence, ScrollProgressBar, motion } from '@/components/motion'
 
 export function Header() {
@@ -113,11 +113,6 @@ export function Header() {
                   <>
                     <span className="flex items-center gap-1.5">
                       {item.label}
-                      {'badge' in item && item.badge ? (
-                        <Badge variant="primary" size="sm">
-                          {item.badge}
-                        </Badge>
-                      ) : null}
                     </span>
                     <span
                       className={cn(
@@ -166,15 +161,6 @@ export function Header() {
                         {item.label}
                       </Link>
                     ))}
-                    <a
-                      href={site.partner.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 flex items-center gap-2 rounded-md border-t border-border px-3 py-2 pt-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      <Truck className="h-3.5 w-3.5" />
-                      {site.partner.name}
-                    </a>
                   </motion.div>
                 ) : null}
               </AnimatePresence>
@@ -371,11 +357,6 @@ function MobileNav({
                   }
                 >
                   {item.label}
-                  {'badge' in item && item.badge ? (
-                    <Badge variant="primary" size="sm">
-                      {item.badge}
-                    </Badge>
-                  ) : null}
                 </NavLink>
               </li>
             ))}

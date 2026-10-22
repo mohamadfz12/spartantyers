@@ -537,10 +537,10 @@ describe('a message through the engine', () => {
   })
 
   test('the model says it opened a page without calling the tool: the page is opened so the words are true', async () => {
-    await gateway([{ text: "I've opened the Wheel Lab for you." }])
-    const r = await turn('Show me the wheel lab')
+    await gateway([{ text: "I've opened the Tyre Finder for you." }])
+    const r = await turn('Show me the tyre finder')
     assert.deepEqual(r.types, ['text', 'go', 'done'])
-    assert.deepEqual(r.events[1], { type: 'go', to: '/wheel-lab', note: 'Opened the Wheel Lab' })
+    assert.deepEqual(r.events[1], { type: 'go', to: '/finder', note: 'Opened the Tyre Finder' })
   })
 
   test('the model tells them to phone: the call and email buttons come with it', async () => {
@@ -1409,7 +1409,7 @@ describe('the practice AI drives the assistant end to end (free, local)', () => 
     assert.equal(call('I want to talk to a person')?.name, 'talk_to_person')
     assert.deepEqual(call('open the tyre finder'), { name: 'open_page', args: { page: 'finder' } })
     assert.deepEqual(call('open the shop with 11R22.5 steer tyres in stock'), { name: 'open_page', args: { page: 'shop', size: '11R22.5', position: 'steer', in_stock: true } })
-    assert.deepEqual(call('take me to the wheel lab'), { name: 'open_page', args: { page: 'wheel_lab' } })
+    assert.notEqual(call('take me to the wheel lab')?.args?.page, 'wheel_lab', 'the Wheel Lab page no longer exists')
     assert.deepEqual(call('open the faq'), { name: 'open_page', args: { page: 'faq' } })
     assert.equal(call('I run a fleet of 30 trucks')?.args?.enquiry_type, 'fleet')
     assert.equal(call('wholesale pricing please')?.args?.enquiry_type, 'wholesale')

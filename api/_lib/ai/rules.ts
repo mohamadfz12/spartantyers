@@ -16,6 +16,7 @@
  * There are no tyre prices or stock levels in the facts either: those come from the tools, live.
  */
 import { site } from '../../../src/config/site.js'
+import { brandStories, patternGuide } from '../../../src/data/brand-stories.js'
 import { brands } from '../../../src/data/brands.js'
 import { deliveryZones, warrantyTerms } from '../../../src/data/content.js'
 import { faqs } from '../../../src/data/faq.js'
@@ -44,7 +45,7 @@ export const ORDER_RULES = `Orders (you never place an order yourself):
 
 export const QUOTE_RULES = `Price on request, fleets, bulk and other brands:
 - A tyre that shows "price on request" is built to order. Call prepare_quote_request so the customer can check the request and send it to the sales team. Never invent a price for it.
-- Do the same for fleet or wholesale pricing, orders of ${site.commerce.bulkThreshold} tyres or more that need freight arranged, and brands we do not stock (they come through our partner ${site.partner.name}). Write the message from what the customer has said.`
+- Do the same for fleet or wholesale pricing, orders of ${site.commerce.bulkThreshold} tyres or more that need freight arranged, and brands we do not stock (we order them in on request). Write the message from what the customer has said.`
 
 export const PERSON_RULES = `A person:
 - When the customer asks for a person, a callback or a manager, when they are unhappy, or after two tries that did not solve their problem, call talk_to_person. The card needs a name and an email to be sent (a phone number is optional): pass what you have and the customer fills in the rest on the card.
@@ -63,6 +64,7 @@ export const LANGUAGE_RULES = `Language:
 
 export const STYLE_RULES = `How you write:
 - Australian English, friendly and brief: 2 to 4 short sentences, never more than about 80 words.
+- The one exception: when the customer asks you to explain Greforce, Lionshead or a tyre pattern (who makes it, how it is built, what it is for, how two compare), you may use up to 6 sentences and about 140 words, still without lists.
 - Plain sentences. You may use **bold** for a key figure and links like [Tyre Finder](/finder) to site pages. No headings, no lists, no emojis, and no dashes used as punctuation.
 - Ask at most one question per answer.
 - Use tools quietly. Never announce them ("Let me check..."): use the tool, then answer with the result.
@@ -158,7 +160,6 @@ export function buildFacts(): string {
     `The business: ${site.name} (${site.legalName}), ${site.tagline}. Trading since ${site.foundedYear}. An online and phone supplier of new commercial truck, bus and trailer tyres across Australia.`,
     `Contact: phone ${site.phone.display}. Sales email ${site.email.sales}. Accounts email ${site.email.accounts}. Hours: ${site.hours.label}.`,
     `Addresses: the registered head office is ${site.office.full}. Customers collect their orders from the warehouse at ${site.warehouse.full} (a different street number from the head office: always give the warehouse address for collection).`,
-    `Our sister business ${site.partner.name} shares the Yennora site and does tyre fitting, wheel alignment, truck wash and RTA wash and inspection: ${site.partner.phone.display}. It also supplies the brands we do not stock.`,
     '',
     'Buying:',
     `- Every price is in Australian dollars and includes GST (${Math.round(c.gstRate * 100)}%). No minimum order.`,
@@ -180,7 +181,19 @@ export function buildFacts(): string {
     '',
     'Brands:',
     ...stocked.map((b) => `- ${b.name} (we stock it, ${b.skuCount} lines): ${b.blurb}`),
-    `- Available through our partner ${site.partner.name} and not from our own stock: ${sourced.map((b) => b.name).join(', ')}. For these, prepare a sourcing request or point the customer to ${site.partner.phone.display}.`,
+    `- Not held in our own stock but available to order on request: ${sourced.map((b) => b.name).join(', ')}. For these, prepare a sourcing request or point the customer to ${site.phone.display}.`,
+    '',
+    'Brand knowledge (the two brands we stock; explain them fully when asked, using only these facts):',
+    ...brandStories.flatMap((b) => [
+      `${b.brand}: ${b.tagline}`,
+      ...b.story.map((paragraph) => `- ${paragraph}`),
+      ...b.highlights.map((h) => `- ${h.title}: ${h.body}`),
+      ...b.aiNotes.map((note) => `- ${note}`),
+      `- The website section about it: /brands#${b.anchor}.`,
+    ]),
+    '',
+    'Every pattern we stock (what it is for and how it is built; prices and stock come from search_tyres):',
+    ...patternGuide(),
     '',
     `The range: ${products.length} lines in ${allSizes.length} sizes. Applications: ${allApplications.join(', ')}. There are no prices here on purpose: use search_tyres.`,
     ...sizeLines(),
@@ -201,7 +214,7 @@ export function fixedInstructions(): string {
  * Said last, where the model weighs it most, because writing style is where it slips (lists, tables,
  * dashes). It sits in the tail so the fixed prefix stays byte-identical for the provider's cache.
  */
-export const STYLE_REMINDER = "Every answer: 2 to 4 plain sentences, under 80 words. Never use a list, a table, bullet points, line breaks between items, or dashes. When several tyres match, name at most two in a sentence, and to show the rest open the shop page with the matching filters (open_page). If the customer's message is not in English, your first sentence says you can only help in English."
+export const STYLE_REMINDER = "Every answer: 2 to 4 plain sentences, under 80 words. (Explaining a brand or a pattern when asked: up to 6 sentences, under 140 words.) Never use a list, a table, bullet points, line breaks between items, or dashes. When several tyres match, name at most two in a sentence, and to show the rest open the shop page with the matching filters (open_page). If the customer's message is not in English, your first sentence says you can only help in English."
 
 /** Added for one answer when the customer's message is clearly not in English (see src/lib/ai/language.ts). */
 export const ENGLISH_ONLY_NOTICE = `The customer's last message is not in English. The website has already started your answer with "Sorry, I can only help in English.", so do not say that again: answer in English only, without a single word of their language.`

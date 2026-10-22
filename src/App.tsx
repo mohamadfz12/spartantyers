@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
 import { CartDrawer } from '@/components/layout/CartDrawer'
@@ -25,7 +25,6 @@ const Shop = lazy(() => import('@/pages/Shop'))
 const ProductDetail = lazy(() => import('@/pages/ProductDetail'))
 const Deals = lazy(() => import('@/pages/Deals'))
 const Finder = lazy(() => import('@/pages/Finder'))
-const WheelLab = lazy(() => import('@/pages/WheelLab'))
 const Brands = lazy(() => import('@/pages/Brands'))
 const Range = lazy(() => import('@/pages/Range'))
 const FleetSolutions = lazy(() => import('@/pages/FleetSolutions'))
@@ -83,7 +82,8 @@ export default function App() {
               <Route path="/product/:id" element={<ProductDetail />} />
               <Route path="/deals" element={<Deals />} />
               <Route path="/finder" element={<Finder />} />
-              <Route path="/wheel-lab" element={<WheelLab />} />
+              {/* The Wheel Lab was retired; old links land on the shop. */}
+              <Route path="/wheel-lab" element={<Navigate to="/shop" replace />} />
               <Route path="/brands" element={<Brands />} />
               <Route path="/products" element={<Range />} />
               <Route path="/fleet-solutions" element={<FleetSolutions />} />
@@ -144,15 +144,29 @@ function SkipLink() {
 
 /**
  * React Router keeps the scroll position across client navigations, which is
- * wrong for a page change. Reset it — but leave hash links and browser
- * back/forward alone, where the existing position is the correct one.
+ * wrong for a page change. Reset it, or scroll to the section a hash link
+ * names once it has rendered.
  */
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
 
   useEffect(() => {
-    if (hash) return
-    window.scrollTo({ top: 0, behavior: 'auto' })
+    if (!hash) {
+      window.scrollTo({ top: 0, behavior: 'auto' })
+      return
+    }
+    // A link to a section (e.g. /brands#why-greforce): the page may still be
+    // loading, so look for the target for a couple of seconds.
+    const id = decodeURIComponent(hash.slice(1))
+    let tries = 0
+    const timer = setInterval(() => {
+      const target = document.getElementById(id)
+      if (target || ++tries > 20) {
+        clearInterval(timer)
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 100)
+    return () => clearInterval(timer)
   }, [pathname, hash])
 
   return null

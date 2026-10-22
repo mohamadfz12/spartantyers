@@ -90,7 +90,6 @@ export const PAGES = [
   'shop',
   'product',
   'finder',
-  'wheel_lab',
   'deals',
   'brands',
   'range',
@@ -317,7 +316,6 @@ export type Target = { to: string; note: string }
 const FIXED_PAGES: Record<Exclude<PageName, 'shop' | 'product' | 'blog_post'>, [string, string]> = {
   home: ['/', 'Opened the home page'],
   finder: ['/finder', 'Opened the Tyre Finder'],
-  wheel_lab: ['/wheel-lab', 'Opened the Wheel Lab'],
   deals: ['/deals', 'Opened the deals'],
   brands: ['/brands', 'Opened the brands page'],
   range: ['/products', 'Opened the full range'],
@@ -370,7 +368,7 @@ export function pageTarget(page: unknown, args: PageArgs, catalogue: Product[]):
       if (present(args.brand)) {
         const wanted = line(args.brand, 40).toLowerCase()
         const brand = allBrands.find((b) => b.toLowerCase() === wanted)
-        if (!brand) return { error: `We only stock ${allBrands.join(' and ')}. Other brands come through our partner ${site.partner.name}.` }
+        if (!brand) return { error: `We only stock ${allBrands.join(' and ')}. Other brands can be ordered in on request.` }
         params.set('brand', brand)
         parts.push(brand)
       }
@@ -465,7 +463,6 @@ export function claimedPage(s: string, catalogue: Product[]): Target | null {
 
   const fixed = (rx: RegExp, weight: number, page: PageName) => add(rx, weight, pageTarget(page, {}, catalogue))
   fixed(/\btyre\s+finder\b|\bfinder\b/i, 1, 'finder')
-  fixed(/\bwheel\s+lab\b|\b3d\b/i, 1, 'wheel_lab')
   fixed(/\bdeals?\b|\bspecials?\b|\bon\s+sale\b/i, 1, 'deals')
   fixed(/\bbrands\b/i, 1, 'brands')
   fixed(/\bfull\s+range\b|\bwhole\s+range\b/i, 1, 'range')
@@ -606,14 +603,14 @@ async function run(name: string, args: Record<string, unknown>, t: Turn): Promis
       if (brandWanted) {
         brand = allBrands.find((b) => b.toLowerCase() === brandWanted.toLowerCase()) ?? null
         if (!brand) {
-          const partner = brands.find((b) => !b.stocked && b.name.toLowerCase() === brandWanted.toLowerCase())
+          const sourced = brands.find((b) => !b.stocked && b.name.toLowerCase() === brandWanted.toLowerCase())
           t.notes.push(`Searched tyres for ${brandWanted}: not a brand we stock`)
           return {
             total_matches: 0,
             results: [],
-            note: partner
-              ? `${partner.name} is not in our own stock. It is available through our partner ${site.partner.name} (${site.partner.phone.display}). Offer prepare_quote_request with enquiry_type "sourcing".`
-              : `We only stock ${allBrands.join(' and ')}. Other major brands come through our partner ${site.partner.name} (${site.partner.phone.display}); offer prepare_quote_request with enquiry_type "sourcing".`,
+            note: sourced
+              ? `${sourced.name} is not in our own stock. We can order it in on request (${site.phone.display}). Offer prepare_quote_request with enquiry_type "sourcing".`
+              : `We only stock ${allBrands.join(' and ')}. Other major brands can be ordered in on request (${site.phone.display}); offer prepare_quote_request with enquiry_type "sourcing".`,
           }
         }
       }

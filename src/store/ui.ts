@@ -74,7 +74,7 @@ export { MAX_COMPARE }
  * Shared axle selection
  *
  * The axle a visitor picks on the home page follows them into the shop,
- * the finder and the Wheel Lab — one decision, remembered everywhere.
+ * and the finder — one decision, remembered everywhere.
  * ------------------------------------------------------------------ */
 
 interface AxleState {

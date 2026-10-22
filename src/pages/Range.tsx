@@ -446,8 +446,8 @@ export default function Range() {
                   fitments rather than one price point.
                 </p>
                 <p>
-                  Specialty and hard-to-find sizes are sourced through our partner{' '}
-                  {site.partner.name} and our wider supplier network. Send the size, load
+                  Specialty and hard-to-find sizes are sourced through our supplier
+                  network. Send the size, load
                   index, speed symbol and quantity and we come back with availability, lead
                   time and price before you commit to anything.
                 </p>

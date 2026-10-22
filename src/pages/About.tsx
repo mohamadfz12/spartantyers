@@ -37,7 +37,7 @@ const CAPABILITY = [
   {
     label: 'Head office',
     value: site.office.full,
-    detail: `Accounts, fleet contracts and trade applications. ${site.partner.name} operates from this address for fitting, wheel alignment and truck wash.`,
+    detail: 'Accounts, fleet contracts and trade applications.',
   },
   {
     label: 'Range held',
@@ -174,16 +174,7 @@ export default function About() {
                 </p>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                   Pickup orders can add wheel fitting at ${site.commerce.fittingFeePerTyre} per
-                  tyre. Delivered orders arrive as loose tyres for your own fitter. For fitting,
-                  wheel alignment, truck wash or RTA wash and inspection, {site.partner.name}{' '}
-                  works from {site.partner.address} — call{' '}
-                  <a
-                    href={site.partner.phone.href}
-                    className="link-underline font-semibold text-primary"
-                  >
-                    {site.partner.phone.display}
-                  </a>
-                  .
+                  tyre. Delivered orders arrive as loose tyres for your own fitter.
                 </p>
               </div>
             </Reveal>
@@ -307,11 +298,11 @@ export default function About() {
           <SectionHeading
             id="about-brands"
             eyebrow="Brands"
-            title="Stocked here, or sourced through our partner"
+            title="Stocked here, or ordered in for you"
             lede={
               <>
                 Greforce and Lionshead are held in our warehouse. Every other major brand is
-                available through {site.partner.name} rather than from our stock —{' '}
+                available to order on request rather than from our stock —{' '}
                 <Link to="/brands" className="link-underline font-semibold text-primary">
                   see the full brand list
                 </Link>

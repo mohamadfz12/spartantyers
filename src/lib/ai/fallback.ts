@@ -64,7 +64,7 @@ export function quickAnswer(question: string): QuickAnswer {
   /* Fitting */
   if (test(q, /\bfit(ted|ting|ment)?\b/, /\binstall/, /\bmount/, /\bbalanc/)) {
     return reply(
-      `Fitting is $${c.fittingFeePerTyre} per tyre and is available when you pick up from our warehouse at ${site.warehouse.full}. It cannot be added to a delivered order. ${site.partner.name} (${site.partner.phone.display}) also does tyre fitting. ${CONTACT}`,
+      `Fitting is $${c.fittingFeePerTyre} per tyre and is available when you pick up from our warehouse at ${site.warehouse.full}. It cannot be added to a delivered order. ${CONTACT}`,
     )
   }
 
@@ -92,7 +92,7 @@ export function quickAnswer(question: string): QuickAnswer {
   /* Brands */
   if (test(q, /\bbrands?\b/, /greforce/, /lionshead/, /manufacturer/, /\bmakes?\b/)) {
     return reply(
-      `We stock ${list(brands)}. ${site.partner.name} (${site.partner.phone.display}) can source other brands on request. See the [brands page](/brands).`,
+      `We stock ${list(brands)}. Other brands can be ordered in on request: call us on ${site.phone.display}. See the [brands page](/brands).`,
     )
   }
 
@@ -143,7 +143,7 @@ export function quickAnswer(question: string): QuickAnswer {
   /* Not commercial tyres */
   if (test(q, /car tyre/, /passenger/, /\b4wd\b/, /\bute\b/, /\bsuv\b/, /caravan/)) {
     return reply(
-      `We supply commercial truck, bus and trailer tyres only. For passenger or 4WD tyres, ${site.partner.name} (${site.partner.phone.display}) may be able to help.`,
+      `We supply commercial truck, bus and trailer tyres only, so we cannot help with passenger or 4WD tyres. ${CONTACT}`,
     )
   }
 

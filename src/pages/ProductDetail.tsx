@@ -712,10 +712,9 @@ function Detail({ product }: { product: Product }) {
                 </dl>
 
                 <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
-                  Want to see this pattern in motion and compare it against the
-                  others?{' '}
-                  <Link to="/wheel-lab" className="font-semibold text-primary hover:underline">
-                    Open the Wheel Lab
+                  Weighing it up against another pattern?{' '}
+                  <Link to="/compare" className="font-semibold text-primary hover:underline">
+                    Compare tyres side by side
                   </Link>
                   .
                 </p>
