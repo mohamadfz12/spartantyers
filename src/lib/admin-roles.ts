@@ -19,7 +19,7 @@ export const ROLE_LABELS: Record<StaffRole, string> = {
 export const ROLE_DESCRIPTIONS: Record<StaffRole, string> = {
   owner: 'Everything, including staff accounts and the activity log.',
   manager: 'Everything except creating staff accounts, passwords and roles.',
-  staff: 'Orders, stock, products, customers, enquiries and leads. No money pages, no price changes.',
+  staff: 'The till, orders, stock, products, customers, enquiries and leads. No money pages, no price changes.',
 }
 
 export type Permission =
@@ -32,6 +32,8 @@ export type Permission =
   | 'leads'
   | 'inventory'
   | 'customers'
+  /** The counter till: selling, taking payment, counter customers. */
+  | 'pos'
   | 'payments'
   | 'finance'
   /** The staff list and timesheets. */
@@ -49,6 +51,7 @@ const EVERYONE: Permission[] = [
   'leads',
   'inventory',
   'customers',
+  'pos',
 ]
 
 const ROLE_PERMISSIONS: Record<StaffRole, ReadonlySet<Permission>> = {

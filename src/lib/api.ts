@@ -399,6 +399,26 @@ export const api = {
     customers: (token: string) =>
       request<{ customers: Customer[] }>('/api/admin/customers', { headers: auth(token) }),
 
+    /** The counter till: GET views (see api/_lib/handlers/admin-pos.ts). */
+    pos: <T,>(token: string, params: Record<string, string>) =>
+      request<T>(`/api/admin/pos?${new URLSearchParams(params).toString()}`, {
+        headers: auth(token),
+        timeoutMs: 30000,
+      }),
+
+    posAction: <T,>(token: string, body: Record<string, unknown>) =>
+      request<T>('/api/admin/pos', { ...json(body), headers: auth(token), timeoutMs: 30000 }),
+
+    /** The Square account: GET views (see api/_lib/handlers/admin-square.ts). */
+    square: <T,>(token: string, params: Record<string, string>) =>
+      request<T>(`/api/admin/square?${new URLSearchParams(params).toString()}`, {
+        headers: auth(token),
+        timeoutMs: 45000,
+      }),
+
+    squareAction: <T,>(token: string, body: Record<string, unknown>) =>
+      request<T>('/api/admin/square', { ...json(body), headers: auth(token), timeoutMs: 30000 }),
+
     activity: (token: string) =>
       request<{ entries: ActivityEntry[]; total: number }>('/api/admin/activity', {
         headers: auth(token),
@@ -702,7 +722,7 @@ export interface LedgerEntry {
   reference: string
   counterparty: string
   orderId?: string
-  source: 'manual' | 'stock' | 'wages'
+  source: 'manual' | 'stock' | 'wages' | 'pos'
   createdAt: string
   createdBy: string
 }
@@ -774,6 +794,114 @@ export interface Customer {
   lastOrder: string
   references: string[]
   subscribed: boolean
+}
+
+/* ---- Counter till (POS) ------------------------------------------ */
+
+export type PosLineSource = 'tyre' | 'service' | 'square' | 'custom'
+
+export interface PosItem {
+  key: string
+  source: 'tyre' | 'service' | 'square'
+  itemId: string
+  name: string
+  variation: string
+  /** GST included; null means "enter the price when selling". */
+  price: number | null
+  /** Tyres only. */
+  stock: number | null
+  sku: string
+  squareItemId?: string
+  singlePrice?: boolean
+}
+
+export interface PosLine {
+  source: PosLineSource
+  itemId: string
+  name: string
+  variation: string
+  qty: number
+  price: number
+  total?: number
+}
+
+export interface PosCustomer {
+  id: string
+  name: string
+  company: string
+  email: string
+  phone: string
+  address: string
+  notes: string
+  termsDays: number
+  createdAt: string
+  updatedAt: string
+  balance?: PosBalance
+}
+
+export interface PosBalance {
+  due: number
+  overdue: number
+  count: number
+}
+
+export type PosTicketStatus = 'open' | 'paid' | 'account' | 'void'
+
+export interface PosTicket {
+  ref: string
+  status: PosTicketStatus
+  customerId: string | null
+  customer: PosCustomer | null
+  lines: PosLine[]
+  subtotal: number
+  discount: number
+  total: number
+  amountPaid: number
+  note: string
+  payment: 'card' | 'cash' | 'other' | 'account' | null
+  paymentMethod: string
+  dueDate: string | null
+  history: Array<{ at: string; by: string; what: string }>
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  paidAt: string | null
+}
+
+export interface PosAccountPayment {
+  ref: string
+  customerId: string
+  amount: number
+  method: 'card' | 'cash' | 'other'
+  methodLabel: string
+  status: 'pending' | 'paid'
+  allocations: Array<{ ticketRef: string; amount: number; settles: boolean }>
+  createdAt: string
+  paidAt: string | null
+}
+
+export interface AccountPreview {
+  owed: number
+  left: number
+  tickets: Array<{ ref: string; dueDate: string | null; total: number; owing: number }>
+  allocations: Array<{ ticketRef: string; amount: number; settles: boolean }>
+}
+
+export interface TerminalCheckout {
+  id: string
+  purpose: 'ticket' | 'account' | 'custom'
+  ref: string
+  amount: number
+  note: string
+  status: string
+  detail: string
+  createdAt: string
+}
+
+export interface TerminalDevice {
+  id: string
+  name: string
+  pairedAt: string
 }
 
 export interface ActivityEntry {

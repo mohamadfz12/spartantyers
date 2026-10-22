@@ -27,6 +27,8 @@
  *   GET    /api/admin/ledger      POST | PATCH | DELETE /api/admin/ledger
  *   GET    /api/admin/customers
  *   GET    /api/admin/activity
+ *   GET    /api/admin/pos         POST /api/admin/pos      (the counter till)
+ *   GET    /api/admin/square      POST /api/admin/square   (the Square account and Terminal)
  */
 
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
@@ -48,6 +50,8 @@ import timesheets from '../_lib/handlers/admin-timesheets.js'
 import ledger from '../_lib/handlers/admin-ledger.js'
 import customers from '../_lib/handlers/admin-customers.js'
 import activity from '../_lib/handlers/admin-activity.js'
+import pos from '../_lib/handlers/admin-pos.js'
+import square from '../_lib/handlers/admin-square.js'
 
 type Handler = (req: ApiRequest, res: ApiResponse) => Promise<void> | void
 
@@ -69,6 +73,8 @@ const ROUTES: Record<string, Handler> = {
   ledger,
   customers,
   activity,
+  pos,
+  square,
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {

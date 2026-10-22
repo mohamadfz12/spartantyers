@@ -22,7 +22,7 @@ export interface MoneyRow {
   description: string
   reference: string
   counterparty: string
-  source: 'website' | 'manual' | 'stock' | 'wages'
+  source: 'website' | 'manual' | 'stock' | 'wages' | 'pos'
   /** False only for the card payment of a cancelled order. */
   counted: boolean
   entry?: LedgerEntry
@@ -34,6 +34,7 @@ export const SOURCE_LABELS: Record<MoneyRow['source'], string> = {
   manual: 'Entered by hand',
   stock: 'Stock delivery',
   wages: 'Wages run',
+  pos: 'Counter (POS)',
 }
 
 export function moneyRows(data: LedgerResponse): MoneyRow[] {

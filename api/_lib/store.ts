@@ -161,6 +161,11 @@ const KEY_STOCK_SETTINGS = 'spartan:stock-settings'
 const KEY_STOCK_MOVES = 'spartan:stock-moves'
 const KEY_LEDGER = 'spartan:ledger'
 const KEY_AUDIT = 'spartan:audit'
+const KEY_POS_CUSTOMERS = 'spartan:pos-customers'
+const KEY_POS_TICKETS = 'spartan:pos-tickets'
+const KEY_POS_ACCOUNT_PAYMENTS = 'spartan:pos-account-payments'
+const KEY_TERMINAL_CHECKOUTS = 'spartan:terminal-checkouts'
+const KEY_CLAIMS = 'spartan:claims'
 
 /* ------------------------------------------------------------------ *
  * Backend selection
@@ -830,8 +835,8 @@ export interface StoredLedgerEntry {
   /** Customer, supplier or staff member. */
   counterparty: string
   orderId?: string
-  /** What created it: typed in, a stock delivery, or a wages run. */
-  source: 'manual' | 'stock' | 'wages'
+  /** What created it: typed in, a stock delivery, a wages run, or a sale at the counter (POS). */
+  source: 'manual' | 'stock' | 'wages' | 'pos'
   createdAt: string
   createdBy: string
 }
@@ -911,4 +916,192 @@ export async function listAudit(): Promise<StoredAuditEntry[]> {
 
 export async function saveAudit(entry: StoredAuditEntry): Promise<void> {
   await hashSet(KEY_AUDIT, entry.id, entry)
+}
+
+/* ------------------------------------------------------------------ *
+ * Claims: "do this only once", safe across concurrent requests
+ * ------------------------------------------------------------------ */
+
+/**
+ * True for the first caller with this key, false for every later one. Atomic
+ * on every backend (Redis HSETNX, a Postgres insert that ignores conflicts),
+ * so two tabs polling the same Terminal charge cannot both record it.
+ */
+export async function claimOnce(key: string): Promise<boolean> {
+  const at = JSON.stringify(new Date().toISOString())
+  switch (storeBackend()) {
+    case 'redis':
+      return (await kvCommand<number>(['HSETNX', KEY_CLAIMS, key, at])) === 1
+    case 'postgres': {
+      await pgReady()
+      const rows = await pg().query(
+        `INSERT INTO spartan_store (bucket, field, value) VALUES ($1, $2, $3::jsonb)
+         ON CONFLICT (bucket, field) DO NOTHING RETURNING field`,
+        [KEY_CLAIMS, key, at],
+      )
+      return rows.length === 1
+    }
+    default: {
+      const bucket = memoryBucket(KEY_CLAIMS)
+      if (key in bucket) return false
+      bucket[key] = at
+      return true
+    }
+  }
+}
+
+export async function setMeta(field: string, value: unknown): Promise<void> {
+  await hashSet(KEY_META, field, value)
+}
+
+/* ------------------------------------------------------------------ *
+ * POS: counter customers, tickets, account payments, Terminal charges
+ * ------------------------------------------------------------------ */
+
+export interface StoredPosCustomer {
+  id: string
+  name: string
+  company: string
+  email: string
+  phone: string
+  address: string
+  notes: string
+  /** Days to pay a sale on account, unless changed at the counter. */
+  termsDays: number
+  createdAt: string
+  updatedAt: string
+  createdBy: string
+}
+
+export type PosLineSource = 'tyre' | 'service' | 'square' | 'custom'
+
+export interface StoredPosLine {
+  source: PosLineSource
+  /** Product id, Square variation id, or '' for a typed line. */
+  itemId: string
+  name: string
+  variation: string
+  qty: number
+  /** Per item, GST included. */
+  price: number
+  total: number
+}
+
+export type PosTicketStatus = 'open' | 'paid' | 'account' | 'void'
+export type PosPayment = 'card' | 'cash' | 'other' | 'account'
+
+export interface StoredPosTicket {
+  ref: string
+  status: PosTicketStatus
+  customerId: string | null
+  lines: StoredPosLine[]
+  subtotal: number
+  discount: number
+  total: number
+  /** Paid so far: the whole total once paid; part of it for a sale on account. */
+  amountPaid: number
+  note: string
+  payment: PosPayment | null
+  /** For 'other': how it was paid (bank transfer, card on another machine…). */
+  paymentMethod: string
+  squareOrderId: string | null
+  squarePaymentId: string | null
+  /** YYYY-MM-DD, for a sale on account. */
+  dueDate: string | null
+  stockApplied: boolean
+  history: Array<{ at: string; by: string; what: string }>
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  paidAt: string | null
+}
+
+export interface StoredAccountPayment {
+  ref: string
+  customerId: string
+  amount: number
+  method: 'card' | 'cash' | 'other'
+  methodLabel: string
+  status: 'pending' | 'paid'
+  /** Which account tickets it pays, oldest due first. */
+  allocations: Array<{ ticketRef: string; amount: number; settles: boolean }>
+  squarePaymentId: string | null
+  createdBy: string
+  createdAt: string
+  paidAt: string | null
+}
+
+export type TerminalPurpose = 'ticket' | 'account' | 'custom'
+
+export interface StoredTerminalCheckout {
+  id: string
+  purpose: TerminalPurpose
+  /** Ticket or account-payment ref; '' for a custom amount. */
+  ref: string
+  amount: number
+  note: string
+  deviceId: string
+  squareOrderId: string | null
+  paymentId: string | null
+  /** Square's status: PENDING, IN_PROGRESS, CANCEL_REQUESTED, CANCELED, COMPLETED. */
+  status: string
+  detail: string
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export async function listPosCustomers(): Promise<StoredPosCustomer[]> {
+  return Object.values(await hashAll<StoredPosCustomer>(KEY_POS_CUSTOMERS)).sort((a, b) =>
+    (a.company || a.name).localeCompare(b.company || b.name),
+  )
+}
+export async function getPosCustomer(id: string): Promise<StoredPosCustomer | null> {
+  return id ? hashGet<StoredPosCustomer>(KEY_POS_CUSTOMERS, id) : null
+}
+export async function savePosCustomer(c: StoredPosCustomer): Promise<StoredPosCustomer> {
+  await hashSet(KEY_POS_CUSTOMERS, c.id, c)
+  return c
+}
+export async function deletePosCustomer(id: string): Promise<void> {
+  await hashDelete(KEY_POS_CUSTOMERS, id)
+}
+
+export async function listPosTickets(): Promise<StoredPosTicket[]> {
+  return Object.values(await hashAll<StoredPosTicket>(KEY_POS_TICKETS)).sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt),
+  )
+}
+export async function getPosTicket(ref: string): Promise<StoredPosTicket | null> {
+  return ref ? hashGet<StoredPosTicket>(KEY_POS_TICKETS, ref) : null
+}
+export async function savePosTicket(t: StoredPosTicket): Promise<StoredPosTicket> {
+  await hashSet(KEY_POS_TICKETS, t.ref, t)
+  return t
+}
+
+export async function listAccountPayments(): Promise<StoredAccountPayment[]> {
+  return Object.values(await hashAll<StoredAccountPayment>(KEY_POS_ACCOUNT_PAYMENTS)).sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  )
+}
+export async function getAccountPayment(ref: string): Promise<StoredAccountPayment | null> {
+  return ref ? hashGet<StoredAccountPayment>(KEY_POS_ACCOUNT_PAYMENTS, ref) : null
+}
+export async function saveAccountPayment(p: StoredAccountPayment): Promise<StoredAccountPayment> {
+  await hashSet(KEY_POS_ACCOUNT_PAYMENTS, p.ref, p)
+  return p
+}
+
+export async function listTerminalCheckouts(): Promise<StoredTerminalCheckout[]> {
+  return Object.values(await hashAll<StoredTerminalCheckout>(KEY_TERMINAL_CHECKOUTS)).sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  )
+}
+export async function getTerminalCheckout(id: string): Promise<StoredTerminalCheckout | null> {
+  return id ? hashGet<StoredTerminalCheckout>(KEY_TERMINAL_CHECKOUTS, id) : null
+}
+export async function saveTerminalCheckout(c: StoredTerminalCheckout): Promise<StoredTerminalCheckout> {
+  await hashSet(KEY_TERMINAL_CHECKOUTS, c.id, c)
+  return c
 }

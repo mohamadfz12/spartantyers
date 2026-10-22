@@ -14,6 +14,8 @@ import {
   Package,
   Receipt,
   ShieldCheck,
+  ShoppingCart,
+  Smartphone,
   Target,
   UserCog,
   Users,
@@ -35,7 +37,9 @@ import Leads from './Leads'
 import Login from './Login'
 import Orders from './Orders'
 import Payments from './Payments'
+import Pos from './Pos'
 import Products from './Products'
+import SquarePage from './SquarePage'
 import Staff from './Staff'
 
 /* ------------------------------------------------------------------ *
@@ -67,12 +71,14 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, permission: 'dashboard' },
+  { to: '/admin/pos', label: 'Till (POS)', icon: ShoppingCart, permission: 'pos' },
   { to: '/admin/orders', label: 'Orders', icon: Receipt, permission: 'orders' },
   { to: '/admin/products', label: 'Products', icon: Package, permission: 'products' },
   { to: '/admin/inventory', label: 'Inventory', icon: Boxes, permission: 'inventory' },
   { to: '/admin/customers', label: 'Customers', icon: Users, permission: 'customers' },
   { to: '/admin/payments', label: 'Payments', icon: CreditCard, permission: 'payments' },
   { to: '/admin/balance', label: 'Balance', icon: Wallet, permission: 'finance' },
+  { to: '/admin/square', label: 'Square', icon: Smartphone, permission: 'payments' },
   { to: '/admin/enquiries', label: 'Enquiries', icon: Mail, permission: 'enquiries' },
   { to: '/admin/leads', label: 'Leads', icon: Target, permission: 'leads' },
   { to: '/admin/staff', label: 'Staff', icon: UserCog, permission: 'staff' },
@@ -190,7 +196,9 @@ export default function Admin() {
             <Routes>
               <Route index element={gate('dashboard', <Dashboard />)} />
               <Route path="products" element={gate('products', <Products />)} />
+              <Route path="pos" element={gate('pos', <Pos />)} />
               <Route path="orders" element={gate('orders', <Orders />)} />
+              <Route path="square" element={gate('payments', <SquarePage />)} />
               <Route path="inventory" element={gate('inventory', <Inventory />)} />
               <Route path="customers" element={gate('customers', <Customers />)} />
               <Route path="payments" element={gate('payments', <Payments />)} />

@@ -108,6 +108,9 @@ export default withGuard(async (req, res) => {
     if (entry.type === 'expense' && !can(actor.role, 'finance')) {
       return fail(res, 403, 'Only an owner or manager can remove expenses.')
     }
+    if (entry.source === 'pos') {
+      return fail(res, 409, 'This payment was taken at the counter (POS). It stays as long as its ticket is paid.')
+    }
 
     await deleteLedgerEntry(entry.id)
 
@@ -181,7 +184,9 @@ export default withGuard(async (req, res) => {
       409,
       existing.source === 'wages'
         ? 'Wages payments are made from timesheets. Delete this one and pay the hours again to change it.'
-        : 'Stock deliveries are recorded on the Inventory page. Delete this one and re-enter it to change it.',
+        : existing.source === 'pos'
+          ? 'This payment was taken at the counter (POS) and cannot be edited here.'
+          : 'Stock deliveries are recorded on the Inventory page. Delete this one and re-enter it to change it.',
     )
   }
 

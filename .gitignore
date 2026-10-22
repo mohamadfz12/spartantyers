@@ -37,3 +37,7 @@ spartan-tyres-leads/**/__pycache__/
 # Researchers' scratch / download folders
 _dl*/
 _scratch*/
+
+# A separate project (#1 Truck Stop) kept here for reference. It has its own
+# credentials and must never be committed to this public repo.
+1truckstop/

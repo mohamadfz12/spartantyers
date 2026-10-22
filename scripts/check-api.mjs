@@ -186,6 +186,9 @@ if (priceEdit.status !== 200 || live?.price !== 512.34 || live?.discountPrice !=
 const noAuth = await call(admin, 'GET', { action: 'stats' })
 console.log('no token            ', noAuth.status, JSON.stringify(noAuth.body))
 
+
+let tillToken = null
+function sam_till() { return { authorization: `Bearer ${tillToken}` } }
 /* ---- staff, roles, inventory, hours and money ---- */
 console.log('\n--- staff, inventory, money ---')
 let opsFailures = 0
@@ -312,6 +315,158 @@ expect('demote Mia to staff', await call(admin, 'PATCH', { action: 'staff' }, { 
 expect('Mia\'s old manager session ends', await call(admin, 'GET', { action: 'staff' }, undefined, mia), 401)
 expect('Mia (no hours) can be deleted', await call(admin, 'DELETE', { action: 'staff', id: mgr.member.id }, undefined, auth), 200)
 expect('tampered token refused', await call(admin, 'GET', { action: 'me' }, undefined, bearer(`${samLogin.token.split('.')[0]}x.${samLogin.token.split('.')[1]}`)), 401)
+
+/* ---- the counter till (POS) ---- */
+console.log('\n--- till (POS) ---')
+await call(admin, 'POST', { action: 'staff' }, { name: 'Tia Till', email: 'tia@example.com', role: 'staff', password: 'till-pass-12345' }, auth)
+tillToken = (await call(admin, 'POST', { action: 'login' }, { email: 'tia@example.com', password: 'till-pass-12345' })).body?.token
+const till = await call(admin, 'GET', { action: 'pos', view: 'items' }, undefined, auth)
+expect('till items', till, 200, `${till.body?.items?.length} items, square ${till.body?.squareReady ? 'on' : 'off'}`)
+const tyre = till.body.items.find((i) => i.source === 'tyre' && i.price != null)
+const stockBefore = tyre.stock
+const fleet = expect('add a counter customer', await call(admin, 'POST', { action: 'pos' }, {
+  action: 'customer-save', customer: { name: 'Dave Driver', company: 'ABC Haulage', email: 'dave@abc.example', termsDays: 30 },
+}, auth), 200)
+const t1 = expect('save a ticket', await call(admin, 'POST', { action: 'pos' }, {
+  action: 'ticket-save', customerId: null, discount: 10,
+  lines: [{ source: 'tyre', itemId: tyre.itemId, name: tyre.name, variation: tyre.variation, qty: 2, price: tyre.price }, { source: 'custom', name: 'Fitting', qty: 2, price: 70 }],
+}, auth), 200)
+const expectTotal = Math.round((tyre.price * 2 + 140 - 10) * 100) / 100
+if (t1?.ticket?.total !== expectTotal || t1?.ticket?.status !== 'open') { opsFailures++; console.log('FAIL ticket total', t1?.ticket?.total, expectTotal) }
+expect('bad line refused', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-save', lines: [{ name: '', qty: 1, price: 1 }] }, auth), 400)
+expect('discount over total refused', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-save', discount: 999999, lines: [{ name: 'x', qty: 1, price: 1 }] }, auth), 400)
+expect('short cash refused', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-cash', ref: t1.ticket.ref, tendered: 1 }, auth), 400)
+const cash = expect('pay in cash', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-cash', ref: t1.ticket.ref, tendered: expectTotal + 20 }, sam_till()), 200)
+if (cash?.ticket?.status !== 'paid' || cash?.change !== 20) { opsFailures++; console.log('FAIL cash', JSON.stringify(cash).slice(0, 200)) }
+expect('paying twice refused', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-cash', ref: t1.ticket.ref }, auth), 409)
+const after = (await call(admin, 'GET', { action: 'pos', view: 'items' }, undefined, auth)).body.items.find((i) => i.key === tyre.key)
+if (after.stock !== Math.max(0, stockBefore - 2)) { opsFailures++; console.log('FAIL stock', stockBefore, '->', after.stock) }
+console.log('     stock', stockBefore, '->', after.stock)
+const led = (await call(admin, 'GET', { action: 'ledger' }, undefined, auth)).body
+const posEntry = led.entries.find((e) => e.source === 'pos' && e.reference === t1.ticket.ref)
+if (!posEntry || posEntry.amount !== expectTotal || posEntry.method !== 'Cash') { opsFailures++; console.log('FAIL ledger entry', JSON.stringify(posEntry)) }
+expect('POS ledger entry cannot be deleted', await call(admin, 'DELETE', { action: 'ledger', id: posEntry?.id }, undefined, auth), 409)
+
+const t2 = (await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-save', lines: [{ source: 'service', itemId: 'fitting', name: 'Fitting', qty: 1, price: 70 }] }, auth)).body.ticket
+expect('pay another way', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-other', ref: t2.ref, method: 'Bank transfer' }, auth), 200)
+expect('unknown method refused', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-other', ref: 'TK-NOPE', method: 'Gold bars' }, auth), 400)
+
+const t3 = (await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-save', lines: [{ name: 'Tyres on account', qty: 1, price: 1000 }] }, auth)).body.ticket
+expect('on account needs a customer', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-account', ref: t3.ref }, auth), 400)
+await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-save', ref: t3.ref, customerId: fleet.customer.id, lines: t3.lines }, auth)
+const acct = expect('put on account', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-account', ref: t3.ref }, auth), 200)
+if (acct?.ticket?.status !== 'account' || !acct?.dueDate) { opsFailures++; console.log('FAIL account', JSON.stringify(acct).slice(0, 160)) }
+const t4 = (await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-save', customerId: fleet.customer.id, lines: [{ name: 'More tyres', qty: 1, price: 500 }] }, auth)).body.ticket
+await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-account', ref: t4.ref, dueDays: 0 }, auth)
+const owes = (await call(admin, 'GET', { action: 'pos', view: 'customer', id: fleet.customer.id }, undefined, auth)).body
+if (owes.balance.due !== 1500) { opsFailures++; console.log('FAIL balance', JSON.stringify(owes.balance)) }
+const prev = expect('preview $700', await call(admin, 'GET', { action: 'pos', view: 'account-preview', id: fleet.customer.id, amount: '700' }, undefined, auth), 200)
+// t4 is due today, t3 in 30 days: t4 ($500) is paid off first, then $200 of t3.
+if (prev?.allocations?.[0]?.ticketRef !== t4.ref || prev?.allocations?.[0]?.settles !== true || prev?.allocations?.[1]?.amount !== 200 || prev?.left !== 800) {
+  opsFailures++; console.log('FAIL allocation', JSON.stringify(prev))
+}
+expect('more than owed refused', await call(admin, 'GET', { action: 'pos', view: 'account-preview', id: fleet.customer.id, amount: '9999' }, undefined, auth), 400)
+expect('take $700 in cash', await call(admin, 'POST', { action: 'pos' }, { action: 'account-cash', customerId: fleet.customer.id, amount: 700 }, auth), 200)
+const mid = (await call(admin, 'GET', { action: 'pos', view: 'customer', id: fleet.customer.id }, undefined, auth)).body
+const t3now = mid.tickets.find((t) => t.ref === t3.ref)
+const t4now = mid.tickets.find((t) => t.ref === t4.ref)
+if (mid.balance.due !== 800 || t4now.status !== 'paid' || t3now.amountPaid !== 200 || t3now.status !== 'account') {
+  opsFailures++; console.log('FAIL after part payment', JSON.stringify({ b: mid.balance, t3: t3now.status, paid: t3now.amountPaid, t4: t4now.status }))
+}
+expect('pay the rest of one ticket', await call(admin, 'POST', { action: 'pos' }, { action: 'account-other', customerId: fleet.customer.id, amount: 800, method: 'Bank transfer', ticket: t3.ref }, auth), 200)
+const end = (await call(admin, 'GET', { action: 'pos', view: 'customer', id: fleet.customer.id }, undefined, auth)).body
+if (end.balance.due !== 0 || end.tickets.some((t) => t.status === 'account') || end.payments.length !== 2) { opsFailures++; console.log('FAIL settle', JSON.stringify(end.balance)) }
+expect('customer with tickets cannot be deleted', await call(admin, 'POST', { action: 'pos' }, { action: 'customer-delete', id: fleet.customer.id }, auth), 409)
+const t5 = (await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-save', lines: [{ name: 'Quote', qty: 1, price: 5 }] }, auth)).body.ticket
+expect('cancel an open ticket', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-void', ref: t5.ref }, auth), 200)
+expect('tickets list', await call(admin, 'GET', { action: 'pos', view: 'tickets' }, undefined, auth), 200)
+expect('Terminal without Square: clear message, not a sign-out', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-charge', ref: t5.ref }, auth), 409)
+expect('Square page without Square: 503', await call(admin, 'GET', { action: 'square', view: 'summary' }, undefined, auth), 503)
+const salesAfter = (await call(admin, 'GET', { action: 'ledger' }, undefined, auth)).body.entries.filter((e) => e.source === 'pos')
+console.log('     POS payments in the ledger:', salesAfter.length, salesAfter.map((e) => `${e.method} $${e.amount}`).join(', '))
+if (salesAfter.length !== 4) { opsFailures++; console.log('FAIL expected 4 POS ledger payments') }
+
+/* ---- Square Terminal, against a fake Square (fetch is intercepted for Square's hosts only) ---- */
+console.log('\n--- Square Terminal (fake Square) ---')
+const realFetch = globalThis.fetch
+const fakeSq = { checkouts: {}, payments: [], polls: 0 }
+const sqJson = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+globalThis.fetch = async (url, init = {}) => {
+  const u = new URL(String(url))
+  if (!/squareup(sandbox)?\.com$/.test(u.hostname)) return realFetch(url, init)
+  const method = (init.method || 'GET').toUpperCase()
+  const body = init.body ? JSON.parse(init.body) : {}
+  const path = u.pathname
+  if (method === 'POST' && path === '/v2/devices/codes') return sqJson({ device_code: { id: 'dc_1', code: 'QWER', name: body.device_code.name, pair_by: new Date(Date.now() + 3e5).toISOString(), status: 'UNPAIRED' } })
+  if (method === 'GET' && path === '/v2/devices/codes/dc_1') return sqJson({ device_code: { id: 'dc_1', name: 'Front counter', status: 'PAIRED', device_id: 'device_1', paired_at: new Date().toISOString() } })
+  if (method === 'POST' && path === '/v2/orders') return sqJson({ order: { id: `order_${Object.keys(fakeSq.checkouts).length + fakeSq.payments.length}` } })
+  if (method === 'POST' && path === '/v2/terminals/checkouts') {
+    const id = `co_${Object.keys(fakeSq.checkouts).length + 1}`
+    fakeSq.checkouts[id] = { id, status: 'PENDING', amount_money: body.checkout.amount_money, reference_id: body.checkout.reference_id }
+    return sqJson({ checkout: fakeSq.checkouts[id] })
+  }
+  const co = path.match(/^\/v2\/terminals\/checkouts\/([^/]+)$/)
+  if (method === 'GET' && co) {
+    fakeSq.polls++
+    // In progress on the first look, paid after that.
+    const c = fakeSq.checkouts[co[1]]
+    c.status = c.seen ? 'COMPLETED' : 'IN_PROGRESS'
+    c.seen = true
+    return sqJson({ checkout: { ...c, payment_ids: c.status === 'COMPLETED' ? [`pay_${co[1]}`] : [] } })
+  }
+  if (method === 'POST' && path === '/v2/payments') { fakeSq.payments.push(body); return sqJson({ payment: { id: `cash_${fakeSq.payments.length}` } }) }
+  if (method === 'GET' && path === '/v2/catalog/list') return sqJson({ objects: [{ id: 'item_1', item_data: { name: 'Wheel alignment', variations: [{ id: 'var_1', item_variation_data: { name: 'Regular', price_money: { amount: 9900 } } }] } }] })
+  if (method === 'GET' && path === '/v2/payments') return sqJson({ payments: [{ id: 'p1', status: 'COMPLETED', created_at: new Date().toISOString(), total_money: { amount: 12345 }, reference_id: 'spt-ticket-TK-ABC', card_details: { card: { card_brand: 'VISA', last_4: '4242' }, entry_method: 'CONTACTLESS' }, processing_fee: [{ amount_money: { amount: 200 } }] }] })
+  if (method === 'GET' && path === '/v2/refunds') return sqJson({ refunds: [] })
+  if (method === 'GET' && path === '/v2/merchants/me') return sqJson({ merchant: { business_name: 'Spartan Tyres' } })
+  if (method === 'GET' && path.startsWith('/v2/locations/')) return sqJson({ location: { name: 'Yennora', currency: 'AUD', status: 'ACTIVE' } })
+  if (method === 'GET' && path === '/v2/payouts') return sqJson({ payouts: [] })
+  if (method === 'GET' && path === '/v2/devices') return sqJson({ devices: [] })
+  return sqJson({ errors: [{ code: 'NOT_FOUND', detail: `fake Square has no ${method} ${path}` }] }, 404)
+}
+process.env.SQUARE_ACCESS_TOKEN = 'EAAAfake'
+process.env.SQUARE_LOCATION_ID = 'LOC_FAKE'
+
+const pair = expect('pair a Terminal', await call(admin, 'POST', { action: 'square' }, { action: 'pair', name: 'Front counter' }, auth), 200)
+expect('staff cannot pair', await call(admin, 'POST', { action: 'square' }, { action: 'pair' }, sam_till()), 403)
+const status = expect('Terminal paired after the code is used', await call(admin, 'GET', { action: 'square', view: 'terminal' }, undefined, auth), 200)
+if (pair?.code?.code !== 'QWER' || status?.devices?.[0]?.id !== 'device_1' || status?.code) { opsFailures++; console.log('FAIL pairing', JSON.stringify(status)) }
+const items2 = (await call(admin, 'GET', { action: 'pos', view: 'items' }, undefined, auth)).body
+if (!items2.items.some((i) => i.source === 'square' && i.price === 99)) { opsFailures++; console.log('FAIL square items in till') }
+const tc = (await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-save', lines: [{ name: 'Wheel alignment', source: 'square', itemId: 'var_1', qty: 1, price: 99 }] }, sam_till())).body.ticket
+const sent = expect('send a ticket to the Terminal', await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-charge', ref: tc.ref }, sam_till()), 200)
+const coId = sent.checkout.id
+const first = await call(admin, 'GET', { action: 'pos', view: 'checkout', id: coId }, undefined, sam_till())
+if (first.body?.checkout?.status !== 'IN_PROGRESS') { opsFailures++; console.log('FAIL first poll', JSON.stringify(first.body)) }
+// Two tabs polling at once must record the payment once.
+const [a, b] = await Promise.all([
+  call(admin, 'GET', { action: 'pos', view: 'checkout', id: coId }, undefined, sam_till()),
+  call(admin, 'GET', { action: 'pos', view: 'checkout', id: coId }, undefined, auth),
+])
+console.log('     two polls:', a.body?.checkout?.status, b.body?.checkout?.status)
+const paidTicket = (await call(admin, 'GET', { action: 'pos', view: 'ticket', ref: tc.ref }, undefined, auth)).body.ticket
+const cardEntries = (await call(admin, 'GET', { action: 'ledger' }, undefined, auth)).body.entries.filter((e) => e.reference === tc.ref)
+expect('ticket paid by card on the Terminal', { status: paidTicket.status === 'paid' && paidTicket.paymentMethod === 'Card (in store)' ? 200 : 500, body: paidTicket }, 200)
+if (cardEntries.length !== 1) { opsFailures++; console.log('FAIL card payment recorded', cardEntries.length, 'times') }
+const tcash = (await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-save', lines: [{ name: 'Valve', qty: 1, price: 15 }] }, auth)).body.ticket
+await call(admin, 'POST', { action: 'pos' }, { action: 'ticket-cash', ref: tcash.ref, tendered: 20 }, auth)
+const cashInSquare = fakeSq.payments.find((p) => p.source_id === 'CASH' && p.reference_id === `spt-ticket-${tcash.ref}`)
+if (!cashInSquare || cashInSquare.amount_money.amount !== 1500 || cashInSquare.cash_details.buyer_supplied_money.amount !== 2000) { opsFailures++; console.log('FAIL cash in Square', JSON.stringify(cashInSquare)) }
+console.log('     cash also recorded in Square:', Boolean(cashInSquare))
+const custom = expect('charge any amount', await call(admin, 'POST', { action: 'square' }, { action: 'charge', amount: 45, description: 'Puncture repair' }, auth), 200)
+await call(admin, 'GET', { action: 'pos', view: 'checkout', id: custom.checkout.id }, undefined, auth)
+const done = await call(admin, 'GET', { action: 'pos', view: 'checkout', id: custom.checkout.id }, undefined, auth)
+if (done.body?.checkout?.status !== 'COMPLETED' || !/recorded/.test(done.body?.checkout?.detail)) { opsFailures++; console.log('FAIL custom charge', JSON.stringify(done.body)) }
+const sum = expect('Square summary', await call(admin, 'GET', { action: 'square', view: 'summary', fresh: '1' }, undefined, auth), 200)
+console.log('     today', sum?.today?.gross, 'from', Object.keys(sum?.bySource ?? {}).join(', '))
+if (sum?.today?.gross !== 123.45 || !sum?.bySource?.['Counter (POS)']) { opsFailures++; console.log('FAIL summary') }
+for (const view of ['payments', 'refunds', 'payouts', 'items', 'devices']) {
+  expect(`Square ${view}`, await call(admin, 'GET', { action: 'square', view }, undefined, auth), 200)
+}
+expect('staff cannot open the Square page', await call(admin, 'GET', { action: 'square', view: 'summary' }, undefined, sam_till()), 403)
+globalThis.fetch = realFetch
+delete process.env.SQUARE_ACCESS_TOKEN
+delete process.env.SQUARE_LOCATION_ID
 
 if (opsFailures) {
   console.error(`\n✗ ${opsFailures} staff / inventory / money check(s) failed`)
