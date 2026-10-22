@@ -63,6 +63,12 @@ export const POSITION_LABELS: Record<AxlePosition, string> = {
  *  - LD317E had the same 149/146 with no published row behind it, so its
  *    load index is now confirmed per quote rather than repeated.
  *  - GRT33 in 11R22.5 is M rated (was L).
+ *  - LD316E in 11R22.5 has 23mm of tread (was 20mm), per Lionshead's LD316 row.
+ *  - LA302E 215/75R17.5 and LD328E 235/75R17.5: the sizes and SKUs are from
+ *    the Lionshead Barcode Catalogue, but Lionshead publishes no data for
+ *    these sizes (LA302 only in 7.00R16, LD328E only in 315/80R22.5). Their
+ *    tread depth, load index, speed symbol and EU label had no source, so
+ *    they are now confirmed per quote. Both are built to order.
  * ------------------------------------------------------------------ */
 
 interface Spec {
@@ -458,31 +464,31 @@ const SPECS: Spec[] = [
   },
   {
     pattern: 'LA302E', brand: 'Lionshead', size: '215/75R17.5', sku: 'LH-21575R175-LA302E', ply: '16PR', rim: '6.00',
-    treadDepthMm: 12.5, loadIndex: '127/124 or 135/133', speedRating: 'M/J', rawPosition: 'Steer & Trailer',
+    treadDepthMm: null, loadIndex: null, speedRating: null, rawPosition: 'Steer & Trailer',
     application: 'Urban Delivery', tread: 'trailer', price: null, stock: 0, rating: 4.2, reviewCount: 11,
-    fuelRating: 'B', noiseDb: 70, retreadable: false,
+    fuelRating: null, noiseDb: null, retreadable: false,
     headline: 'Light-truck rib for steer and trailer builds',
     description:
-      'LA302E is a closed-shoulder rib for light-truck steer and trailer axles — light tandem trailers, plant floats and light rigids. It is available in two load ratings depending on batch, so check the sidewall against your plate before fitting. Built to order and quoted per order.',
+      'LA302E is a closed-shoulder rib for light-truck steer and trailer axles — light tandem trailers, plant floats and light rigids. Lionshead publishes no data sheet for this size, so we confirm the load index, speed symbol and tread depth with your quote. Built to order and quoted per order.',
     highlights: [
       'Closed-shoulder rib for long, free-rolling life',
       'Lighter 16PR casing for tandem trailers and plant floats',
-      'Dual load rating — 127/124 or 135/133 by batch',
+      'Load index and tread depth confirmed with your quote',
       'Built to order — quoted per order',
     ],
   },
   {
     pattern: 'LD328E', brand: 'Lionshead', size: '235/75R17.5', sku: 'LH-23575R175-LD328E', ply: '18PR', rim: '6.75',
-    treadDepthMm: 15.5, loadIndex: '143/141', speedRating: 'L', rawPosition: 'Drive',
+    treadDepthMm: null, loadIndex: null, speedRating: null, rawPosition: 'Drive',
     application: 'Urban Delivery', tread: 'block', price: null, stock: 0, rating: 4.5, reviewCount: 20,
-    fuelRating: 'B', noiseDb: 71, retreadable: false,
+    fuelRating: null, noiseDb: null, retreadable: false,
     headline: 'Lionshead 17.5in drive tyre',
     description:
-      'LD328E gives 15.5mm of open block tread in the common 235/75R17.5 light-truck drive size. A direct alternative to the Greforce GR999, with a marginally more open shoulder for wet grip.',
+      'LD328E is an open block drive pattern in the common 235/75R17.5 light-truck drive size, a direct alternative to the Greforce GR999 with a more open shoulder for wet grip. Lionshead publishes its data sheet for the 315/80R22.5 only, so we confirm the load index, speed symbol and tread depth for this size with your quote. Built to order.',
     highlights: [
-      '15.5mm open block tread for wet-surface traction',
+      'Open block tread for wet-surface traction',
       'More open shoulder than the GR999 equivalent',
-      '18PR casing rated to 2725kg per tyre',
+      '18PR casing; load and tread confirmed with your quote',
       'Popular on refrigerated metro rigids',
     ],
   },
@@ -524,16 +530,16 @@ const SPECS: Spec[] = [
   },
   {
     pattern: 'LD316E', brand: 'Lionshead', size: '11R22.5', sku: 'LH-11R225-LD316E', ply: '18PR', rim: '8.25',
-    treadDepthMm: 20.0, loadIndex: '148/145', speedRating: 'M', rawPosition: 'Drive',
+    treadDepthMm: 23.0, loadIndex: '148/145', speedRating: 'M', rawPosition: 'Drive',
     application: 'Regional', tread: 'lug', price: 220, stock: 0, rating: 0, reviewCount: 0,
     fuelRating: null, noiseDb: null, retreadable: null,
     headline: 'Deep-lug Lionshead drive tyre for regional work',
     description:
-      'LD316E is a deep-lug drive pattern for traction and long mileage, on a robust 18PR casing engineered for regional drive duty. With 20mm of tread and an M speed rating it is a hard-working 11R22.5 drive fitment, and it partners the LA301E all-position in the same size.',
+      'LD316E is a deep-lug drive pattern for traction and long mileage, on a robust 18PR casing engineered for regional drive duty. With 23mm of tread and an M speed rating it is a hard-working 11R22.5 drive fitment, and it partners the LA301E all-position in the same size.',
     highlights: [
       'Deep-lug drive pattern for traction and long mileage',
       'Robust casing engineered for regional drive duty',
-      '20mm tread depth with M speed rating',
+      '23mm tread depth with M speed rating',
       '18PR casing rated to 3150kg per tyre',
     ],
   },
