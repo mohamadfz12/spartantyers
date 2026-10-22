@@ -142,6 +142,8 @@ export type LeadStatusValue = (typeof LEAD_STATUSES)[number]
 export interface StoredLeadStatus {
   status: LeadStatusValue
   notes: string
+  /** Hours spent researching this company, entered by hand. Absent when not recorded. */
+  researchHours?: number
   updatedAt: string
 }
 
@@ -606,18 +608,22 @@ export async function getLeadStatuses(): Promise<Record<string, StoredLeadStatus
 
 export async function setLeadStatus(
   key: string,
-  patch: Partial<Pick<StoredLeadStatus, 'status' | 'notes'>>,
+  patch: Partial<Pick<StoredLeadStatus, 'status' | 'notes'>> & { researchHours?: number | null },
 ): Promise<StoredLeadStatus> {
   const current = (await hashGet<StoredLeadStatus>(KEY_LEAD_STATUS, key)) ?? {
     status: 'New' as const,
     notes: '',
     updatedAt: '',
   }
+  const { researchHours, ...rest } = patch
   const next: StoredLeadStatus = {
     ...current,
-    ...patch,
+    ...rest,
     updatedAt: new Date().toISOString(),
   }
+  // null clears the figure; undefined leaves it alone.
+  if (researchHours === null) delete next.researchHours
+  else if (researchHours !== undefined) next.researchHours = researchHours
   await hashSet(KEY_LEAD_STATUS, key, next)
   return next
 }

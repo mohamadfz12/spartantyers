@@ -470,7 +470,7 @@ export const api = {
     updateLead: (
       token: string,
       key: string,
-      patch: Partial<Pick<LeadStatus, 'status' | 'notes'>>,
+      patch: LeadStatusPatch,
     ) =>
       request<{ key: string; status: LeadStatus }>('/api/admin/leads', {
         method: 'PATCH',
@@ -564,7 +564,14 @@ export type LeadStatusValue =
 export interface LeadStatus {
   status: LeadStatusValue
   notes: string
+  /** Hours spent researching this company. Absent when not recorded. */
+  researchHours?: number
   updatedAt: string
+}
+
+export type LeadStatusPatch = Partial<Pick<LeadStatus, 'status' | 'notes'>> & {
+  /** null clears it. */
+  researchHours?: number | null
 }
 
 /* ------------------------------------------------------------------ *

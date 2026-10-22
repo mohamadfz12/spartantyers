@@ -768,10 +768,86 @@ export const priceRange = {
 }
 
 /** Priced lines with stock on the floor at Yennora. */
-export const inStockCount = pricedProducts.filter((p) => p.stock > 0).length
+export let inStockCount = pricedProducts.filter((p) => p.stock > 0).length
 
 /** Priced lines at zero stock, still sold as pre-orders. */
-export const preOrderCount = pricedProducts.filter((p) => p.stock <= 0).length
+export let preOrderCount = pricedProducts.filter((p) => p.stock <= 0).length
+
+/* ------------------------------------------------------------------ *
+ * Live prices and stock
+ *
+ * The specs above are bundled with the site, but price, discount and
+ * stock are set in the admin panel and stored in the database. The
+ * browser fetches them from /api/inventory (see src/lib/live-catalogue.ts)
+ * and applies them here, IN PLACE: every page imports these objects and
+ * lists directly, so updating them is what makes a price changed in the
+ * admin show everywhere, while the bundled values keep the site working
+ * if the API is slow or down.
+ *
+ * Browser only. The API imports this module too, but it reads overrides
+ * itself (api/_lib/catalogue.ts) and never calls this.
+ * ------------------------------------------------------------------ */
+
+type LiveFields = Pick<Product, 'id' | 'price' | 'discount' | 'discountPrice' | 'stock'>
+
+const POA_TAGS = ['Price on application', 'POA', 'Built to order']
+
+/** Applies live commercial fields. Returns true when anything changed. */
+export function applyLiveCatalogue(live: LiveFields[]): boolean {
+  let changed = false
+
+  for (const update of live) {
+    const product = productById.get(update.id)
+    if (!product) continue
+    const price = typeof update.price === 'number' ? update.price : null
+    const discount = price != null && typeof update.discount === 'number' ? update.discount : undefined
+    const discountPrice =
+      price != null && typeof update.discountPrice === 'number' ? update.discountPrice : undefined
+    const stock = typeof update.stock === 'number' ? update.stock : product.stock
+
+    if (
+      product.price === price &&
+      product.discount === discount &&
+      product.discountPrice === discountPrice &&
+      product.stock === stock
+    ) {
+      continue
+    }
+
+    changed = true
+    const wasPoa = product.price == null
+    product.price = price
+    product.discount = discount
+    product.discountPrice = discountPrice
+    product.stock = stock
+
+    if (wasPoa !== (price == null)) {
+      const tags = product.tags.filter((tag) => !POA_TAGS.includes(tag))
+      product.tags = price == null ? [...tags, ...POA_TAGS] : tags
+    }
+  }
+
+  if (!changed) return false
+
+  // The derived lists are shared arrays, so they are refilled rather than replaced.
+  const refill = <T,>(list: T[], next: T[]) => list.splice(0, list.length, ...next)
+  refill(pricedProducts, products.filter(hasPrice))
+  refill(poaProducts, products.filter((p) => !hasPrice(p)))
+  refill(
+    dealProducts,
+    pricedProducts
+      .filter((p) => p.discount != null)
+      .sort((a, b) => (b.discount ?? 0) - (a.discount ?? 0)),
+  )
+  if (pricedProducts.length) {
+    priceRange.min = Math.min(...pricedProducts.map((p) => effectivePrice(p)))
+    priceRange.max = Math.max(...pricedProducts.map((p) => effectivePrice(p)))
+  }
+  inStockCount = pricedProducts.filter((p) => p.stock > 0).length
+  preOrderCount = pricedProducts.filter((p) => p.stock <= 0).length
+
+  return true
+}
 
 /** Volume price breaks — applied automatically in the cart. */
 export const PRICE_BREAKS = [

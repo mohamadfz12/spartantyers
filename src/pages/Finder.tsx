@@ -27,6 +27,7 @@ import { AxleSelector } from '@/components/shop/AxleSelector'
 import { ProductCard } from '@/components/shop/ProductCard'
 import { SizeDecoder } from '@/components/shop/SizeDecoder'
 import { SIZE_FACETS, matchSizes } from '@/components/shop/Filters'
+import { useCatalogueVersion } from '@/lib/live-catalogue'
 
 /**
  * The fast path for somebody who already knows their size.
@@ -85,7 +86,8 @@ export default function Finder() {
     () => inSize.filter((product) => product.position.includes(axle)),
     [inSize, axle],
   )
-  const fromPrice = useMemo(() => lowestPrice(inSize), [inSize])
+  const catalogue = useCatalogueVersion()
+  const fromPrice = useMemo(() => lowestPrice(inSize), [inSize, catalogue])
 
   const chooseSize = (next: string) => {
     setSize(next)

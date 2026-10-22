@@ -34,6 +34,7 @@ import {
 } from '@/components/shop/Filters'
 import { ProductGrid } from '@/components/shop/ProductGrid'
 import { QuickView } from '@/components/shop/QuickView'
+import { useCatalogueVersion } from '@/lib/live-catalogue'
 
 /**
  * The full catalogue browse.
@@ -100,9 +101,10 @@ export default function Shop() {
 
   /* ---- results --------------------------------------------------- */
 
+  const catalogue = useCatalogueVersion()
   const results = useMemo(
     () => sortProducts(applyFilters(filters), filters),
-    [filters],
+    [filters, catalogue],
   )
 
   const activeCount = activeFilterCount(filters)

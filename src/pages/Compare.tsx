@@ -12,6 +12,7 @@ import { proportionsForProduct } from '@/components/three'
 import { Seo, breadcrumbJsonLd } from '@/components/Seo'
 import { fuelRank } from '@/components/shop/Filters'
 import { ProductThumb } from '@/components/shop/ProductThumb'
+import { useCatalogueVersion } from '@/lib/live-catalogue'
 
 /* ------------------------------------------------------------------ *
  * The comparison rows
@@ -142,6 +143,7 @@ export default function Compare() {
   const clear = useCompare((state) => state.clear)
   const add = useCart((state) => state.add)
 
+  const catalogue = useCatalogueVersion()
   const selected = useMemo(
     () =>
       ids
@@ -170,7 +172,7 @@ export default function Compare() {
       map.set(row.label, best)
     }
     return map
-  }, [selected])
+  }, [selected, catalogue])
 
   const jsonLd = useMemo(
     () =>

@@ -8,6 +8,7 @@ import { QuoteDialog } from '@/components/shop/QuoteDialog'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Toaster } from '@/components/ui'
 import { WheelSpinner } from '@/components/three'
+import { refreshCatalogue, startLiveCatalogue, useCatalogueVersion } from '@/lib/live-catalogue'
 import { applyTheme, useTheme } from '@/store/ui'
 
 /* ------------------------------------------------------------------ *
@@ -55,6 +56,15 @@ export default function App() {
 
   // Keep the `dark` class on <html> in step with the persisted preference.
   useEffect(() => applyTheme(theme), [theme])
+
+  // Prices and stock set in the admin panel. Subscribing here re-renders the
+  // routes when they arrive, so every page shows the live figures.
+  useCatalogueVersion()
+  useEffect(() => startLiveCatalogue(), [])
+  // Checkout always gets the latest prices before the Pay button is shown.
+  useEffect(() => {
+    if (location.pathname === '/checkout' || location.pathname === '/cart') void refreshCatalogue(true)
+  }, [location.pathname])
 
   return (
     <div className="flex min-h-screen flex-col">

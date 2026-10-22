@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Download,
   ExternalLink,
   Mail,
@@ -27,6 +28,7 @@ import {
   type LeadCategory,
   type LeadRegion,
   type LeadStatus,
+  type LeadStatusPatch,
   type LeadStatusValue,
 } from '@/lib/api'
 import { cn, formatDate, formatNumber } from '@/lib/utils'
@@ -215,21 +217,31 @@ export default function Leads() {
 
   /* ---- status + notes -------------------------------------------- */
 
-  async function saveStatus(lead: Lead, patch: Partial<Pick<LeadStatus, 'status' | 'notes'>>) {
+  async function saveStatus(lead: Lead, patch: LeadStatusPatch) {
     const token = adminToken()
     if (!token) return
     const previous = statuses[lead.key]
+    const { researchHours, ...rest } = patch
     const optimistic: LeadStatus = {
       ...(previous ?? NEW_STATUS),
-      ...patch,
+      ...rest,
       updatedAt: new Date().toISOString(),
     }
+    if (researchHours === null) delete optimistic.researchHours
+    else if (researchHours !== undefined) optimistic.researchHours = researchHours
     query.patch((data) => ({ ...data, statuses: { ...data.statuses, [lead.key]: optimistic } }))
     try {
       const { status } = await api.admin.updateLead(token, lead.key, patch)
       query.patch((data) => ({ ...data, statuses: { ...data.statuses, [lead.key]: status } }))
       toast({
-        title: patch.notes !== undefined ? 'Notes saved' : `Marked “${status.status}”`,
+        title:
+          patch.researchHours !== undefined
+            ? status.researchHours
+              ? `Research time: ${hoursLabel(status.researchHours)}`
+              : 'Research time cleared'
+            : patch.notes !== undefined
+              ? 'Notes saved'
+              : `Marked “${status.status}”`,
         description: lead.name,
         variant: 'success',
       })
@@ -380,6 +392,7 @@ export default function Leads() {
                     onToggle={() => setOpen((current) => (current === lead.key ? null : lead.key))}
                     onStatus={(status) => saveStatus(lead, { status })}
                     onNotes={(notes) => saveStatus(lead, { notes })}
+                    onResearch={(researchHours) => saveStatus(lead, { researchHours })}
                   />
                 ))}
               </ul>
@@ -455,9 +468,11 @@ function Summary({
       hint: `${count((l) => statusOf(l.key).status === 'Customer')} now customers`,
     },
   ]
+  const researched = leads.filter((l) => statusOf(l.key).researchHours)
+  const researchTotal = researched.reduce((sum, l) => sum + (statusOf(l.key).researchHours ?? 0), 0)
 
   return (
-    <dl className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <dl className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
       {tiles.map((tile) => (
         <div key={tile.label} className="rounded-lg border border-border bg-card p-4">
           <dt className="text-[0.7rem] font-bold uppercase tracking-wide text-muted-foreground">
@@ -467,6 +482,17 @@ function Summary({
           <dd className="text-xs text-muted-foreground">{tile.hint}</dd>
         </div>
       ))}
+      <div className="rounded-lg border border-border bg-card p-4">
+        <dt className="text-[0.7rem] font-bold uppercase tracking-wide text-muted-foreground">
+          Research time
+        </dt>
+        <dd className="mt-1 font-heading text-2xl font-black">{hoursLabel(researchTotal)}</dd>
+        <dd className="text-xs text-muted-foreground">
+          {researched.length
+            ? `Across ${formatNumber(researched.length)} ${researched.length === 1 ? 'company' : 'companies'}`
+            : 'Add it on a lead, under Sales progress'}
+        </dd>
+      </div>
     </dl>
   )
 }
@@ -749,6 +775,7 @@ function LeadRow({
   onToggle,
   onStatus,
   onNotes,
+  onResearch,
 }: {
   lead: Lead
   status: LeadStatus
@@ -756,6 +783,7 @@ function LeadRow({
   onToggle: () => void
   onStatus: (status: LeadStatusValue) => void
   onNotes: (notes: string) => void
+  onResearch: (hours: number | null) => void
 }) {
   const panelId = `lead-${lead.key}`
 
@@ -792,6 +820,12 @@ function LeadRow({
               {lead.size ? (
                 <Badge variant={lead.size === 'Large' ? 'primary' : 'default'} size="sm">
                   {lead.size}
+                </Badge>
+              ) : null}
+              {status.researchHours ? (
+                <Badge variant="outline" size="sm" title="Time spent researching this company">
+                  <Clock aria-hidden="true" className="h-3 w-3" />
+                  {hoursLabel(status.researchHours)} research
                 </Badge>
               ) : null}
             </span>
@@ -934,7 +968,7 @@ function LeadRow({
             </div>
           </div>
 
-          <SalesBox status={status} onStatus={onStatus} onNotes={onNotes} />
+          <SalesBox status={status} onStatus={onStatus} onNotes={onNotes} onResearch={onResearch} />
         </div>
       ) : null}
     </li>
@@ -954,13 +988,19 @@ function SalesBox({
   status,
   onStatus,
   onNotes,
+  onResearch,
 }: {
   status: LeadStatus
   onStatus: (status: LeadStatusValue) => void
   onNotes: (notes: string) => void
+  onResearch: (hours: number | null) => void
 }) {
   const [draft, setDraft] = useState(status.notes)
   const dirty = draft !== status.notes
+  const [hours, setHours] = useState(status.researchHours != null ? String(status.researchHours) : '')
+  const parsedHours = hours.trim() === '' ? null : Number(hours)
+  const hoursValid = parsedHours === null || (Number.isFinite(parsedHours) && parsedHours > 0 && parsedHours <= 1000)
+  const hoursDirty = parsedHours !== (status.researchHours ?? null)
 
   return (
     <div className="space-y-3 rounded-lg border border-border bg-card p-4">
@@ -1007,6 +1047,33 @@ function SalesBox({
           </Button>
         </div>
       </div>
+
+      <div>
+        <Label htmlFor="lead-research" className="mb-1 block text-xs text-muted-foreground">
+          Research time (hours)
+        </Label>
+        <div className="flex items-start gap-2">
+          <Input
+            id="lead-research"
+            type="number"
+            inputMode="decimal"
+            min={0.25}
+            max={1000}
+            step={0.25}
+            value={hours}
+            onChange={(event) => setHours(event.target.value)}
+            placeholder="e.g. 8"
+            aria-invalid={!hoursValid}
+            aria-describedby="lead-research-hint"
+          />
+          <Button size="sm" variant="outline" className="h-10 shrink-0" disabled={!hoursDirty || !hoursValid} onClick={() => onResearch(parsedHours)}>
+            Save
+          </Button>
+        </div>
+        <p id="lead-research-hint" className="mt-1 text-xs text-muted-foreground">
+          {hoursValid ? 'How long researching this company took. Leave empty to clear.' : 'Enter hours between 0.25 and 1000.'}
+        </p>
+      </div>
     </div>
   )
 }
@@ -1014,6 +1081,12 @@ function SalesBox({
 /* ------------------------------------------------------------------ *
  * Helpers
  * ------------------------------------------------------------------ */
+
+/** "8 hrs", "1 hr", "2.5 hrs", "0 hrs". */
+function hoursLabel(hours: number): string {
+  const rounded = Math.round(hours * 100) / 100
+  return `${formatNumber(rounded)} ${rounded === 1 ? 'hr' : 'hrs'}`
+}
 
 function tally(values: string[]): Array<[string, number]> {
   const counts = new Map<string, number>()
@@ -1058,6 +1131,10 @@ async function exportLeads(rows: Lead[], statusOf: (key: string) => LeadStatus) 
     col('Other contacts / people', 40, (l) => l.other_contacts, true),
     col('Status', 14, (l) => statusOf(l.key).status),
     col('Notes', 40, (l) => statusOf(l.key).notes, true),
+    col('Research hours', 14, (l) => {
+      const hours = statusOf(l.key).researchHours
+      return hours ? String(hours) : ''
+    }),
     col('Source', 34, (l) => l.source),
   ]
 

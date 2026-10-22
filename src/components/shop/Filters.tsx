@@ -16,6 +16,7 @@ import { cn, money, pluralise } from '@/lib/utils'
 import { sizeKey } from '@/lib/size'
 import { Badge, Checkbox, Input, Label } from '@/components/ui'
 import { AxleSelector } from './AxleSelector'
+import { useCatalogueVersion } from '@/lib/live-catalogue'
 
 /* ------------------------------------------------------------------ *
  * The shop's filter model
@@ -604,7 +605,8 @@ export function Filters({
   idPrefix,
   className,
 }: FiltersProps) {
-  const counts = useMemo(() => facetCounts(filters), [filters])
+  const catalogue = useCatalogueVersion()
+  const counts = useMemo(() => facetCounts(filters), [filters, catalogue])
   const activeCount = activeFilterCount(filters)
 
   return (

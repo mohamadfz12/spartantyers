@@ -23,9 +23,10 @@ export default withGuard(async (req, res) => {
     .sort()
     .pop()
 
-  // Stock changes on every order; a short shared cache keeps the shop snappy
-  // without serving genuinely stale numbers.
-  res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=120')
+  // Prices are edited in the admin and stock changes on every order, so the
+  // shared cache is only long enough to absorb a burst of visitors: an admin
+  // change reaches the shop within seconds.
+  res.setHeader('Cache-Control', 'public, s-maxage=5, stale-while-revalidate=10')
 
   ok(res, { products, updatedAt: updatedAt ?? new Date().toISOString() })
 })

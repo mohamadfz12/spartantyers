@@ -17,6 +17,7 @@ import { StaticWheel } from '@/components/three'
 import { Seo, breadcrumbJsonLd } from '@/components/Seo'
 import { ProductCard } from '@/components/shop/ProductCard'
 import { QuickView } from '@/components/shop/QuickView'
+import { useCatalogueVersion } from '@/lib/live-catalogue'
 
 /** A set of four is one axle end; eight is a full drive group. */
 const SET_SIZES = [4, 8] as const
@@ -35,11 +36,12 @@ function savingPerTyre(product: PricedProduct): number {
 export default function Deals() {
   const [quickView, setQuickView] = useState<Product | null>(null)
 
+  const catalogue = useCatalogueVersion()
   const deals = dealProducts
   const headline = deals[0]
   const totalSavingOnASet = useMemo(
     () => deals.reduce((sum, product) => sum + savingPerTyre(product) * 4, 0),
-    [deals],
+    [deals, catalogue],
   )
 
   const jsonLd = useMemo(

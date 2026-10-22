@@ -162,11 +162,25 @@ const leadMissing = await call(admin, 'PATCH', { action: 'leads' }, { key: 'no-s
 console.log('lead unknown key    ', leadMissing.status, JSON.stringify(leadMissing.body))
 const leadsNoAuth = await call(admin, 'GET', { action: 'leads' })
 console.log('leads without token ', leadsNoAuth.status)
+const leadHoursBad = await call(admin, 'PATCH', { action: 'leads' }, { key: 'abc', researchHours: -1 }, auth)
+console.log('lead bad research   ', leadHoursBad.status, JSON.stringify(leadHoursBad.body).slice(0, 80))
+const leadHoursMissing = await call(admin, 'PATCH', { action: 'leads' }, { key: 'no-such-lead', researchHours: 8 }, auth)
+console.log('lead research, no key', leadHoursMissing.status)
 const leadChecks = [
   [leadsList.status, 200], [leadBad.status, 400], [leadMissing.status, 404], [leadsNoAuth.status, 401],
+  [leadHoursBad.status, 400], [leadHoursMissing.status, 404],
 ]
 if (leadChecks.some(([got, want]) => got !== want)) {
   console.error('✗ leads endpoint did not behave as expected')
+  process.exit(1)
+}
+// A price set in the admin must be what the website reads (and what checkout charges).
+const priceEdit = await call(admin, 'PATCH', { action: 'products' }, { id: priced.id, patch: { price: 512.34, discount: 10 } }, auth)
+const shop = await call(loaded['api/inventory.js'], 'GET')
+const live = shop.body?.products?.find((p) => p.id === priced.id)
+console.log('price edit -> shop  ', priceEdit.status, `price ${live?.price}, on sale ${live?.discountPrice}`)
+if (priceEdit.status !== 200 || live?.price !== 512.34 || live?.discountPrice !== 461.11) {
+  console.error('✗ a price edited in the admin did not reach /api/inventory')
   process.exit(1)
 }
 const noAuth = await call(admin, 'GET', { action: 'stats' })

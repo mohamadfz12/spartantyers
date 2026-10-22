@@ -26,6 +26,8 @@ import {
 } from '../store.js'
 
 const MAX_NOTES = 4000
+/** Research time per company, in hours. */
+const MAX_RESEARCH_HOURS = 1000
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET', 'PATCH'])) return
@@ -49,7 +51,7 @@ export default withGuard(async (req, res) => {
     return
   }
 
-  const body = readBody<{ key?: unknown; status?: unknown; notes?: unknown }>(req)
+  const body = readBody<{ key?: unknown; status?: unknown; notes?: unknown; researchHours?: unknown }>(req)
   if (!body) {
     fail(res, 400, 'Expected a JSON request body with "key" and a "status" or "notes".')
     return
@@ -61,7 +63,7 @@ export default withGuard(async (req, res) => {
     return
   }
 
-  const patch: { status?: LeadStatusValue; notes?: string } = {}
+  const patch: { status?: LeadStatusValue; notes?: string; researchHours?: number | null } = {}
 
   if (body.status !== undefined) {
     if (!LEAD_STATUSES.includes(body.status as LeadStatusValue)) {
@@ -79,8 +81,21 @@ export default withGuard(async (req, res) => {
     patch.notes = body.notes
   }
 
-  if (patch.status === undefined && patch.notes === undefined) {
-    fail(res, 400, 'Nothing to change: send a "status", "notes", or both.')
+  if (body.researchHours !== undefined) {
+    if (body.researchHours === null || body.researchHours === '') {
+      patch.researchHours = null
+    } else {
+      const hours = Number(body.researchHours)
+      if (!Number.isFinite(hours) || hours <= 0 || hours > MAX_RESEARCH_HOURS) {
+        fail(res, 400, `"researchHours" must be more than 0 and at most ${MAX_RESEARCH_HOURS}, or null to clear it.`)
+        return
+      }
+      patch.researchHours = Math.round(hours * 100) / 100
+    }
+  }
+
+  if (patch.status === undefined && patch.notes === undefined && patch.researchHours === undefined) {
+    fail(res, 400, 'Nothing to change: send a "status", "notes" or "researchHours".')
     return
   }
 

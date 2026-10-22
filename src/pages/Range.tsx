@@ -23,6 +23,7 @@ import { StaticWheel } from '@/components/three'
 import { Reveal, Stagger } from '@/components/motion'
 import { Icon } from '@/components/Icon'
 import { CtaBand, PageHero, SectionHeading } from '@/components/marketing'
+import { useCatalogueVersion } from '@/lib/live-catalogue'
 
 /* ------------------------------------------------------------------ *
  * /products — the range overview
@@ -91,6 +92,7 @@ const POSITION_NOTE: Record<AxlePosition, string> = {
 }
 
 export default function Range() {
+  const catalogue = useCatalogueVersion()
   /** Sizes grouped by rim diameter, with a count and a real price floor. */
   const byRim = useMemo(
     () =>
@@ -104,7 +106,7 @@ export default function Range() {
           from: lowestPrice(matching),
         }
       }),
-    [],
+    [catalogue],
   )
 
   const byApplication = useMemo(
@@ -118,7 +120,7 @@ export default function Range() {
           sizes: [...new Set(matching.map((product) => product.size))].length,
         }
       }),
-    [],
+    [catalogue],
   )
 
   return (
