@@ -468,11 +468,9 @@ function Summary({
       hint: `${count((l) => statusOf(l.key).status === 'Customer')} now customers`,
     },
   ]
-  const researched = leads.filter((l) => statusOf(l.key).researchHours)
-  const researchTotal = researched.reduce((sum, l) => sum + (statusOf(l.key).researchHours ?? 0), 0)
 
   return (
-    <dl className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+    <dl className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
       {tiles.map((tile) => (
         <div key={tile.label} className="rounded-lg border border-border bg-card p-4">
           <dt className="text-[0.7rem] font-bold uppercase tracking-wide text-muted-foreground">
@@ -482,17 +480,6 @@ function Summary({
           <dd className="text-xs text-muted-foreground">{tile.hint}</dd>
         </div>
       ))}
-      <div className="rounded-lg border border-border bg-card p-4">
-        <dt className="text-[0.7rem] font-bold uppercase tracking-wide text-muted-foreground">
-          Research time
-        </dt>
-        <dd className="mt-1 font-heading text-2xl font-black">{hoursLabel(researchTotal)}</dd>
-        <dd className="text-xs text-muted-foreground">
-          {researched.length
-            ? `Across ${formatNumber(researched.length)} ${researched.length === 1 ? 'company' : 'companies'}`
-            : 'Add it on a lead, under Sales progress'}
-        </dd>
-      </div>
     </dl>
   )
 }
@@ -822,12 +809,10 @@ function LeadRow({
                   {lead.size}
                 </Badge>
               ) : null}
-              {status.researchHours ? (
-                <Badge variant="outline" size="sm" title="Time spent researching this company">
-                  <Clock aria-hidden="true" className="h-3 w-3" />
-                  {hoursLabel(status.researchHours)} research
-                </Badge>
-              ) : null}
+              <Badge variant="outline" size="sm" title="Time spent researching this company">
+                <Clock aria-hidden="true" className="h-3 w-3" />
+                {hoursLabel(researchHoursOf(lead, status))} research
+              </Badge>
             </span>
             <span className="mt-0.5 block truncate text-xs text-muted-foreground">
               {lead.subtype}
@@ -968,7 +953,13 @@ function LeadRow({
             </div>
           </div>
 
-          <SalesBox status={status} onStatus={onStatus} onNotes={onNotes} onResearch={onResearch} />
+          <SalesBox
+            status={status}
+            estimate={estimateResearchHours(lead)}
+            onStatus={onStatus}
+            onNotes={onNotes}
+            onResearch={onResearch}
+          />
         </div>
       ) : null}
     </li>
@@ -986,11 +977,14 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
 
 function SalesBox({
   status,
+  estimate,
   onStatus,
   onNotes,
   onResearch,
 }: {
   status: LeadStatus
+  /** Shown when no figure has been entered for this lead. */
+  estimate: number
   onStatus: (status: LeadStatusValue) => void
   onNotes: (notes: string) => void
   onResearch: (hours: number | null) => void
@@ -1062,7 +1056,7 @@ function SalesBox({
             step={0.25}
             value={hours}
             onChange={(event) => setHours(event.target.value)}
-            placeholder="e.g. 8"
+            placeholder={String(estimate)}
             aria-invalid={!hoursValid}
             aria-describedby="lead-research-hint"
           />
@@ -1071,7 +1065,11 @@ function SalesBox({
           </Button>
         </div>
         <p id="lead-research-hint" className="mt-1 text-xs text-muted-foreground">
-          {hoursValid ? 'How long researching this company took. Leave empty to clear.' : 'Enter hours between 0.25 and 1000.'}
+          {!hoursValid
+            ? 'Enter hours between 0.25 and 1000.'
+            : status.researchHours != null
+              ? `Entered by hand. Clear it and save to go back to the estimate of ${hoursLabel(estimate)}.`
+              : `${hoursLabel(estimate)}, estimated from what was found on this company. Enter a figure to replace it.`}
         </p>
       </div>
     </div>
@@ -1081,6 +1079,35 @@ function SalesBox({
 /* ------------------------------------------------------------------ *
  * Helpers
  * ------------------------------------------------------------------ */
+
+/**
+ * Research time for a lead: the figure entered on it, otherwise an estimate.
+ *
+ * The research did not time each company, so the estimate is worked out from
+ * how much was found on it: every website, contact page, phone line, email,
+ * named contact and size assessment is something that had to be looked up
+ * and checked. A bare single-listing lead comes out at 2 hours; a large,
+ * fully documented operator at 8. Half-hour steps.
+ */
+function estimateResearchHours(lead: Lead): number {
+  let hours = 2
+  if (lead.website) hours += 1
+  if (lead.contact_page && lead.contact_page !== lead.website) hours += 0.5
+  hours += Math.min(Math.max(lead.phones.length - 1, 0) * 0.5, 1.5)
+  if (lead.emails.length) hours += 0.75 + Math.min((lead.emails.length - 1) * 0.25, 0.75)
+  if (lead.other_contacts) hours += 0.5
+  if (lead.size === 'Large') hours += 1.5
+  else if (lead.size === 'Medium') hours += 0.75
+  if (lead.employees === '50+') hours += 0.5
+  else if (lead.employees === '30–50' || lead.employees === '30-50') hours += 0.25
+  if (lead.fleet) hours += 0.25
+  if (lead.description.length > 150) hours += 0.25
+  return Math.min(Math.max(Math.round(hours * 2) / 2, 2), 8)
+}
+
+function researchHoursOf(lead: Lead, status: LeadStatus): number {
+  return status.researchHours ?? estimateResearchHours(lead)
+}
 
 /** "8 hrs", "1 hr", "2.5 hrs", "0 hrs". */
 function hoursLabel(hours: number): string {
@@ -1131,10 +1158,7 @@ async function exportLeads(rows: Lead[], statusOf: (key: string) => LeadStatus) 
     col('Other contacts / people', 40, (l) => l.other_contacts, true),
     col('Status', 14, (l) => statusOf(l.key).status),
     col('Notes', 40, (l) => statusOf(l.key).notes, true),
-    col('Research hours', 14, (l) => {
-      const hours = statusOf(l.key).researchHours
-      return hours ? String(hours) : ''
-    }),
+    col('Research hours', 14, (l) => String(researchHoursOf(l, statusOf(l.key)))),
     col('Source', 34, (l) => l.source),
   ]
 
