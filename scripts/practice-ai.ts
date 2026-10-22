@@ -1,11 +1,11 @@
 /**
- * The practice AI: a stand-in for the Litos AI gateway that costs nothing. It speaks the same
- * OpenAI-style streaming as the real gateway (server-sent events, tool calls, token usage), so
+ * The practice AI: a stand-in for OpenAI's chat completions that costs nothing. It speaks the same
+ * OpenAI-style streaming as the real API (server-sent events, tool calls, token usage), so
  * the assistant can be tried end to end without a model, but it answers from keywords.
  *
  *   npm run dev:ai     on http://localhost:3410 (npm run dev starts it too)
  *
- * In .env.local:  AI_GATEWAY_URL=http://localhost:3410  AI_GATEWAY_KEY=practice  AI_MODEL=practice/assistant
+ * In .env.local:  OPENAI_API_KEY=practice   (the chat then comes here by itself)
  *
  * It knows the Spartan Tyres tools and calls them with valid arguments from plain phrases:
  *
@@ -364,6 +364,6 @@ if (process.argv[1]?.replace(/\\/g, '/').endsWith('scripts/practice-ai.ts')) {
       else throw err
     })
     .listen(port, () =>
-      console.log(`  Practice AI  http://localhost:${port}   (no real AI, no cost; point AI_GATEWAY_URL here)`),
+      console.log(`  Practice AI  http://localhost:${port}   (no real AI, no cost; used with OPENAI_API_KEY=practice)`),
     )
 }

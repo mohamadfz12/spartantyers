@@ -13,9 +13,9 @@ Object.assign(process.env, {
   AI_DB_MEMORY: '1',
   ADMIN_SESSION_SECRET: 'test-secret-test-secret-test-secret',
   // A non-local URL, so prices count (the practice AI costs 0); no call is ever made to it.
-  AI_GATEWAY_URL: 'https://gateway.example.test',
-  AI_GATEWAY_KEY: 'test-key',
-  AI_MODEL: 'test/main',
+  AI_API_URL: 'https://gateway.example.test',
+  OPENAI_API_KEY: 'test-key',
+  OPENAI_CHAT_MODEL: 'test/main',
   AI_FALLBACK_MODEL: '',
   AI_DISABLED: '',
   AI_DAILY_LIMIT_USD: '',
@@ -34,7 +34,7 @@ const { todaySydney } = await import('../api/_lib/ai/dates.js')
 const { clientIp } = await import('../api/_lib/http.js')
 const { createPracticeAi } = await import('../scripts/practice-ai.js')
 
-const GATEWAY_ENV = ['AI_GATEWAY_URL', 'AI_GATEWAY_KEY', 'AI_MODEL', 'AI_FALLBACK_MODEL'] as const
+const GATEWAY_ENV = ['AI_API_URL', 'OPENAI_API_KEY', 'OPENAI_CHAT_MODEL', 'AI_FALLBACK_MODEL'] as const
 
 /** Runs `fn` with some environment variables changed, then puts them back. */
 async function withEnv<T>(changes: Record<string, string | undefined>, fn: () => Promise<T> | T): Promise<T> {
@@ -232,13 +232,27 @@ describe('gateway', () => {
     })
   })
 
-  test('aiConfig needs a URL, a key and a model, and trims trailing slashes', async () => {
-    await withEnv({ AI_GATEWAY_URL: 'https://g.example.test///', AI_GATEWAY_KEY: 'k', AI_MODEL: 'm' }, () => {
+  test('aiConfig needs an OpenAI key, defaults to api.openai.com and gpt-4.1-mini, and trims trailing slashes', async () => {
+    await withEnv({ AI_API_URL: 'https://g.example.test///', OPENAI_API_KEY: 'k', OPENAI_CHAT_MODEL: 'm' }, () => {
       assert.equal(gateway.aiConfig()?.url, 'https://g.example.test')
     })
-    for (const name of GATEWAY_ENV.filter((n) => n !== 'AI_FALLBACK_MODEL')) {
-      await withEnv({ [name]: '' }, () => assert.equal(gateway.aiConfig(), null, name))
-    }
+    await withEnv({ AI_API_URL: '', OPENAI_API_KEY: 'sk-k', OPENAI_CHAT_MODEL: '' }, () => {
+      assert.deepEqual(gateway.aiConfig(), { url: 'https://api.openai.com', key: 'sk-k', model: 'gpt-4.1-mini', fallbackModel: '' })
+    })
+    await withEnv({ AI_API_URL: '', OPENAI_API_KEY: 'practice', OPENAI_CHAT_MODEL: '' }, () => {
+      const cfg = gateway.aiConfig()
+      assert.equal(cfg?.url, 'http://localhost:3410')
+      assert.equal(cfg?.model, 'practice/assistant')
+      assert.equal(gateway.isPracticeAi(cfg), true)
+    })
+    await withEnv({ OPENAI_API_KEY: '' }, () => assert.equal(gateway.aiConfig(), null))
+  })
+
+  test('reasoning models get thinking room and a reasoning effort instead of a temperature', () => {
+    for (const m of ['gpt-5-mini', 'gpt-5.2', 'o3', 'o4-mini']) assert.equal(gateway.isReasoningModel(m), true, m)
+    for (const m of ['gpt-4.1-mini', 'gpt-4o', 'practice/assistant']) assert.equal(gateway.isReasoningModel(m), false, m)
+    assert.equal(gateway.outputAllowance('gpt-4.1-mini', 450), 450)
+    assert.equal(gateway.outputAllowance('gpt-5-mini', 450), 2450)
   })
 
   test('canFallBack only for a timeout or a server error, before any answer, with a different model', () => {
@@ -301,10 +315,10 @@ describe('gateway', () => {
       assert.deepEqual(out.usage, { promptTokens: 120, cachedTokens: 20, completionTokens: 30 })
       assert.equal(out.finishReason, 'tool_calls')
       assert.equal(last?.auth, 'Bearer real-key')
-      assert.deepEqual(last?.body.chat_template_kwargs, { enable_thinking: false })
+      assert.equal(last?.body.chat_template_kwargs, undefined)
       assert.equal(last?.body.stream, true)
       assert.equal(last?.body.model, 'test/main')
-      assert.equal(last?.body.max_tokens, 50)
+      assert.equal(last?.body.max_completion_tokens, 50)
       assert.equal(last?.body.tool_choice, 'auto')
     })
 
@@ -313,6 +327,15 @@ describe('gateway', () => {
       const config = { ...(await withUrl()), model: 'test/main' }
       await gateway.complete({ config, model: 'test/other', messages: [{ role: 'user', content: 'hi' }], maxTokens: 10 })
       assert.equal(last?.body.model, 'test/other')
+    })
+
+    test('a reasoning model is sent a reasoning effort and thinking room, and no temperature', async () => {
+      mode = 'stream'
+      const config = { ...(await withUrl()), model: 'gpt-5-mini' }
+      await gateway.complete({ config, messages: [{ role: 'user', content: 'hi' }], maxTokens: 10 })
+      assert.equal(last?.body.temperature, undefined)
+      assert.equal(last?.body.reasoning_effort, 'low')
+      assert.equal(last?.body.max_completion_tokens, 2010)
     })
 
     const withUrl = async () => ({ url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, key: 'real-key', model: 'm', fallbackModel: '' })
@@ -352,7 +375,7 @@ describe('gateway', () => {
     })
 
     test('without a gateway configured the call is refused before any request', async () => {
-      await withEnv({ AI_GATEWAY_URL: '' }, () =>
+      await withEnv({ OPENAI_API_KEY: '' }, () =>
         assert.rejects(
           gateway.complete({ messages: [{ role: 'user', content: 'hi' }], maxTokens: 10 }),
           (err: unknown) => err instanceof gateway.AiError && err.reason === 'not_configured',
@@ -498,7 +521,7 @@ describe('spending', () => {
   })
 
   test('the practice AI settles at zero', async () => {
-    await withEnv({ AI_GATEWAY_URL: 'http://localhost:3410', AI_GATEWAY_KEY: 'practice' }, async () => {
+    await withEnv({ AI_API_URL: 'http://localhost:3410', OPENAI_API_KEY: 'practice' }, async () => {
       const r = await spend.reserve('chat', 'practice/assistant', 0)
       assert.ok(r.ok)
       await spend.settle(r.id, { promptTokens: 5000, cachedTokens: 0, completionTokens: 5000 }, 'done')
@@ -568,9 +591,9 @@ describe('spending', () => {
     assert.deepEqual(await spend.aiAvailable('visitor-a'), { ok: true })
     assert.equal((await rowsOf()).length, 0)
 
-    await withEnv({ AI_GATEWAY_URL: '' }, async () => {
+    await withEnv({ OPENAI_API_KEY: '' }, async () => {
       assert.deepEqual(await spend.aiAvailable('', 'chat'), { ok: false, reason: 'not_configured' })
-      // Voice has its own OpenAI settings and does not need the chat gateway.
+      // Voice is checked by its own code (voiceConfig): here only the switches and the limits count.
       assert.deepEqual(await spend.aiAvailable('', 'voice'), { ok: true })
     })
 

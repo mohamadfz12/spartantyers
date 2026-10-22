@@ -11,9 +11,9 @@ import { after, beforeEach, describe, test } from 'node:test'
 Object.assign(process.env, {
   AI_DB_MEMORY: '1',
   ADMIN_SESSION_SECRET: 'test-secret-test-secret-test-secret',
-  AI_GATEWAY_URL: '',
-  AI_GATEWAY_KEY: '',
-  AI_MODEL: '',
+  AI_API_URL: '',
+  OPENAI_API_KEY: '',
+  OPENAI_CHAT_MODEL: '',
 })
 for (const name of [
   'DATABASE_URL',

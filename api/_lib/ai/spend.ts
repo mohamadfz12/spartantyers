@@ -149,7 +149,7 @@ export function crossed(
 
 /**
  * Whether the AI can answer at all right now (set up, switched on, under every limit).
- * Books nothing. Chat needs the gateway; voice has its own OpenAI settings which the voice
+ * Books nothing. Chat needs the OpenAI key (aiConfig); voice has its own OpenAI settings which the voice
  * code checks, so purpose 'voice' looks only at the switches and the limits.
  */
 export async function aiAvailable(

@@ -17,10 +17,9 @@ Object.assign(process.env, {
   AI_DAILY_LIMIT_USD: '',
   AI_MONTHLY_LIMIT_USD: '',
   AI_FALLBACK_MODEL: '',
-  AI_GATEWAY_URL: '',
-  AI_GATEWAY_KEY: '',
-  AI_MODEL: '',
+  AI_API_URL: '',
   OPENAI_API_KEY: '',
+  OPENAI_CHAT_MODEL: '',
   VOICE_API_URL: '',
   VOICE_MODEL: '',
   VOICE_VOICE: '',
@@ -322,7 +321,7 @@ async function gateway(step: Step) {
     res.end('data: [DONE]\n\n')
   })
   const base = await listen(server)
-  Object.assign(process.env, { AI_GATEWAY_URL: base, AI_GATEWAY_KEY: 'practice', AI_MODEL: 'practice/assistant' })
+  Object.assign(process.env, { AI_API_URL: base, OPENAI_API_KEY: 'practice', OPENAI_CHAT_MODEL: 'practice/assistant' })
   return { bodies, base }
 }
 
@@ -332,7 +331,7 @@ const realRuntime = { ...voice.runtime }
 
 const voiceOn = () => Object.assign(process.env, { OPENAI_API_KEY: KEY, VOICE_API_URL: openai.base })
 const voiceOff = () => {
-  for (const k of ['OPENAI_API_KEY', 'VOICE_API_URL', 'VOICE_MODEL', 'VOICE_VOICE', 'VOICE_TRANSCRIBE_MODEL', 'VOICE_MAX_SECONDS', 'AI_FUNCTION_MAX_SECONDS', 'AI_GATEWAY_URL', 'AI_GATEWAY_KEY', 'AI_MODEL', 'AI_DISABLED', 'AI_DAILY_LIMIT_USD', 'AI_MONTHLY_LIMIT_USD']) {
+  for (const k of ['OPENAI_API_KEY', 'VOICE_API_URL', 'VOICE_MODEL', 'VOICE_VOICE', 'VOICE_TRANSCRIBE_MODEL', 'VOICE_MAX_SECONDS', 'AI_FUNCTION_MAX_SECONDS', 'AI_API_URL', 'OPENAI_API_KEY', 'OPENAI_CHAT_MODEL', 'AI_DISABLED', 'AI_DAILY_LIMIT_USD', 'AI_MONTHLY_LIMIT_USD']) {
     process.env[k] = ''
   }
   delete process.env.VERCEL
@@ -453,9 +452,8 @@ run('protocol: the call id is read from where OpenAI says the call is, and refus
 
 /* ============================================================== status */
 
-run('spend: voice availability does not need the chat gateway, but chat does', async () => {
-  // No AI_GATEWAY_* at all (voiceOff cleared them).
-  assert.deepEqual(await spend.aiAvailable('', 'chat'), { ok: false, reason: 'not_configured' })
+run('spend: voice and chat share the OpenAI key, and voice has its own switch', async () => {
+  assert.deepEqual(await spend.aiAvailable('', 'chat'), { ok: true })
   assert.deepEqual(await spend.aiAvailable('', 'voice'), { ok: true })
   await saveAiSettings({ voiceEnabled: false })
   assert.deepEqual(await spend.aiAvailable('', 'voice'), { ok: false, reason: 'off' })
@@ -464,7 +462,7 @@ run('spend: voice availability does not need the chat gateway, but chat does', a
 })
 
 run('GET /api/ai/voice: the Call button is offered only when calls are set up, switched on and the limits have room', async () => {
-  // The chat gateway is not set up here, and the Call button is still offered.
+  // The OpenAI key is set, so the Call button is offered.
   assert.deepEqual((await getVoice()).json, { available: true, practice: false, seconds: 600 })
   await saveAiSettings({ voiceEnabled: false })
   assert.equal((await getVoice()).json.available, false)
@@ -507,7 +505,7 @@ run('GET /api/ai/voice: hidden for a visitor who has used their own share, offer
 run('GET /api/ai/status carries the voice status next to the chat status', async () => {
   const res = await request('status', { method: 'GET' })
   assert.equal(res.status, 200)
-  assert.deepEqual(res.json, { chat: { available: false }, voice: { available: true, practice: false, seconds: 600 } })
+  assert.deepEqual(res.json, { chat: { available: true }, voice: { available: true, practice: false, seconds: 600 } })
   assert.equal(res.headers['cache-control'], 'no-store')
 })
 
@@ -1555,19 +1553,12 @@ run('practice: starts without OpenAI and without cost, and is not held up by the
   assert.equal((await post({ action: 'start', conversationId: newChat(), page: '/' }, { ip })).status, 200)
 })
 
-run('practice: needs the practice AI on this computer, and is never offered with a real chat gateway', async () => {
+run('practice: needs the practice AI on this computer, and is never offered with a real chat API', async () => {
+  // OPENAI_API_KEY=practice points the chat at the practice AI on this computer by itself.
   process.env.OPENAI_API_KEY = 'practice'
-  // No chat AI at all.
-  assert.equal((await getVoice()).json.available, false)
-  assert.equal((await start()).status, 503)
-  // A real gateway.
-  Object.assign(process.env, { AI_GATEWAY_URL: 'https://gateway.example', AI_GATEWAY_KEY: 'k', AI_MODEL: 'm' })
-  assert.equal((await getVoice()).json.available, false)
-  const refused = await start()
-  assert.equal(refused.status, 503)
-  assert.equal(refused.json.reason, 'not_configured')
+  assert.equal((await getVoice()).json.practice, true)
   // The word "practice" as the key of a gateway that is not on this computer is a real, priced key.
-  Object.assign(process.env, { AI_GATEWAY_URL: 'https://gateway.example', AI_GATEWAY_KEY: 'practice' })
+  Object.assign(process.env, { AI_API_URL: 'https://gateway.example', OPENAI_API_KEY: 'practice' })
   assert.equal((await getVoice()).json.available, false)
   assert.equal((await start()).status, 503)
   assert.equal((await sqlRows(`SELECT COUNT(*)::int AS n FROM ai_calls`))[0].n, 0)
@@ -1602,7 +1593,7 @@ run('practice: never uses a real gateway, refuses a messy conversation, and is o
   assert.equal((await bad(Array(41).fill({ role: 'user', content: 'hi' }))).status, 400)
   assert.equal((await bad([])).status, 400)
   assert.equal((await post({ action: 'practice', call: 'nope', messages: [{ role: 'user', content: 'hi' }] })).status, 400)
-  process.env.AI_GATEWAY_URL = 'https://gateway.example'
+  process.env.AI_API_URL = 'https://gateway.example'
   assert.equal((await bad([{ role: 'user', content: 'hi' }])).status, 503)
   process.env.OPENAI_API_KEY = KEY
   assert.equal((await bad([{ role: 'user', content: 'hi' }])).status, 403)
@@ -1623,7 +1614,7 @@ run('practice: switched off by the voice setting, and never on Vercel', async ()
 
 run('practice: the real practice AI (scripts/practice-ai.ts) drives the same tools through a call', async () => {
   const base = await listen(createPracticeAi())
-  Object.assign(process.env, { AI_GATEWAY_URL: base, AI_GATEWAY_KEY: 'practice', AI_MODEL: 'practice/assistant', OPENAI_API_KEY: 'practice' })
+  Object.assign(process.env, { AI_API_URL: base, OPENAI_API_KEY: 'practice', OPENAI_CHAT_MODEL: 'practice/assistant' })
   const { id } = await live()
   const step = await post({ action: 'practice', call: id, page: '/', messages: [{ role: 'user', content: 'I want to talk to a person' }] })
   assert.equal(step.status, 200)

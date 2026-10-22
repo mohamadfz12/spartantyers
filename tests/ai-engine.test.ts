@@ -18,10 +18,9 @@ Object.assign(process.env, {
   AI_DAILY_LIMIT_USD: '',
   AI_MONTHLY_LIMIT_USD: '',
   AI_FALLBACK_MODEL: '',
-  AI_GATEWAY_URL: '',
-  AI_GATEWAY_KEY: '',
-  AI_MODEL: '',
+  AI_API_URL: '',
   OPENAI_API_KEY: '',
+  OPENAI_CHAT_MODEL: '',
   VOICE_MAX_SECONDS: '',
   // The public status answer is not kept between requests here (the tests change the settings between them).
   AI_STATUS_CACHE_SECONDS: '0',
@@ -110,11 +109,11 @@ async function gateway(script: Step[]) {
   })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
   servers.push(server)
-  Object.assign(process.env, { AI_GATEWAY_URL: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, AI_GATEWAY_KEY: 'mock-key', AI_MODEL: 'mock/main' })
+  Object.assign(process.env, { AI_API_URL: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, OPENAI_API_KEY: 'mock-key', OPENAI_CHAT_MODEL: 'mock/main' })
   return { seen, calls: () => seen.length }
 }
 
-const aiOff = () => Object.assign(process.env, { AI_GATEWAY_URL: '', AI_GATEWAY_KEY: '', AI_MODEL: '' })
+const aiOff = () => Object.assign(process.env, { AI_API_URL: '', OPENAI_API_KEY: '', OPENAI_CHAT_MODEL: '' })
 const DEFAULT_LIMITS = { ...engine.CHAT }
 
 const TABLES = ['ai_calls', 'ai_messages', 'ai_conversations', 'ai_usage', 'ai_rate', 'ai_settings']
@@ -402,7 +401,8 @@ describe('a message through the engine', () => {
     const body = g.seen[0].body
     assert.equal(body.model, 'mock/main')
     assert.equal(body.stream, true)
-    assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false })
+    assert.equal(body.chat_template_kwargs, undefined)
+    assert.equal(body.temperature, 0.3)
     assert.equal(body.messages[0].role, 'system')
     assert.match(body.messages[0].content, /You are the Spartan Tyres assistant/)
     assert.match(body.messages[0].content, /The customer is looking at the page \/shop\./)
@@ -1149,12 +1149,13 @@ describe('the route', () => {
     assert.match(g.seen[2].body.messages.at(-2).content, /\[Customer: The customer tapped Add to cart/)
   })
 
-  test('GET /api/ai/status says whether chat can answer; voice is off without an OpenAI key (tests/ai-voice.test.ts covers voice)', async () => {
+  test('GET /api/ai/status says whether chat and voice can answer; both are off without an OpenAI key (tests/ai-voice.test.ts covers voice)', async () => {
     const off = await route('status', { method: 'GET', origin: null })
     assert.deepEqual(off.body, { chat: { available: false }, voice: { available: false, practice: false, seconds: 600 } })
     await gateway([{ text: 'x' }])
     const on = await route('status', { method: 'GET', origin: null })
-    assert.deepEqual(on.body, { chat: { available: true }, voice: { available: false, practice: false, seconds: 600 } })
+    // Chat and voice share the OpenAI key, so the key that turns the chat on turns the Call button on too.
+    assert.deepEqual(on.body, { chat: { available: true }, voice: { available: true, practice: false, seconds: 600 } })
     await saveAiSettings({ enabled: false })
     assert.deepEqual((await route('status', { method: 'GET', origin: null })).body, { chat: { available: false }, voice: { available: false, practice: false, seconds: 600 } })
     assert.equal(on.headers['cache-control'], 'no-store')
@@ -1167,7 +1168,7 @@ describe('the route', () => {
       await gateway([{ text: 'x' }])
       const visitor = '10.77.1.1'
       const first = await route('status', { method: 'GET', origin: null, ip: visitor })
-      assert.deepEqual(first.body, { chat: { available: true }, voice: { available: false, practice: false, seconds: 600 } })
+      assert.deepEqual(first.body, { chat: { available: true }, voice: { available: true, practice: false, seconds: 600 } })
       // The switch is flipped, but the same visitor is still told what was true a moment ago...
       await saveAiSettings({ enabled: false })
       assert.deepEqual((await route('status', { method: 'GET', origin: null, ip: visitor })).body, first.body)
@@ -1389,7 +1390,7 @@ describe('the practice AI drives the assistant end to end (free, local)', () => 
     practice = createPracticeAi()
     await new Promise<void>((r) => practice.listen(0, '127.0.0.1', r))
     servers.push(practice)
-    Object.assign(process.env, { AI_GATEWAY_URL: `http://127.0.0.1:${(practice.address() as AddressInfo).port}`, AI_GATEWAY_KEY: 'practice', AI_MODEL: 'practice/assistant' })
+    Object.assign(process.env, { AI_API_URL: `http://127.0.0.1:${(practice.address() as AddressInfo).port}`, OPENAI_API_KEY: 'practice', OPENAI_CHAT_MODEL: 'practice/assistant' })
   }
 
   const kinds = (r: { cards: Card[] }) => r.cards.map((c) => c.kind)

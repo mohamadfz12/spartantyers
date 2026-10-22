@@ -14,10 +14,9 @@ Object.assign(process.env, {
   AI_DAILY_LIMIT_USD: '',
   AI_MONTHLY_LIMIT_USD: '',
   AI_FALLBACK_MODEL: '',
-  AI_GATEWAY_URL: '',
-  AI_GATEWAY_KEY: '',
-  AI_MODEL: '',
+  AI_API_URL: '',
   OPENAI_API_KEY: '',
+  OPENAI_CHAT_MODEL: '',
   VOICE_MAX_SECONDS: '',
 })
 for (const name of ['DATABASE_URL', 'POSTGRES_URL', 'VERCEL']) delete process.env[name]
@@ -127,9 +126,9 @@ beforeEach(async () => {
   delete process.env.AI_DISABLED
   process.env.AI_DAILY_LIMIT_USD = ''
   process.env.AI_MONTHLY_LIMIT_USD = ''
-  process.env.AI_GATEWAY_URL = ''
-  process.env.AI_GATEWAY_KEY = ''
-  process.env.AI_MODEL = ''
+  process.env.AI_API_URL = ''
+  process.env.OPENAI_API_KEY = ''
+  process.env.OPENAI_CHAT_MODEL = ''
   process.env.OPENAI_API_KEY = ''
 })
 
@@ -190,24 +189,24 @@ run('status says the chat is not set up when there is no gateway, and the databa
 })
 
 run('status knows the practice AI from a real model, and never returns the key or the gateway address', async () => {
-  Object.assign(process.env, { AI_GATEWAY_URL: 'http://localhost:3410', AI_GATEWAY_KEY: 'practice', AI_MODEL: 'practice/assistant', OPENAI_API_KEY: 'practice' })
+  Object.assign(process.env, { AI_API_URL: 'http://localhost:3410', OPENAI_API_KEY: 'practice', OPENAI_CHAT_MODEL: 'practice/assistant' })
   const practice = (await call('ai-status')).json
   assert.equal(practice.chat.mode, 'practice')
   assert.equal(practice.chat.model, null)
   assert.equal(practice.voice.mode, 'practice')
 
-  Object.assign(process.env, { AI_GATEWAY_URL: 'https://gateway.example.test', AI_GATEWAY_KEY: 'sk-secret-gateway-key', AI_MODEL: 'deepinfra/zai-org/GLM-5.2', OPENAI_API_KEY: 'sk-secret-openai-key' })
+  Object.assign(process.env, { AI_API_URL: 'https://gateway.example.test', OPENAI_CHAT_MODEL: 'gpt-4.1-mini', OPENAI_API_KEY: 'sk-secret-openai-key' })
   const real = await call('ai-status')
   assert.equal(real.json.chat.mode, 'real')
-  assert.equal(real.json.chat.model, 'deepinfra/zai-org/GLM-5.2')
+  assert.equal(real.json.chat.model, 'gpt-4.1-mini')
   assert.equal(real.json.voice.mode, 'real')
   assert.equal(real.json.voice.model, 'gpt-realtime-2.1-mini')
   const text = JSON.stringify(real.json)
-  for (const secret of ['sk-secret-gateway-key', 'sk-secret-openai-key', 'gateway.example.test']) assert.ok(!text.includes(secret), `leaked ${secret}`)
+  for (const secret of ['sk-secret-openai-key', 'gateway.example.test']) assert.ok(!text.includes(secret), `leaked ${secret}`)
 })
 
 run('status shows what was spent (Sydney day) against the limits in force, and warns when the environment caps them lower', async () => {
-  Object.assign(process.env, { AI_GATEWAY_URL: 'http://localhost:3410', AI_GATEWAY_KEY: 'practice', AI_MODEL: 'practice/assistant' })
+  Object.assign(process.env, { AI_API_URL: 'http://localhost:3410', OPENAI_API_KEY: 'practice', OPENAI_CHAT_MODEL: 'practice/assistant' })
   const booked = await reserve('chat', 'm', 1_500_000, '')
   assert.equal(booked.ok, true)
   if (booked.ok) await settle(booked.id, null, 'billed')
@@ -274,7 +273,7 @@ run('status reports the call length calls really get, next to the one that is se
 })
 
 run('status says why the AI is off: AI_DISABLED, or the switch', async () => {
-  Object.assign(process.env, { AI_GATEWAY_URL: 'http://localhost:3410', AI_GATEWAY_KEY: 'practice', AI_MODEL: 'practice/assistant', OPENAI_API_KEY: 'practice' })
+  Object.assign(process.env, { AI_API_URL: 'http://localhost:3410', OPENAI_API_KEY: 'practice', OPENAI_CHAT_MODEL: 'practice/assistant' })
   await call('ai-settings', { method: 'PATCH', body: { enabled: false } })
   let json = (await call('ai-status')).json
   assert.equal(json.chat.mode, 'off')

@@ -61,7 +61,7 @@ successfully and then fail at the deploy step. The whole AI is one function,
 | `/api/contact` | POST | public | `KV_REST_API_*` *(optional)* | Stored in the dev-only in-memory store |
 | `/api/newsletter` | POST | public | `KV_REST_API_*` *(optional)* | Stored in the dev-only in-memory store |
 | `/api/orders` | GET | public (reference + email) | `KV_REST_API_*` *(optional)* | **404** with "order lookup unavailable on this deployment" |
-| `/api/ai/chat` | POST (streams NDJSON), GET (collect a saved answer) | same-origin only (`Origin` must be this site) | `AI_GATEWAY_URL`, `AI_GATEWAY_KEY`, `AI_MODEL`, `ADMIN_SESSION_SECRET`, a Postgres URL *(see `.env.example`)* | A `fallback` event (`not_configured`), never an error |
+| `/api/ai/chat` | POST (streams NDJSON), GET (collect a saved answer) | same-origin only (`Origin` must be this site) | `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL` *(optional)*, `ADMIN_SESSION_SECRET`, a Postgres URL *(see `.env.example`)* | A `fallback` event (`not_configured`), never an error |
 | `/api/ai/outcome` | POST | same-origin only | as above | Saves nothing, answers `{ ok: true, saved: 0 }` |
 | `/api/ai/status` | GET | public (kept for about 15 s per visitor) | as above | `{ chat: { available: false }, voice: { available: false } }` |
 | `/api/ai/voice` | GET (voice status), POST (`start`, `tool`, `line`, `end`, `practice`) | same-origin only (POST) | `OPENAI_API_KEY` plus the settings above; `VOICE_*` *(optional)* | A refusal with a `reason` (`not_configured`, `off`, `busy`, `already`, `daily`, `monthly`, `unavailable`); never an error page |
@@ -126,8 +126,8 @@ successfully and then fail at the deploy step. The whole AI is one function,
 | `PROMO_CODES` | built-in table | JSON array of `{code, percentOff, description, minTyres?}` or an object map. `percentOff` accepts `0.1` or `10`. |
 | `LOW_STOCK_THRESHOLD` | `24` | Stock at or below this appears in `admin/stats.lowStock`. |
 | `PUBLIC_SITE_URL` | — | Extra allowed CORS origin (for a custom domain). |
-| `AI_GATEWAY_URL`, `AI_GATEWAY_KEY`, `AI_MODEL` | none | The assistant's chat model (an OpenAI-compatible gateway). Without them the chat shows quick keyword answers. |
-| `OPENAI_API_KEY` | none | Voice calls (OpenAI Realtime). Without it there is no Call button. |
+| `OPENAI_API_KEY` | none | The assistant's chat (OpenAI chat completions) and voice calls (OpenAI Realtime). Without it the chat shows quick keyword answers and there is no Call button. |
+| `OPENAI_CHAT_MODEL` | `gpt-4.1-mini` | The chat model. |
 | `DATABASE_URL` or `POSTGRES_URL` | none | The AI keeps its chats, calls and spending in Postgres, **even when the store above uses KV**. Without one on Vercel the AI is off (`not_configured`). |
 | `ADMIN_SESSION_SECRET` | none | Also required for the AI on Vercel: it keys the hash that identifies a visitor for the limits. Without it the AI is off. |
 | `VOICE_MAX_SECONDS`, `AI_FUNCTION_MAX_SECONDS` | `600`, `300` | Call length and the time the AI function is taken to have; see the README's voice section. |

@@ -180,7 +180,7 @@ export function plannedSeconds(configured: number): number {
 
 /* ------------------------------------------------------------------- status */
 
-/** Practice calls are answered by the practice AI on this computer: they need it, and never a real gateway. */
+/** Practice calls are answered by the practice AI on this computer: they need it, and never a real model. */
 const practiceReady = () => isPracticeAi(aiConfig())
 
 /**
@@ -283,7 +283,7 @@ async function claim(o: { id: string; conversationId: string; ip: string; practi
 export async function startCall(input: { conversationId: string; page: string; ipHash: string; sdp: string }): Promise<{ ok: true; call: StartedCall } | Fail> {
   const cfg = voiceConfig()
   if (!cfg) return fail(503, 'not_configured', 'Voice calls are not set up on this site.')
-  if (cfg.practice && !practiceReady()) return fail(503, 'not_configured', 'Practice calls need the practice AI (AI_GATEWAY_URL=http://localhost:3410).')
+  if (cfg.practice && !practiceReady()) return fail(503, 'not_configured', 'Practice calls need the practice AI on this computer (OPENAI_API_KEY=practice).')
   if (!aiDbConfigured() || !visitorKeyConfigured()) return fail(503, 'not_configured', 'Voice calls are not set up on this site.')
   let settings: AiSettings
   try {
@@ -829,13 +829,13 @@ const isPracticeMessages = (v: unknown): v is PracticeMessage[] =>
 /**
  * A practice call's next step: the practice AI (scripts/practice-ai.ts, free) answers the
  * conversation so far with words or tool uses, which the browser then plays like a real call. Only
- * for practice calls, and only with the practice AI: a real gateway is never used here.
+ * for practice calls, and only with the practice AI: a real model is never used here.
  */
 export async function practiceTurn(input: { callId: unknown; page: unknown; messages: unknown }): Promise<{ ok: true; answer: PracticeAnswer } | Fail> {
   const cfg = voiceConfig()
   if (!cfg?.practice) return fail(403, 'off', 'Practice calls are not on.')
   const ai = aiConfig()
-  if (!ai || !isPracticeAi(ai)) return fail(503, 'not_configured', 'Practice calls need the practice AI (AI_GATEWAY_URL=http://localhost:3410).')
+  if (!ai || !isPracticeAi(ai)) return fail(503, 'not_configured', 'Practice calls need the practice AI on this computer (OPENAI_API_KEY=practice).')
   const found = await liveCall(input.callId)
   if (found.ok === false) return found
   if (!isPracticeMessages(input.messages)) return fail(400, 'error', 'That practice conversation could not be read.')

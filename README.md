@@ -79,8 +79,8 @@ Full annotated list in [`.env.example`](./.env.example). Summary:
 | `ADMIN_PASSWORD` | for `/admin` | Admin endpoints 503; panel shows a setup guide. **Never falls open.** |
 | `ADMIN_SESSION_SECRET` | recommended | Derived from `ADMIN_PASSWORD`, so rotating the password logs everyone out |
 | `KV_REST_API_URL` `KV_REST_API_TOKEN` | **strongly recommended** | In-memory store, wiped every cold start |
-| `AI_GATEWAY_URL` `AI_GATEWAY_KEY` `AI_MODEL` | for the AI chat | The chat shows quick keyword answers from the real site data (see `.env.example`) |
-| `OPENAI_API_KEY` | for voice calls | No Call button |
+| `OPENAI_API_KEY` | for the AI chat and voice calls | The chat shows quick keyword answers from the real site data, and there is no Call button (see `.env.example`) |
+| `OPENAI_CHAT_MODEL` | no | The chat uses `gpt-4.1-mini` |
 | `DATABASE_URL` or `POSTGRES_URL` | for the AI on Vercel | The AI keeps its chats, calls and spending in **Postgres, even when the store above uses KV**; without it the AI is off |
 | `ADMIN_SESSION_SECRET` | for the AI on Vercel | Keys the hash that identifies a visitor for the limits; without it the AI is off |
 | `PROMO_CODES` | no | Built-in code table |
@@ -246,7 +246,7 @@ assistant and AI conversations).
   the store above uses KV**, and `ADMIN_SESSION_SECRET` on Vercel. Without them
   the AI is off and the site shows quick keyword answers. Locally it keeps its
   records in `.data/` and needs neither.
-- **Chat.** An OpenAI-compatible gateway (`AI_GATEWAY_*`, `AI_MODEL`). It only
+- **Chat.** OpenAI chat completions (`OPENAI_API_KEY`, `OPENAI_CHAT_MODEL`). It only
   mentions Afterpay while checkout offers it (`SQUARE_AFTERPAY_ENABLED`).
 - **Voice.** OpenAI Realtime (`OPENAI_API_KEY`), connected from the customer's
   browser. The function that opens a call also watches it and hangs it up, so it
