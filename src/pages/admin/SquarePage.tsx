@@ -119,7 +119,7 @@ export default function SquarePage() {
         </div>
 
         {error ? (
-          <Warn>{error}</Warn>
+          <p className="rounded-lg border border-border bg-muted/30 p-4 text-sm font-semibold">Not connected</p>
         ) : !summary ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }, (_, i) => (
