@@ -7,7 +7,8 @@
  * against Square.
  */
 
-import { requireAdmin } from '../auth.js'
+import { audit } from '../audit.js'
+import { authorize } from '../auth.js'
 import {
   asString,
   fail,
@@ -29,7 +30,8 @@ const STATUSES: StoredOrder['status'][] = [
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET', 'PATCH'])) return
-  if (!requireAdmin(req, res)) return
+  const actor = await authorize(req, res, 'orders')
+  if (!actor) return
 
   res.setHeader('Cache-Control', 'private, no-store')
 
@@ -63,6 +65,8 @@ export default withGuard(async (req, res) => {
     fail(res, 404, `No order with id "${id}".`)
     return
   }
+
+  await audit(actor, 'order.status', `${order.reference} marked ${status}`)
 
   ok(res, { order })
 })

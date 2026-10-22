@@ -24,6 +24,7 @@
  *    a paid order with stale stock is recoverable, a 500 after a charge is not.
  */
 
+import { randomUUID } from 'node:crypto'
 import { site } from '../../../src/config/site.js'
 import { isConversationId } from '../../../src/lib/ai/protocol.js'
 import {
@@ -42,7 +43,13 @@ import { newOrderId, newOrderReference } from '../ids.js'
 import { priceOrder, toCents } from '../pricing.js'
 import { resolveProduct } from '../catalogue.js'
 import { createPayment, SquareError, getSquareConfig } from '../square.js'
-import { getOverrides, saveOrder, setOverride, type StoredOrder } from '../store.js'
+import {
+  getOverrides,
+  saveOrder,
+  saveStockMove,
+  setOverride,
+  type StoredOrder,
+} from '../store.js'
 
 const AU_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT']
 
@@ -289,8 +296,22 @@ export default withGuard(async (req, res) => {
     try {
       const product = resolveProduct(line.id, overrides)
       if (!product) continue
-      await setOverride(line.id, {
-        stock: Math.max(0, product.stock - line.quantity),
+      const after = Math.max(0, product.stock - line.quantity)
+      await setOverride(line.id, { stock: after })
+      // The stockroom's history of this tyre; best-effort like the decrement.
+      await saveStockMove({
+        id: randomUUID(),
+        productId: line.id,
+        sku: line.sku,
+        type: 'sale',
+        change: after - product.stock,
+        before: product.stock,
+        after,
+        reason: 'Sold online',
+        note: '',
+        reference,
+        at: new Date().toISOString(),
+        by: 'Website checkout',
       })
     } catch (error) {
       console.error(

@@ -11,7 +11,7 @@
  * is connected. No key, address or secret is returned: only names and numbers.
  */
 
-import { requireAdmin } from '../auth.js'
+import { authorize } from '../auth.js'
 import { methodGuard, ok, withGuard } from '../http.js'
 import { todaySydney } from '../ai/dates.js'
 import { AiDbUnavailable, aiDbConfigured, getAiDb } from '../ai/db.js'
@@ -28,7 +28,8 @@ export type ChatMode = 'real' | 'practice' | 'off' | 'not_configured'
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET'])) return
-  if (!requireAdmin(req, res)) return
+  const actor = await authorize(req, res, 'ai')
+  if (!actor) return
 
   res.setHeader('Cache-Control', 'private, no-store')
 

@@ -8,7 +8,10 @@
  * clearing the override.
  */
 
-import { requireAdmin } from '../auth.js'
+import { randomUUID } from 'node:crypto'
+import { can } from '../../../src/lib/admin-roles.js'
+import { audit } from '../audit.js'
+import { authorize } from '../auth.js'
 import { mergeCatalogue, mergeOverride, getProduct } from '../catalogue.js'
 import {
   asString,
@@ -18,14 +21,20 @@ import {
   readBody,
   withGuard,
 } from '../http.js'
-import { getOverrides, setOverride, type StoredOverride } from '../store.js'
+import {
+  getOverrides,
+  saveStockMove,
+  setOverride,
+  type StoredOverride,
+} from '../store.js'
 
 const MAX_PRICE = 20000
 const MAX_STOCK = 100000
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET', 'PATCH'])) return
-  if (!requireAdmin(req, res)) return
+  const actor = await authorize(req, res, 'products')
+  if (!actor) return
 
   res.setHeader('Cache-Control', 'private, no-store')
 
@@ -62,6 +71,11 @@ export default withGuard(async (req, res) => {
 
   const raw = body.patch as Record<string, unknown>
   const patch: StoredOverride = {}
+
+  if (('price' in raw || 'discount' in raw) && !can(actor.role, 'pricing')) {
+    fail(res, 403, 'Only an owner or manager can change prices and discounts.')
+    return
+  }
 
   if ('price' in raw) {
     const price = Number(raw.price)
@@ -100,7 +114,32 @@ export default withGuard(async (req, res) => {
     return
   }
 
+  const before = mergeOverride(base, (await getOverrides())[id])
   const stored = await setOverride(id, patch)
+  const product = mergeOverride(base, stored)
 
-  ok(res, { product: mergeOverride(base, stored) })
+  if (patch.stock !== undefined && patch.stock !== before.stock) {
+    await saveStockMove({
+      id: randomUUID(),
+      productId: id,
+      sku: base.sku,
+      type: 'count',
+      change: patch.stock - before.stock,
+      before: before.stock,
+      after: patch.stock,
+      reason: 'Edited on the Products page',
+      note: '',
+      at: new Date().toISOString(),
+      by: actor.name,
+    })
+  }
+
+  const changes = [
+    patch.price !== undefined ? `price ${before.price ?? 'POA'} → ${patch.price}` : '',
+    patch.discount !== undefined ? `discount ${before.discount ?? 0}% → ${patch.discount ?? 0}%` : '',
+    patch.stock !== undefined ? `stock ${before.stock} → ${patch.stock}` : '',
+  ].filter(Boolean)
+  await audit(actor, 'product.update', `${base.sku}: ${changes.join(', ')}`)
+
+  ok(res, { product })
 })

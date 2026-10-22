@@ -7,6 +7,7 @@
  */
 
 import type { Order, Product } from '@/data/types'
+import type { StaffRole } from '@/lib/admin-roles'
 
 export class ApiError extends Error {
   status: number
@@ -287,11 +288,121 @@ export const api = {
    * -------------------------------------------------------------- */
 
   admin: {
-    login: (password: string) =>
-      request<{ token: string; expiresAt: string }>(
+    /** No email: the owner password. With an email: that staff member's own password. */
+    login: (password: string, email?: string) =>
+      request<{ token: string; expiresAt: string; user: AdminUser }>(
         '/api/admin/login',
-        json({ password }),
+        json(email ? { email, password } : { password }),
       ),
+
+    me: (token: string) =>
+      request<{ user: AdminUser }>('/api/admin/me', { headers: auth(token) }),
+
+    inventory: (token: string) =>
+      request<{
+        items: InventoryItem[]
+        moves: StockMove[]
+        totalMoves: number
+        defaultReorderLevel: number
+        reasons: string[]
+      }>('/api/admin/inventory', { headers: auth(token) }),
+
+    inventoryAction: (token: string, body: InventoryAction) =>
+      request<{ item: InventoryItem; move?: StockMove; expenseId?: string | null }>(
+        '/api/admin/inventory',
+        { ...json(body), headers: auth(token) },
+      ),
+
+    staff: (token: string) =>
+      request<{ staff: StaffMember[]; timesheets: Timesheet[]; canManageAccounts: boolean }>(
+        '/api/admin/staff',
+        { headers: auth(token) },
+      ),
+
+    createStaff: (token: string, member: StaffInput) =>
+      request<{ member: StaffMember }>('/api/admin/staff', {
+        ...json(member),
+        headers: auth(token),
+      }),
+
+    updateStaff: (
+      token: string,
+      id: string,
+      changes: Partial<StaffInput> & { active?: boolean; removeLogin?: boolean },
+    ) =>
+      request<{ member: StaffMember }>('/api/admin/staff', {
+        method: 'PATCH',
+        body: JSON.stringify({ id, ...changes }),
+        headers: { ...auth(token), 'Content-Type': 'application/json' },
+      }),
+
+    deleteStaff: (token: string, id: string) =>
+      request<{ ok: true }>(`/api/admin/staff?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: auth(token),
+      }),
+
+    logHours: (
+      token: string,
+      entry: { staffId: string; date: string; hours: number; note?: string; rate?: number },
+    ) =>
+      request<{ entry: Timesheet }>('/api/admin/timesheets', {
+        ...json(entry),
+        headers: auth(token),
+      }),
+
+    payHours: (token: string, ids: string[], date: string, method: string) =>
+      request<{ entries: Timesheet[]; expense: LedgerEntry }>('/api/admin/timesheets', {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'pay', ids, date, method }),
+        headers: { ...auth(token), 'Content-Type': 'application/json' },
+      }),
+
+    deleteHours: (token: string, id: string) =>
+      request<{ ok: true }>(`/api/admin/timesheets?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: auth(token),
+      }),
+
+    ledger: (token: string) =>
+      request<LedgerResponse>('/api/admin/ledger', { headers: auth(token) }),
+
+    createLedgerEntry: (token: string, entry: LedgerInput & { markOrderPaid?: boolean }) =>
+      request<{ entry: LedgerEntry; orderMarkedPaid: boolean }>('/api/admin/ledger', {
+        ...json(entry),
+        headers: auth(token),
+      }),
+
+    updateLedgerEntry: (token: string, id: string, entry: LedgerInput) =>
+      request<{ entry: LedgerEntry; orderMarkedPaid: boolean }>('/api/admin/ledger', {
+        method: 'PATCH',
+        body: JSON.stringify({ id, ...entry }),
+        headers: { ...auth(token), 'Content-Type': 'application/json' },
+      }),
+
+    deleteLedgerEntry: (token: string, id: string) =>
+      request<{ ok: true; unpaid: number }>(`/api/admin/ledger?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: auth(token),
+      }),
+
+    saveFinanceSettings: (
+      token: string,
+      settings: Partial<Pick<FinanceSettings, 'openingBalance' | 'openingDate' | 'gstRegistered'>>,
+    ) =>
+      request<{ settings: FinanceSettings }>('/api/admin/ledger', {
+        method: 'PATCH',
+        body: JSON.stringify({ settings }),
+        headers: { ...auth(token), 'Content-Type': 'application/json' },
+      }),
+
+    customers: (token: string) =>
+      request<{ customers: Customer[] }>('/api/admin/customers', { headers: auth(token) }),
+
+    activity: (token: string) =>
+      request<{ entries: ActivityEntry[]; total: number }>('/api/admin/activity', {
+        headers: auth(token),
+      }),
 
     stats: (token: string) =>
       request<{
@@ -454,6 +565,217 @@ export interface LeadStatus {
   status: LeadStatusValue
   notes: string
   updatedAt: string
+}
+
+/* ------------------------------------------------------------------ *
+ * Admin: staff, inventory, money (see api/_lib/handlers/admin-*.ts)
+ * ------------------------------------------------------------------ */
+
+export interface AdminUser {
+  /** `owner` for the deployment's owner password. */
+  id: string
+  name: string
+  role: StaffRole
+  email: string
+}
+
+export interface StaffMember {
+  id: string
+  name: string
+  email: string
+  phone: string
+  role: StaffRole
+  position: string
+  payRate: number | null
+  startDate: string
+  notes: string
+  active: boolean
+  /** True when they have a password and can sign in. */
+  hasLogin: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface StaffInput {
+  name: string
+  email: string
+  phone: string
+  role: StaffRole
+  position: string
+  payRate: number | null
+  startDate: string
+  notes: string
+  /** Sets or replaces their password. Omit to leave it alone. */
+  password?: string
+}
+
+export interface Timesheet {
+  id: string
+  staffId: string
+  date: string
+  hours: number
+  rate: number
+  note: string
+  paid: boolean
+  paidAt?: string
+  expenseId?: string
+  createdAt: string
+  createdBy: string
+}
+
+export interface StockSettings {
+  reorderLevel: number | null
+  costPrice: number | null
+  location: string
+  supplier: string
+  updatedAt: string
+}
+
+export interface InventoryItem {
+  product: Product
+  settings: StockSettings | null
+}
+
+export interface StockMove {
+  id: string
+  productId: string
+  sku: string
+  type: 'receive' | 'adjust' | 'sale' | 'count'
+  change: number
+  before: number
+  after: number
+  reason: string
+  note: string
+  unitCost?: number
+  supplier?: string
+  reference?: string
+  at: string
+  by: string
+}
+
+export type InventoryAction =
+  | {
+      action: 'receive'
+      productId: string
+      quantity: number
+      unitCost?: number
+      supplier?: string
+      reference?: string
+      note?: string
+      recordExpense?: boolean
+    }
+  | {
+      action: 'adjust'
+      productId: string
+      mode: 'add' | 'remove' | 'set'
+      quantity: number
+      reason: string
+      note?: string
+    }
+  | {
+      action: 'settings'
+      productId: string
+      reorderLevel?: number | null
+      costPrice?: number | null
+      location?: string
+      supplier?: string
+    }
+
+export type LedgerType = 'payment' | 'refund' | 'expense'
+
+export interface LedgerEntry {
+  id: string
+  type: LedgerType
+  date: string
+  amount: number
+  gst: number
+  category: string
+  method: string
+  description: string
+  reference: string
+  counterparty: string
+  orderId?: string
+  source: 'manual' | 'stock' | 'wages'
+  createdAt: string
+  createdBy: string
+}
+
+export interface LedgerInput {
+  type: LedgerType
+  date: string
+  amount: number
+  gst: number
+  category: string
+  method: string
+  description: string
+  reference: string
+  counterparty: string
+  orderId?: string
+}
+
+/** A card payment taken by the website checkout, read from its order. */
+export interface OnlinePayment {
+  id: string
+  reference: string
+  date: string
+  createdAt: string
+  amount: number
+  gst: number
+  customer: string
+  email: string
+  status: Order['status']
+  paymentId: string
+  /** False for cancelled orders: the money went back through Square. */
+  counted: boolean
+}
+
+export interface UnpaidOrder {
+  id: string
+  reference: string
+  date: string
+  total: number
+  customer: string
+  paidSoFar: number
+}
+
+export interface FinanceSettings {
+  openingBalance: number
+  openingDate: string
+  gstRegistered: boolean
+  updatedAt: string
+}
+
+export interface LedgerResponse {
+  entries: LedgerEntry[]
+  online: OnlinePayment[]
+  unpaidOrders: UnpaidOrder[]
+  settings: FinanceSettings
+  /** Today in Sydney, YYYY-MM-DD. */
+  today: string
+}
+
+export interface Customer {
+  email: string
+  name: string
+  phone: string
+  company: string
+  suburb: string
+  orders: number
+  tyres: number
+  spent: number
+  firstOrder: string
+  lastOrder: string
+  references: string[]
+  subscribed: boolean
+}
+
+export interface ActivityEntry {
+  id: string
+  at: string
+  actorId: string
+  actorName: string
+  action: string
+  detail: string
 }
 
 function auth(token: string): Record<string, string> {

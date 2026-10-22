@@ -172,6 +172,138 @@ if (leadChecks.some(([got, want]) => got !== want)) {
 const noAuth = await call(admin, 'GET', { action: 'stats' })
 console.log('no token            ', noAuth.status, JSON.stringify(noAuth.body))
 
+/* ---- staff, roles, inventory, hours and money ---- */
+console.log('\n--- staff, inventory, money ---')
+let opsFailures = 0
+const expect = (label, result, want, extra = '') => {
+  const good = result.status === want
+  if (!good) opsFailures++
+  console.log(`${good ? 'ok  ' : 'FAIL'} ${label.padEnd(44)} ${result.status}${good ? '' : ` (wanted ${want}) ${JSON.stringify(result.body).slice(0, 120)}`} ${extra}`)
+  return result.body
+}
+const bearer = (token) => ({ authorization: `Bearer ${token}` })
+
+const meOwner = expect('who am I (owner password)', await call(admin, 'GET', { action: 'me' }, undefined, auth), 200)
+if (meOwner?.user?.role !== 'owner') { opsFailures++; console.log('FAIL owner role not reported') }
+
+const mgr = expect('add a manager with a sign-in', await call(admin, 'POST', { action: 'staff' }, {
+  name: 'Mia Manager', email: 'Mia@Example.com', role: 'manager', password: 'manager-pass-123',
+}, auth), 200)
+const fitter = expect('add a staff member with a sign-in', await call(admin, 'POST', { action: 'staff' }, {
+  name: 'Sam Fitter', email: 'sam@example.com', role: 'staff', password: 'fitter-pass-123', payRate: 32.5,
+}, auth), 200)
+if (mgr?.member?.passwordHash || fitter?.member?.passwordHash || !fitter?.member?.hasLogin) {
+  opsFailures++; console.log('FAIL password hash leaked or hasLogin missing')
+}
+expect('duplicate email refused', await call(admin, 'POST', { action: 'staff' }, { name: 'X', email: 'sam@example.com' }, auth), 409)
+expect('short password refused', await call(admin, 'POST', { action: 'staff' }, { name: 'Y', email: 'y@example.com', password: 'short' }, auth), 400)
+
+expect('staff login, wrong password', await call(admin, 'POST', { action: 'login' }, { email: 'sam@example.com', password: 'nope-nope-nope' }), 401)
+expect('staff login, unknown email', await call(admin, 'POST', { action: 'login' }, { email: 'ghost@example.com', password: 'whatever-123' }), 401)
+const samLogin = expect('staff login, right password', await call(admin, 'POST', { action: 'login' }, { email: 'SAM@example.com', password: 'fitter-pass-123' }), 200)
+const mgrLogin = expect('manager login', await call(admin, 'POST', { action: 'login' }, { email: 'mia@example.com', password: 'manager-pass-123' }), 200)
+const sam = bearer(samLogin?.token)
+const mia = bearer(mgrLogin?.token)
+if (samLogin?.user?.role !== 'staff') { opsFailures++; console.log('FAIL staff role not returned at login') }
+
+expect('staff: inventory allowed', await call(admin, 'GET', { action: 'inventory' }, undefined, sam), 200)
+expect('staff: money refused', await call(admin, 'GET', { action: 'ledger' }, undefined, sam), 403)
+expect('staff: staff list refused', await call(admin, 'GET', { action: 'staff' }, undefined, sam), 403)
+expect('staff: activity log refused', await call(admin, 'GET', { action: 'activity' }, undefined, sam), 403)
+expect('staff: price change refused', await call(admin, 'PATCH', { action: 'products' }, { id: priced.id, patch: { price: 1 } }, sam), 403)
+expect('staff: stock change allowed', await call(admin, 'PATCH', { action: 'products' }, { id: priced.id, patch: { stock: 20 } }, sam), 200)
+expect('manager: staff list allowed', await call(admin, 'GET', { action: 'staff' }, undefined, mia), 200)
+expect('manager: adding staff refused', await call(admin, 'POST', { action: 'staff' }, { name: 'Z', email: 'z@example.com' }, mia), 403)
+
+const recv = expect('receive 10 tyres + record expense', await call(admin, 'POST', { action: 'inventory' }, {
+  action: 'receive', productId: priced.id, quantity: 10, unitCost: 300, supplier: 'Test Supplier', reference: 'INV-1', recordExpense: true,
+}, auth), 200)
+if (recv?.item?.product?.stock !== 30 || !recv?.expenseId || recv?.item?.settings?.costPrice !== 300) {
+  opsFailures++; console.log('FAIL receive did not add stock / set cost / record expense', JSON.stringify(recv).slice(0, 200))
+}
+const recv2 = expect('receive 10 more at $400 (average cost)', await call(admin, 'POST', { action: 'inventory' }, {
+  action: 'receive', productId: priced.id, quantity: 10, unitCost: 400,
+}, auth), 200)
+// (30 on hand at $300 + 10 at $400) / 40 = $325
+if (recv2?.item?.settings?.costPrice !== 325) { opsFailures++; console.log('FAIL average cost', recv2?.item?.settings?.costPrice) }
+expect('staff: receive with expense refused', await call(admin, 'POST', { action: 'inventory' }, {
+  action: 'receive', productId: priced.id, quantity: 1, unitCost: 1, recordExpense: true,
+}, sam), 403)
+const dmg = expect('write off 3 damaged', await call(admin, 'POST', { action: 'inventory' }, {
+  action: 'adjust', productId: priced.id, mode: 'remove', quantity: 3, reason: 'Damaged',
+}, sam), 200)
+if (dmg?.item?.product?.stock !== 37 || dmg?.move?.by !== 'Sam Fitter') { opsFailures++; console.log('FAIL adjust', JSON.stringify(dmg?.move)) }
+expect('remove more than on hand refused', await call(admin, 'POST', { action: 'inventory' }, {
+  action: 'adjust', productId: priced.id, mode: 'remove', quantity: 999, reason: 'Damaged',
+}, auth), 400)
+expect('adjust without a valid reason refused', await call(admin, 'POST', { action: 'inventory' }, {
+  action: 'adjust', productId: priced.id, mode: 'add', quantity: 1, reason: 'Because',
+}, auth), 400)
+const count = expect('stocktake count sets stock', await call(admin, 'POST', { action: 'inventory' }, {
+  action: 'adjust', productId: priced.id, mode: 'set', quantity: 36, reason: 'Stocktake count',
+}, auth), 200)
+if (count?.item?.product?.stock !== 36) { opsFailures++; console.log('FAIL count') }
+expect('reorder level / location saved', await call(admin, 'POST', { action: 'inventory' }, {
+  action: 'settings', productId: priced.id, reorderLevel: 8, location: 'Rack B3',
+}, auth), 200)
+const invList = expect('inventory lists the movements', await call(admin, 'GET', { action: 'inventory' }, undefined, auth), 200)
+console.log('     movements logged:', invList?.totalMoves, '| storefront sees stock', (await call(loaded['api/inventory.js'], 'GET')).body?.products?.find((x) => x.id === priced.id)?.stock)
+
+const sheet = expect('log 8 hours for Sam', await call(admin, 'POST', { action: 'timesheets' }, {
+  staffId: fitter.member.id, date: '2026-10-20', hours: 8, note: 'Fleet job',
+}, mia), 200)
+expect('impossible date refused', await call(admin, 'POST', { action: 'timesheets' }, { staffId: fitter.member.id, date: '2026-02-31', hours: 1 }, auth), 400)
+expect('no pay rate refused', await call(admin, 'POST', { action: 'timesheets' }, { staffId: mgr.member.id, date: '2026-10-20', hours: 1 }, auth), 400)
+const paid = expect('pay Sam (wages expense)', await call(admin, 'PATCH', { action: 'timesheets' }, {
+  action: 'pay', ids: [sheet.entry.id], date: '2026-10-21', method: 'Bank transfer',
+}, mia), 200)
+if (paid?.expense?.amount !== 260 || paid?.expense?.gst !== 0 || !paid?.entries?.[0]?.paid) {
+  opsFailures++; console.log('FAIL wages', JSON.stringify(paid).slice(0, 200))
+}
+expect('paid hours cannot be deleted', await call(admin, 'DELETE', { action: 'timesheets', id: sheet.entry.id }, undefined, auth), 409)
+expect('Sam has hours: delete refused', await call(admin, 'DELETE', { action: 'staff', id: fitter.member.id }, undefined, auth), 409)
+expect('wages expense cannot be edited', await call(admin, 'PATCH', { action: 'ledger' }, { id: paid.expense.id, amount: 1 }, auth), 409)
+const undo = expect('delete the wages expense', await call(admin, 'DELETE', { action: 'ledger', id: paid.expense.id }, undefined, auth), 200)
+const afterUndo = (await call(admin, 'GET', { action: 'staff' }, undefined, auth)).body?.timesheets?.find((t) => t.id === sheet.entry.id)
+if (undo?.unpaid !== 1 || afterUndo?.paid !== false) { opsFailures++; console.log('FAIL wages undo did not un-pay the hours') }
+
+const pay = expect('record a bank transfer', await call(admin, 'POST', { action: 'ledger' }, {
+  type: 'payment', date: '2026-10-21', amount: 550, category: 'Fleet account', method: 'Bank transfer', counterparty: 'ABC Haulage',
+}, mia), 200)
+if (pay?.entry?.gst !== 50) { opsFailures++; console.log('FAIL GST inside $550 should be $50', pay?.entry?.gst) }
+expect('edit it', await call(admin, 'PATCH', { action: 'ledger' }, { id: pay.entry.id, amount: 660 }, mia), 200)
+expect('unknown category refused', await call(admin, 'POST', { action: 'ledger' }, {
+  type: 'expense', date: '2026-10-21', amount: 10, category: 'Lunch', method: 'Cash',
+}, auth), 400)
+expect('negative amount refused', await call(admin, 'POST', { action: 'ledger' }, {
+  type: 'expense', date: '2026-10-21', amount: -5, category: 'Rent', method: 'Cash',
+}, auth), 400)
+expect('record rent', await call(admin, 'POST', { action: 'ledger' }, {
+  type: 'expense', date: '2026-10-01', amount: 2200, category: 'Rent', method: 'Direct debit',
+}, auth), 200)
+expect('balance settings', await call(admin, 'PATCH', { action: 'ledger' }, { settings: { openingBalance: 5000, openingDate: '2026-07-01' } }, auth), 200)
+const ledger = expect('ledger lists everything', await call(admin, 'GET', { action: 'ledger' }, undefined, auth), 200)
+const types = (ledger?.entries ?? []).map((e) => `${e.type}:${e.category}:${e.amount}`).sort().join(', ')
+console.log('     entries:', types, '| opening', ledger?.settings?.openingBalance)
+
+expect('customers', await call(admin, 'GET', { action: 'customers' }, undefined, sam), 200)
+const act = expect('activity log', await call(admin, 'GET', { action: 'activity' }, undefined, auth), 200)
+console.log('     activity entries:', act?.total, '| e.g.', act?.entries?.find((e) => e.action === 'stock.adjust')?.detail)
+if ((act?.entries ?? []).some((e) => /pass-123/.test(e.detail))) { opsFailures++; console.log('FAIL a password reached the activity log') }
+
+expect('deactivate Sam', await call(admin, 'PATCH', { action: 'staff' }, { id: fitter.member.id, active: false }, auth), 200)
+expect('Sam\'s open session ends at once', await call(admin, 'GET', { action: 'inventory' }, undefined, sam), 401)
+expect('Sam can no longer sign in', await call(admin, 'POST', { action: 'login' }, { email: 'sam@example.com', password: 'fitter-pass-123' }), 401)
+expect('demote Mia to staff', await call(admin, 'PATCH', { action: 'staff' }, { id: mgr.member.id, role: 'staff' }, auth), 200)
+expect('Mia\'s old manager session ends', await call(admin, 'GET', { action: 'staff' }, undefined, mia), 401)
+expect('Mia (no hours) can be deleted', await call(admin, 'DELETE', { action: 'staff', id: mgr.member.id }, undefined, auth), 200)
+expect('tampered token refused', await call(admin, 'GET', { action: 'me' }, undefined, bearer(`${samLogin.token.split('.')[0]}x.${samLogin.token.split('.')[1]}`)), 401)
+
+if (opsFailures) {
+  console.error(`\n✗ ${opsFailures} staff / inventory / money check(s) failed`)
+  process.exit(1)
+}
+
 /* ---- storefront endpoints ---- */
 console.log('\n--- storefront endpoints ---')
 const contact = await call(loaded['api/contact.js'], 'POST', {}, {

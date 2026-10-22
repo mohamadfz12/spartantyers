@@ -14,7 +14,7 @@
  * the business actually banked.
  */
 
-import { requireAdmin } from '../auth.js'
+import { authorize } from '../auth.js'
 import { mergeCatalogue } from '../catalogue.js'
 import { fail, methodGuard, ok, round2, withGuard } from '../http.js'
 import { getOverrides, listOrders, storeHealth } from '../store.js'
@@ -24,7 +24,8 @@ const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD ?? 24)
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET'])) return
-  if (!requireAdmin(req, res)) return
+  const actor = await authorize(req, res, 'dashboard')
+  if (!actor) return
 
   res.setHeader('Cache-Control', 'private, no-store')
 

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { ApiError, api } from '@/lib/api'
+import { ApiError, api, type AdminUser } from '@/lib/api'
 
 /* ------------------------------------------------------------------ *
  * Admin session
@@ -29,7 +29,7 @@ export const ADMIN_ENV_VARS = [
     name: 'ADMIN_PASSWORD',
     requirement: 'required',
     detail:
-      'The single password this sign-in form checks. Until it is set every /api/admin/* endpoint answers 503 — the admin surface is unconfigured, never open.',
+      'The owner password: sign in with it and no email. Staff then get their own sign-ins on the Staff page. Until it is set every /api/admin/* endpoint answers 503 — the admin surface is unconfigured, never open.',
   },
   {
     name: 'ADMIN_SESSION_SECRET',
@@ -58,6 +58,12 @@ interface AdminState {
   token: string | null
   /** ISO timestamp from the server. Null when signed out. */
   expiresAt: string | null
+  /**
+   * Who is signed in. Null for a session from before staff accounts existed,
+   * which can only have been the owner. Used to decide which menu items to
+   * show; the API enforces the real permissions either way.
+   */
+  user: AdminUser | null
   /** True while a login request is in flight. */
   signingIn: boolean
   /** Last sign-in or session failure, shown on the login screen. */
@@ -65,7 +71,8 @@ interface AdminState {
   /** True when the API answered 503 — `ADMIN_PASSWORD` is not set. */
   notConfigured: boolean
 
-  login: (password: string) => Promise<boolean>
+  login: (password: string, email?: string) => Promise<boolean>
+  setUser: (user: AdminUser) => void
   logout: (reason?: string) => void
   isAuthenticated: () => boolean
   clearError: () => void
@@ -84,18 +91,20 @@ export const useAdmin = create<AdminState>()(
     (set, get) => ({
       token: null,
       expiresAt: null,
+      user: null,
       signingIn: false,
       error: null,
       notConfigured: false,
 
-      login: async (password) => {
+      login: async (password, email) => {
         set({ signingIn: true, error: null, notConfigured: false })
 
         try {
-          const { token, expiresAt } = await api.admin.login(password)
+          const { token, expiresAt, user } = await api.admin.login(password, email)
           set({
             token,
             expiresAt,
+            user,
             signingIn: false,
             error: null,
             notConfigured: false,
@@ -106,6 +115,7 @@ export const useAdmin = create<AdminState>()(
           set({
             token: null,
             expiresAt: null,
+            user: null,
             signingIn: false,
             // The server writes customer-readable messages ("Incorrect
             // password.", "Admin is not configured…"), so show them as-is.
@@ -119,10 +129,13 @@ export const useAdmin = create<AdminState>()(
         }
       },
 
+      setUser: (user) => set({ user }),
+
       logout: (reason) =>
         set({
           token: null,
           expiresAt: null,
+          user: null,
           signingIn: false,
           error: reason ?? null,
           notConfigured: false,
@@ -141,6 +154,7 @@ export const useAdmin = create<AdminState>()(
       partialize: (state) => ({
         token: state.token,
         expiresAt: state.expiresAt,
+        user: state.user,
       }),
       /**
        * Prune on read. `merge` runs during rehydration, before anything can
@@ -150,12 +164,13 @@ export const useAdmin = create<AdminState>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<AdminState>
         if (!saved.token || isExpired(saved.expiresAt)) {
-          return { ...current, token: null, expiresAt: null }
+          return { ...current, token: null, expiresAt: null, user: null }
         }
         return {
           ...current,
           token: saved.token,
           expiresAt: saved.expiresAt ?? null,
+          user: saved.user ?? null,
         }
       },
     },
@@ -181,7 +196,7 @@ export interface AdminFailure {
   /** HTTP status, or 0 for a network/transport failure. */
   status: number
   message: string
-  /** True when the session was ended by this failure (401/403). */
+  /** True when the session was ended by this failure (401). */
   sessionEnded: boolean
   /** True when the deployment has no `ADMIN_PASSWORD` (503). */
   notConfigured: boolean
@@ -189,9 +204,11 @@ export interface AdminFailure {
 
 /**
  * The single place every admin page funnels an `api.admin.*` rejection
- * through. A 401 or 403 means the token is gone or was never valid, so the
- * only correct response is to end the session and say so once — rather than
- * five pages each inventing their own handling.
+ * through. A 401 means the token is gone or was never valid, so the only
+ * correct response is to end the session and say so once — rather than five
+ * pages each inventing their own handling. A 403 is different: the person is
+ * signed in but their role does not cover this, so the server's own message
+ * is shown and they stay signed in.
  */
 export function handleAdminError(error: unknown): AdminFailure {
   const status = error instanceof ApiError ? error.status : 0
@@ -200,7 +217,7 @@ export function handleAdminError(error: unknown): AdminFailure {
       ? error.message
       : 'Something went wrong. Please try again.'
 
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     useAdmin.getState().logout(SESSION_EXPIRED_MESSAGE)
     return {
       status,
@@ -227,7 +244,11 @@ export interface AdminSession {
   expiresAt: string | null
   /** Milliseconds until the token dies, floored at 0. */
   msRemaining: number
+  /** Who is signed in; a pre-staff-accounts session reads as the owner. */
+  user: AdminUser
 }
+
+const LEGACY_OWNER: AdminUser = { id: 'owner', name: 'Owner', role: 'owner', email: '' }
 
 /**
  * Subscribes to the session and arms a timer that signs the operator out the
@@ -239,6 +260,28 @@ export function useAdminSession(): AdminSession {
   const token = useAdmin((s) => s.token)
   const expiresAt = useAdmin((s) => s.expiresAt)
   const logout = useAdmin((s) => s.logout)
+  const user = useAdmin((s) => s.user)
+  const setUser = useAdmin((s) => s.setUser)
+
+  // Re-read who this is once per session, so a role changed by the owner
+  // shows up in the menu without signing out and back in.
+  useEffect(() => {
+    if (!token) return
+    let active = true
+    api.admin
+      .me(token)
+      .then(({ user: fresh }) => {
+        if (active) setUser(fresh)
+      })
+      .catch((error: unknown) => {
+        if (active && error instanceof ApiError && error.status === 401) {
+          logout(SESSION_EXPIRED_MESSAGE)
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [token, setUser, logout])
 
   useEffect(() => {
     if (!token || !expiresAt) return
@@ -260,5 +303,6 @@ export function useAdminSession(): AdminSession {
     token,
     expiresAt,
     msRemaining: Number.isFinite(remaining) ? Math.max(remaining, 0) : 0,
+    user: user ?? LEGACY_OWNER,
   }
 }

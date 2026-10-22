@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import {
+  Boxes,
   Bot,
+  CreditCard,
   ExternalLink,
+  History,
   LayoutDashboard,
+  Lock,
   LogOut,
   Mail,
   Menu,
@@ -11,18 +15,28 @@ import {
   Receipt,
   ShieldCheck,
   Target,
+  UserCog,
+  Users,
+  Wallet,
 } from 'lucide-react'
 import { Logo, LogoMark } from '@/components/brand/Logo'
 import { Button, Sheet, SheetClose, SheetHeader, SheetTitle } from '@/components/ui'
+import { ROLE_LABELS, can, type Permission } from '@/lib/admin-roles'
 import { cn } from '@/lib/utils'
 import { useAdmin, useAdminSession } from '@/store/admin'
+import Activity from './Activity'
 import AiAssistant from './AiAssistant'
+import Balance from './Balance'
+import Customers from './Customers'
 import Dashboard from './Dashboard'
 import Enquiries from './Enquiries'
+import Inventory from './Inventory'
 import Leads from './Leads'
 import Login from './Login'
 import Orders from './Orders'
+import Payments from './Payments'
 import Products from './Products'
+import Staff from './Staff'
 
 /* ------------------------------------------------------------------ *
  * Admin shell
@@ -47,27 +61,31 @@ interface NavItem {
   icon: typeof LayoutDashboard
   /** Index route — only active on an exact match. */
   end?: boolean
+  /** Shown only to roles that have it (the API enforces it regardless). */
+  permission: Permission
 }
 
 const NAV: NavItem[] = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/admin/products', label: 'Products', icon: Package },
-  { to: '/admin/orders', label: 'Orders', icon: Receipt },
-  { to: '/admin/enquiries', label: 'Enquiries', icon: Mail },
-  { to: '/admin/leads', label: 'Leads', icon: Target },
-  { to: '/admin/ai', label: 'AI assistant', icon: Bot },
+  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, permission: 'dashboard' },
+  { to: '/admin/orders', label: 'Orders', icon: Receipt, permission: 'orders' },
+  { to: '/admin/products', label: 'Products', icon: Package, permission: 'products' },
+  { to: '/admin/inventory', label: 'Inventory', icon: Boxes, permission: 'inventory' },
+  { to: '/admin/customers', label: 'Customers', icon: Users, permission: 'customers' },
+  { to: '/admin/payments', label: 'Payments', icon: CreditCard, permission: 'payments' },
+  { to: '/admin/balance', label: 'Balance', icon: Wallet, permission: 'finance' },
+  { to: '/admin/enquiries', label: 'Enquiries', icon: Mail, permission: 'enquiries' },
+  { to: '/admin/leads', label: 'Leads', icon: Target, permission: 'leads' },
+  { to: '/admin/staff', label: 'Staff', icon: UserCog, permission: 'staff' },
+  { to: '/admin/activity', label: 'Activity log', icon: History, permission: 'activity' },
+  { to: '/admin/ai', label: 'AI assistant', icon: Bot, permission: 'ai' },
 ]
 
-const TITLES: Record<string, string> = {
-  '/admin': 'Dashboard',
-  '/admin/products': 'Products',
-  '/admin/orders': 'Orders',
-  '/admin/enquiries': 'Enquiries',
-  '/admin/ai': 'AI assistant',
-}
+const TITLES: Record<string, string> = Object.fromEntries(
+  NAV.map((item) => [item.to, item.label]),
+)
 
 export default function Admin() {
-  const { authenticated, expiresAt } = useAdminSession()
+  const { authenticated, expiresAt, user } = useAdminSession()
   const logout = useAdmin((s) => s.logout)
   const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -78,6 +96,9 @@ export default function Admin() {
   if (!authenticated) return <Login />
 
   const title = TITLES[location.pathname.replace(/\/+$/, '') || '/admin'] ?? 'Admin'
+  const nav = NAV.filter((item) => can(user.role, item.permission))
+  const gate = (permission: Permission, page: React.ReactNode) =>
+    can(user.role, permission) ? page : <NoAccess />
 
   return (
     <div className="bg-muted/20">
@@ -104,7 +125,7 @@ export default function Admin() {
             <Logo compact className="hidden text-charcoal-foreground lg:flex" />
           </Link>
 
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <SidebarLink key={item.to} item={item} />
           ))}
 
@@ -139,7 +160,7 @@ export default function Admin() {
             <p className="hidden items-center gap-1.5 text-xs text-muted-foreground lg:flex">
               <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5 text-primary" />
               <span>
-                Signed in
+                {user.name === ROLE_LABELS[user.role] ? user.name : `${user.name} · ${ROLE_LABELS[user.role]}`}
                 {expiresAt ? (
                   <>
                     {' '}
@@ -167,12 +188,18 @@ export default function Admin() {
 
           <div className="min-w-0 flex-1 px-4 py-6 md:px-6 md:py-8">
             <Routes>
-              <Route index element={<Dashboard />} />
-              <Route path="products" element={<Products />} />
-              <Route path="orders" element={<Orders />} />
-              <Route path="enquiries" element={<Enquiries />} />
-              <Route path="leads" element={<Leads />} />
-              <Route path="ai" element={<AiAssistant />} />
+              <Route index element={gate('dashboard', <Dashboard />)} />
+              <Route path="products" element={gate('products', <Products />)} />
+              <Route path="orders" element={gate('orders', <Orders />)} />
+              <Route path="inventory" element={gate('inventory', <Inventory />)} />
+              <Route path="customers" element={gate('customers', <Customers />)} />
+              <Route path="payments" element={gate('payments', <Payments />)} />
+              <Route path="balance" element={gate('finance', <Balance />)} />
+              <Route path="enquiries" element={gate('enquiries', <Enquiries />)} />
+              <Route path="leads" element={gate('leads', <Leads />)} />
+              <Route path="staff" element={gate('staff', <Staff />)} />
+              <Route path="activity" element={gate('activity', <Activity />)} />
+              <Route path="ai" element={gate('ai', <AiAssistant />)} />
               {/* Anything else inside /admin belongs at the dashboard. */}
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Routes>
@@ -191,7 +218,7 @@ export default function Admin() {
           aria-label="Admin sections"
           className="flex flex-1 flex-col gap-1 bg-charcoal p-3 text-charcoal-foreground"
         >
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <SidebarLink key={item.to} item={item} expanded />
           ))}
 
@@ -221,6 +248,21 @@ export default function Admin() {
 }
 
 /* ------------------------------------------------------------------ */
+
+function NoAccess() {
+  return (
+    <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-6 py-12 text-center">
+      <Lock aria-hidden="true" className="h-8 w-8 text-muted-foreground" />
+      <p className="font-heading text-sm font-bold uppercase tracking-brand">Not part of your role</p>
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        Your account can&apos;t open this page. Ask the owner if you need access.
+      </p>
+      <Button variant="outline" size="sm" asChild>
+        <Link to="/admin">Back to the dashboard</Link>
+      </Button>
+    </div>
+  )
+}
 
 function SidebarLink({ item, expanded = false }: { item: NavItem; expanded?: boolean }) {
   const Icon = item.icon

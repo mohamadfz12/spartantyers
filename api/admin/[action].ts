@@ -20,6 +20,13 @@
  *   GET    /api/admin/ai-settings   PATCH /api/admin/ai-settings
  *   GET    /api/admin/ai-conversations
  *   GET    /api/admin/ai-conversation
+ *   GET    /api/admin/me
+ *   GET    /api/admin/inventory   POST /api/admin/inventory
+ *   GET    /api/admin/staff       POST | PATCH | DELETE /api/admin/staff
+ *          /api/admin/timesheets  POST | PATCH | DELETE
+ *   GET    /api/admin/ledger      POST | PATCH | DELETE /api/admin/ledger
+ *   GET    /api/admin/customers
+ *   GET    /api/admin/activity
  */
 
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
@@ -34,6 +41,13 @@ import aiStatus from '../_lib/handlers/admin-ai-status.js'
 import aiSettings from '../_lib/handlers/admin-ai-settings.js'
 import aiConversations from '../_lib/handlers/admin-ai-conversations.js'
 import aiConversation from '../_lib/handlers/admin-ai-conversation.js'
+import me from '../_lib/handlers/admin-me.js'
+import inventory from '../_lib/handlers/admin-inventory.js'
+import staff from '../_lib/handlers/admin-staff.js'
+import timesheets from '../_lib/handlers/admin-timesheets.js'
+import ledger from '../_lib/handlers/admin-ledger.js'
+import customers from '../_lib/handlers/admin-customers.js'
+import activity from '../_lib/handlers/admin-activity.js'
 
 type Handler = (req: ApiRequest, res: ApiResponse) => Promise<void> | void
 
@@ -48,6 +62,13 @@ const ROUTES: Record<string, Handler> = {
   'ai-settings': aiSettings,
   'ai-conversations': aiConversations,
   'ai-conversation': aiConversation,
+  me,
+  inventory,
+  staff,
+  timesheets,
+  ledger,
+  customers,
+  activity,
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {

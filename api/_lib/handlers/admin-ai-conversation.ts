@@ -6,7 +6,7 @@
  * did with each), the calls (start, end, seconds, why it ended) and the linked order reference.
  */
 
-import { requireAdmin } from '../auth.js'
+import { authorize } from '../auth.js'
 import { fail, methodGuard, ok, queryParam, withGuard } from '../http.js'
 import { AiDbUnavailable } from '../ai/db.js'
 import { getConversation } from '../ai/admin.js'
@@ -14,7 +14,8 @@ import { isConversationId } from '../../../src/lib/ai/protocol.js'
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET'])) return
-  if (!requireAdmin(req, res)) return
+  const actor = await authorize(req, res, 'ai')
+  if (!actor) return
 
   res.setHeader('Cache-Control', 'private, no-store')
 

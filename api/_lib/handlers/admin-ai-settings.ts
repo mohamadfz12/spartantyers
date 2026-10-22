@@ -8,7 +8,7 @@
  * The limits are validated as in `saveAiSettings` (a number from 0 to 1000, rounded to cents).
  */
 
-import { requireAdmin } from '../auth.js'
+import { authorize } from '../auth.js'
 import { fail, methodGuard, ok, readBody, withGuard } from '../http.js'
 import { AiDbUnavailable } from '../ai/db.js'
 import { aiDisabledByEnv, AiSettingsError, getStoredAiSettings, saveAiSettings, type AiSettings } from '../ai/settings.js'
@@ -19,7 +19,8 @@ const NOT_CONNECTED = 'The AI database is not connected, so these settings canno
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET', 'PATCH'])) return
-  if (!requireAdmin(req, res)) return
+  const actor = await authorize(req, res, 'ai')
+  if (!actor) return
 
   res.setHeader('Cache-Control', 'private, no-store')
 

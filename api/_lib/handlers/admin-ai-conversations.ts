@@ -7,7 +7,7 @@
  * person on the sales team). `q` searches what was said. No address or hash is ever returned.
  */
 
-import { requireAdmin } from '../auth.js'
+import { authorize } from '../auth.js'
 import { fail, methodGuard, ok, queryParam, withGuard } from '../http.js'
 import { AiDbUnavailable } from '../ai/db.js'
 import { isConversationFilter, listConversations } from '../ai/admin.js'
@@ -16,7 +16,8 @@ const Q_MAX = 100
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET'])) return
-  if (!requireAdmin(req, res)) return
+  const actor = await authorize(req, res, 'ai')
+  if (!actor) return
 
   res.setHeader('Cache-Control', 'private, no-store')
 

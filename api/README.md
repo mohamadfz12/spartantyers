@@ -143,7 +143,7 @@ successfully and then fail at the deploy step. The whole AI is one function,
 | `store.ts` | Orders / enquiries / subscribers / overrides. Vercel KV over REST when configured, else a dev-only `globalThis` cache. |
 | `pricing.ts` | Authoritative order total. Mirrors `cartTotals()` in `src/store/cart.ts`. |
 | `promos.ts` | Promo table from `PROMO_CODES` or built-ins; `resolvePromo(code, tyreCount)`. |
-| `auth.ts` | Timing-safe password check, stateless 12-hour HMAC tokens, `requireAdmin` gate. |
+| `auth.ts` | Owner password and per-staff scrypt passwords, stateless 12-hour HMAC tokens, the `authorize(req, res, permission)` role gate. |
 | `square.ts` | `POST /v2/payments` over `fetch`, `Square-Version: 2024-10-17`; `afterpayEnabled()`. |
 | `ai/` | The AI assistant: `engine.ts` (a chat turn), `tools.ts`, `rules.ts` (its instructions), `gateway.ts` (the model), `spend.ts` (limits), `voice.ts` and `voice-openai.ts` (calls), `admin.ts` (what staff read), `db.ts` (Postgres, or PGlite locally), `settings.ts`, `retention.ts`, `orders.ts`, `status-cache.ts`, `util.ts`. |
 | `ids.ts` | `crypto`-backed order ids and human-readable `SPT-XXXX-XXXX` references. |

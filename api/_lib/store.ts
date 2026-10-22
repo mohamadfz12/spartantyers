@@ -1,5 +1,6 @@
 /**
- * Persistence for orders, enquiries, subscribers and product overrides.
+ * Persistence for orders, enquiries, subscribers, product overrides, leads,
+ * staff, timesheets, stock movements, the money ledger and the activity log.
  *
  * THREE BACKENDS, CHOSEN AT RUNTIME, ONE SHAPE
  *
@@ -152,6 +153,12 @@ const KEY_ENQUIRIES = 'spartan:enquiries'
 const KEY_SUBSCRIBERS = 'spartan:subscribers'
 const KEY_OVERRIDES = 'spartan:overrides'
 const KEY_SELFTEST = 'spartan:selftest'
+const KEY_STAFF = 'spartan:staff'
+const KEY_TIMESHEETS = 'spartan:timesheets'
+const KEY_STOCK_SETTINGS = 'spartan:stock-settings'
+const KEY_STOCK_MOVES = 'spartan:stock-moves'
+const KEY_LEDGER = 'spartan:ledger'
+const KEY_AUDIT = 'spartan:audit'
 
 /* ------------------------------------------------------------------ *
  * Backend selection
@@ -618,4 +625,284 @@ export async function setLeadStatus(
 /** Small bookkeeping values, e.g. when the leads were last imported. */
 export async function getMeta<T>(field: string): Promise<T | null> {
   return hashGet<T>(KEY_META, field)
+}
+
+/* ------------------------------------------------------------------ *
+ * Staff accounts
+ * ------------------------------------------------------------------ */
+
+export type StaffRoleValue = 'owner' | 'manager' | 'staff'
+
+export interface StoredStaff {
+  id: string
+  name: string
+  /** Lower-cased; the sign-in name. Unique among staff. */
+  email: string
+  phone: string
+  role: StaffRoleValue
+  /** Job title, e.g. "Tyre fitter" — free text, for people, not permissions. */
+  position: string
+  /** Dollars per hour, used to price timesheets. Null when not paid hourly. */
+  payRate: number | null
+  /** YYYY-MM-DD, or '' when unknown. */
+  startDate: string
+  notes: string
+  active: boolean
+  /** scrypt hash (see auth.ts). Absent for people who never sign in, e.g. a fitter on the floor. */
+  passwordHash?: string
+  /**
+   * Stamped into every token issued to this person. Bumped on a password
+   * change, a role change or deactivation, which ends every session they hold.
+   */
+  tokenVersion: number
+  createdAt: string
+  updatedAt: string
+}
+
+export async function listStaff(): Promise<StoredStaff[]> {
+  return Object.values(await hashAll<StoredStaff>(KEY_STAFF)).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )
+}
+
+export async function getStaff(id: string): Promise<StoredStaff | null> {
+  if (!id) return null
+  return hashGet<StoredStaff>(KEY_STAFF, id)
+}
+
+export async function findStaffByEmail(email: string): Promise<StoredStaff | null> {
+  const needle = email.trim().toLowerCase()
+  if (!needle) return null
+  return (await listStaff()).find((member) => member.email === needle) ?? null
+}
+
+export async function saveStaff(member: StoredStaff): Promise<StoredStaff> {
+  await hashSet(KEY_STAFF, member.id, member)
+  return member
+}
+
+export async function deleteStaff(id: string): Promise<void> {
+  await hashDelete(KEY_STAFF, id)
+}
+
+/* ------------------------------------------------------------------ *
+ * Timesheets (hours worked, priced at the rate on the day)
+ * ------------------------------------------------------------------ */
+
+export interface StoredTimesheet {
+  id: string
+  staffId: string
+  /** YYYY-MM-DD */
+  date: string
+  hours: number
+  /** The pay rate when the hours were logged, so a later pay rise never reprices old weeks. */
+  rate: number
+  note: string
+  paid: boolean
+  paidAt?: string
+  /** The wages expense the payment was recorded as. */
+  expenseId?: string
+  createdAt: string
+  createdBy: string
+}
+
+export async function listTimesheets(): Promise<StoredTimesheet[]> {
+  return Object.values(await hashAll<StoredTimesheet>(KEY_TIMESHEETS)).sort(
+    (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
+  )
+}
+
+export async function getTimesheet(id: string): Promise<StoredTimesheet | null> {
+  if (!id) return null
+  return hashGet<StoredTimesheet>(KEY_TIMESHEETS, id)
+}
+
+export async function saveTimesheet(entry: StoredTimesheet): Promise<StoredTimesheet> {
+  await hashSet(KEY_TIMESHEETS, entry.id, entry)
+  return entry
+}
+
+export async function deleteTimesheet(id: string): Promise<void> {
+  await hashDelete(KEY_TIMESHEETS, id)
+}
+
+/* ------------------------------------------------------------------ *
+ * Inventory: per-product stock settings and the movement log
+ *
+ * The on-hand count itself stays in the product override (`stock`), because
+ * that is what the storefront and checkout already read. These records add
+ * what a stockroom needs on top: reorder points, cost, bin location, supplier,
+ * and a history of every change with who made it and why.
+ * ------------------------------------------------------------------ */
+
+export interface StoredStockSettings {
+  /** Alert when stock is at or below this. Null uses the shop-wide default. */
+  reorderLevel: number | null
+  /** Average cost per tyre, inc. GST. Null when never entered. */
+  costPrice: number | null
+  location: string
+  supplier: string
+  updatedAt: string
+}
+
+export type StockMoveType = 'receive' | 'adjust' | 'sale' | 'count'
+
+export interface StoredStockMove {
+  id: string
+  productId: string
+  sku: string
+  type: StockMoveType
+  /** Signed change: +4 received, -2 sold. */
+  change: number
+  before: number
+  after: number
+  reason: string
+  note: string
+  unitCost?: number
+  supplier?: string
+  /** Invoice number, order reference, etc. */
+  reference?: string
+  at: string
+  by: string
+}
+
+export async function getStockSettings(): Promise<Record<string, StoredStockSettings>> {
+  return hashAll<StoredStockSettings>(KEY_STOCK_SETTINGS)
+}
+
+export async function setStockSettings(
+  productId: string,
+  patch: Partial<Omit<StoredStockSettings, 'updatedAt'>>,
+): Promise<StoredStockSettings> {
+  const current = (await hashGet<StoredStockSettings>(KEY_STOCK_SETTINGS, productId)) ?? {
+    reorderLevel: null,
+    costPrice: null,
+    location: '',
+    supplier: '',
+    updatedAt: '',
+  }
+  const next: StoredStockSettings = { ...current, ...patch, updatedAt: new Date().toISOString() }
+  await hashSet(KEY_STOCK_SETTINGS, productId, next)
+  return next
+}
+
+export async function listStockMoves(): Promise<StoredStockMove[]> {
+  return Object.values(await hashAll<StoredStockMove>(KEY_STOCK_MOVES)).sort((a, b) =>
+    b.at.localeCompare(a.at),
+  )
+}
+
+export async function saveStockMove(move: StoredStockMove): Promise<StoredStockMove> {
+  await hashSet(KEY_STOCK_MOVES, move.id, move)
+  return move
+}
+
+/* ------------------------------------------------------------------ *
+ * Ledger: money in and out that did not come through the online checkout
+ *
+ * Card payments taken by the website are NOT copied in here; they are read
+ * straight from the orders, so the two can never disagree. This holds
+ * everything else: bank transfers, cash, refunds and every expense.
+ * ------------------------------------------------------------------ */
+
+export type LedgerType = 'payment' | 'refund' | 'expense'
+
+export interface StoredLedgerEntry {
+  id: string
+  type: LedgerType
+  /** YYYY-MM-DD, the day the money moved. */
+  date: string
+  /** Always positive, GST-inclusive. `type` gives the direction. */
+  amount: number
+  /** The GST inside `amount` (0 for GST-free). */
+  gst: number
+  category: string
+  method: string
+  description: string
+  /** Order reference, invoice or receipt number. */
+  reference: string
+  /** Customer, supplier or staff member. */
+  counterparty: string
+  orderId?: string
+  /** What created it: typed in, a stock delivery, or a wages run. */
+  source: 'manual' | 'stock' | 'wages'
+  createdAt: string
+  createdBy: string
+}
+
+export async function listLedger(): Promise<StoredLedgerEntry[]> {
+  return Object.values(await hashAll<StoredLedgerEntry>(KEY_LEDGER)).sort(
+    (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
+  )
+}
+
+export async function getLedgerEntry(id: string): Promise<StoredLedgerEntry | null> {
+  if (!id) return null
+  return hashGet<StoredLedgerEntry>(KEY_LEDGER, id)
+}
+
+export async function saveLedgerEntry(entry: StoredLedgerEntry): Promise<StoredLedgerEntry> {
+  await hashSet(KEY_LEDGER, entry.id, entry)
+  return entry
+}
+
+export async function deleteLedgerEntry(id: string): Promise<void> {
+  await hashDelete(KEY_LEDGER, id)
+}
+
+export interface StoredFinanceSettings {
+  /** Money in the business account on `openingDate`, before anything in the ledger. */
+  openingBalance: number
+  /** YYYY-MM-DD. Only money from this day on counts toward the running balance. */
+  openingDate: string
+  gstRegistered: boolean
+  updatedAt: string
+}
+
+export async function getFinanceSettings(): Promise<StoredFinanceSettings> {
+  return (
+    (await hashGet<StoredFinanceSettings>(KEY_META, 'finance')) ?? {
+      openingBalance: 0,
+      openingDate: '',
+      gstRegistered: true,
+      updatedAt: '',
+    }
+  )
+}
+
+export async function setFinanceSettings(
+  patch: Partial<Omit<StoredFinanceSettings, 'updatedAt'>>,
+): Promise<StoredFinanceSettings> {
+  const next: StoredFinanceSettings = {
+    ...(await getFinanceSettings()),
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  }
+  await hashSet(KEY_META, 'finance', next)
+  return next
+}
+
+/* ------------------------------------------------------------------ *
+ * Activity log — who changed what, newest first
+ * ------------------------------------------------------------------ */
+
+export interface StoredAuditEntry {
+  id: string
+  at: string
+  actorId: string
+  actorName: string
+  /** Short verb, e.g. "stock.receive", "staff.create". */
+  action: string
+  /** One human sentence. Never a password, token or card detail. */
+  detail: string
+}
+
+export async function listAudit(): Promise<StoredAuditEntry[]> {
+  return Object.values(await hashAll<StoredAuditEntry>(KEY_AUDIT)).sort((a, b) =>
+    b.at.localeCompare(a.at),
+  )
+}
+
+export async function saveAudit(entry: StoredAuditEntry): Promise<void> {
+  await hashSet(KEY_AUDIT, entry.id, entry)
 }

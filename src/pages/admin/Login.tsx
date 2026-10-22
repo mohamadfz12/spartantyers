@@ -10,7 +10,8 @@ import { useAdmin } from '@/store/admin'
 /* ------------------------------------------------------------------ *
  * Admin sign-in
  *
- * One field, because the API takes one field. The server owns the
+ * Staff sign in with their email and own password; the owner can also
+ * leave the email empty and use the owner password. The server owns the
  * messaging — "Incorrect password." and the 503 setup text are written
  * there and shown verbatim, so there is never a second, drifting copy
  * of the truth in the client.
@@ -22,6 +23,7 @@ export default function Login() {
   const error = useAdmin((s) => s.error)
   const notConfigured = useAdmin((s) => s.notConfigured)
 
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
 
@@ -29,12 +31,12 @@ export default function Login() {
     event.preventDefault()
 
     if (!password) {
-      setLocalError('Enter the admin password.')
+      setLocalError(email.trim() ? 'Enter your password.' : 'Enter the owner password, or your email and password.')
       return
     }
 
     setLocalError(null)
-    const ok = await login(password)
+    const ok = await login(password, email.trim() || undefined)
     // Never keep a rejected secret in a controlled input.
     if (!ok) setPassword('')
   }
@@ -69,7 +71,27 @@ export default function Login() {
 
               <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-5" noValidate>
                 <Field
-                  label="Admin password"
+                  label="Email"
+                  htmlFor="admin-email"
+                  hint="Owner: leave this empty and use the owner password."
+                >
+                  <Input
+                    id="admin-email"
+                    name="email"
+                    type="email"
+                    autoComplete="username"
+                    autoFocus
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value)
+                      if (localError) setLocalError(null)
+                    }}
+                    placeholder="you@spartantrucktyres.com.au"
+                  />
+                </Field>
+
+                <Field
+                  label="Password"
                   htmlFor="admin-password"
                   error={message ?? undefined}
                   required
@@ -79,7 +101,6 @@ export default function Login() {
                     name="password"
                     type="password"
                     autoComplete="current-password"
-                    autoFocus
                     value={password}
                     onChange={(event) => {
                       setPassword(event.target.value)

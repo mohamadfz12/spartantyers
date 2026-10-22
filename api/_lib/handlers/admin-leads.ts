@@ -13,7 +13,7 @@
  * by each lead's stable key, so re-importing a bigger list keeps every note.
  */
 
-import { requireAdmin } from '../auth.js'
+import { authorize } from '../auth.js'
 import { fail, methodGuard, ok, readBody, withGuard } from '../http.js'
 import {
   LEAD_STATUSES,
@@ -29,7 +29,8 @@ const MAX_NOTES = 4000
 
 export default withGuard(async (req, res) => {
   if (!methodGuard(req, res, ['GET', 'PATCH'])) return
-  if (!requireAdmin(req, res)) return
+  const actor = await authorize(req, res, 'leads')
+  if (!actor) return
 
   res.setHeader('Cache-Control', 'private, no-store')
 
