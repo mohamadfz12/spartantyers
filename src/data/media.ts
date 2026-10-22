@@ -38,21 +38,20 @@ export const logos = {
 } as const
 
 /**
- * Manufacturer wordmarks, as published on the existing Spartan Tyres site.
- * Only the two stocked brands are shown as artwork by default; the rest fall
- * back to typographic marks (see `src/components/brand/BrandMark.tsx`), which
- * keeps third-party trademarks off pages that merely list what we can source.
+ * Manufacturer logos, as published on the existing Spartan Tyres site (dark
+ * artwork on transparent, trimmed to the mark). `BrandMark` shows them on a
+ * white plate; a brand missing here gets a typographic mark instead.
  */
 export const brandLogos: Record<string, Media> = {
   Greforce: img('brand-greforce.webp', 'Greforce', 1200, 224),
   Lionshead: img('brand-lionshead.webp', 'Lionshead', 933, 511),
   Bridgestone: img('brand-bridgestone.webp', 'Bridgestone', 400, 254),
   Michelin: img('brand-michelin.webp', 'Michelin', 374, 113),
-  Goodyear: img('brand-goodyear.webp', 'Goodyear', 1200, 733),
+  Goodyear: img('brand-goodyear.webp', 'Goodyear', 1150, 215),
   Continental: img('brand-continental.webp', 'Continental', 400, 73),
   Pirelli: img('brand-pirelli.webp', 'Pirelli', 663, 199),
   Dunlop: img('brand-dunlop.webp', 'Dunlop', 400, 60),
-  Hankook: img('brand-hankook.webp', 'Hankook', 800, 141),
+  Hankook: img('brand-hankook.webp', 'Hankook', 799, 107),
   Yokohama: img('brand-yokohama.webp', 'Yokohama', 310, 45),
 }
 

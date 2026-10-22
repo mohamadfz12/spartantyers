@@ -280,7 +280,7 @@ export default function Terms() {
                 <PolicyList
                   items={[
                     'Specifications, images and diagrams on this site are provided to help you identify a fitment. Tread diagrams and 3D models are representations generated from manufacturer specification data, not photographs of the individual tyre you will receive.',
-                    'Manufacturer names and trade marks referred to on this site belong to their respective owners and are used only to identify products. Brand names are rendered typographically rather than reproducing third-party logos.',
+                    'Manufacturer names and trade marks referred to on this site belong to their respective owners and are used only to identify products. Their logos appear only to show which brands we stock or can source; no affiliation with or endorsement by those manufacturers is implied.',
                     'Content on this site is ours or used with permission, and may not be reproduced commercially without our consent.',
                     'We aim to keep stock, pricing and specification data accurate, and it is reviewed against the manufacturer data sheets, but we do not warrant that it is free of error. Where an error affects your order we will contact you before dispatch.',
                   ]}

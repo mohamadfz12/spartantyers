@@ -2,12 +2,12 @@ import { cn } from '@/lib/utils'
 import { brandLogos } from '@/data/media'
 
 /**
- * Typographic marks for every tyre brand on the site.
+ * Marks for every tyre brand on the site.
  *
- * We cannot ship other manufacturers' trademarked logos, so each brand gets a
- * distinct, honest typographic treatment instead — its own colour, weight,
- * tracking and accent rule. The result is a brand wall that reads as designed
- * rather than as a row of broken images, and it costs no network requests.
+ * A brand with a logo in `brandLogos` shows it on a white plate of a fixed size
+ * per `size`, so a row of logos lines up and dark artwork stays legible on the
+ * dark theme. Any other brand gets a typographic treatment instead — its own
+ * colour, weight, tracking and accent rule.
  */
 
 export interface BrandStyle {
@@ -111,15 +111,6 @@ export function brandStyle(name: string): BrandStyle {
   return BRAND_STYLES[name] ?? FALLBACK
 }
 
-/**
- * Brands whose supplied artwork we render. These are the two lines actually
- * held in the warehouse; every other manufacturer we can source falls back to
- * the typographic treatment below, which keeps third-party trademarks off
- * pages that merely list what is available to order. Add a name here to show
- * its artwork instead.
- */
-const ARTWORK_BRANDS = new Set(['Greforce', 'Lionshead'])
-
 export function BrandMark({
   name,
   className,
@@ -130,29 +121,32 @@ export function BrandMark({
   size?: 'sm' | 'md' | 'lg'
 }) {
   const style = brandStyle(name)
-  const artwork = ARTWORK_BRANDS.has(name) ? brandLogos[name] : undefined
+  const artwork = brandLogos[name]
 
   const textSize =
     size === 'lg' ? 'text-2xl md:text-3xl' : size === 'sm' ? 'text-sm' : 'text-lg'
 
   if (artwork) {
-    const height = size === 'lg' ? 'h-12' : size === 'sm' ? 'h-6' : 'h-9'
+    const plate = size === 'lg' ? 'h-16 w-44' : size === 'sm' ? 'h-10 w-28' : 'h-12 w-32'
     return (
       <span className={cn('flex items-center justify-center', className)}>
-        <img
-          src={artwork.src}
-          alt={name}
-          width={artwork.width}
-          height={artwork.height}
-          loading="lazy"
-          decoding="async"
-          // The supplied artwork is light-on-dark, so it needs a dark plate to
-          // stay legible in both colour schemes.
+        {/* The artwork is dark on transparent, so it sits on a white plate. */}
+        <span
           className={cn(
-            'w-auto rounded-md bg-[#111113] px-3 py-1.5 object-contain',
-            height,
+            'flex items-center justify-center rounded-md bg-white px-2.5 py-1.5 ring-1 ring-border',
+            plate,
           )}
-        />
+        >
+          <img
+            src={artwork.src}
+            alt={name}
+            width={artwork.width}
+            height={artwork.height}
+            loading="lazy"
+            decoding="async"
+            className="h-auto max-h-full w-auto max-w-full object-contain"
+          />
+        </span>
       </span>
     )
   }
