@@ -310,11 +310,20 @@ export default function Leads() {
         ) : null}
 
         {!query.loading && leads.length ? (
-          <RegionGrid
-            leads={leads}
-            filters={filters}
-            onPick={(category, region) => update({ category, region, area: '', city: '' })}
-          />
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+            <RegionMap
+              leads={leads}
+              filters={filters}
+              onPick={(region) =>
+                update({ region: filters.region === region ? 'all' : region, area: '', city: '' })
+              }
+            />
+            <RegionGrid
+              leads={leads}
+              filters={filters}
+              onPick={(category, region) => update({ category, region, area: '', city: '' })}
+            />
+          </div>
         ) : null}
 
         <AdminPanel
@@ -487,6 +496,125 @@ function Summary({
 /* ------------------------------------------------------------------ *
  * Region × category grid — click a cell to filter
  * ------------------------------------------------------------------ */
+
+/* NSW, simplified (longitude, latitude), and the four lead regions drawn over it. */
+const NSW_OUTLINE: Array<[number, number]> = [
+  [141, -29], [141, -34], [142.4, -34.8], [143.5, -35.4], [144.8, -36.1], [146.9, -36.1], [148.2, -36.8],
+  [149.98, -37.5], [150.2, -36.3], [150.5, -35.3], [150.9, -34.4], [151.3, -33.9], [151.6, -33.0],
+  [152.2, -32.7], [152.9, -31.4], [153.1, -30.3], [153.6, -28.6], [153.55, -28.2], [152.0, -28.5],
+  [151.0, -28.9], [149.5, -28.6], [148.9, -29.0], [141, -29],
+]
+const REGION_ZONES: Record<LeadRegion, Array<[number, number]>> = {
+  'N NSW': [[148.3, -27.5], [154.5, -27.5], [154.5, -33.25], [151.25, -33.4], [149.6, -32.9], [148.3, -32.3]],
+  'W NSW': [
+    [140, -27.5], [148.3, -27.5], [148.3, -32.3], [149.6, -32.9], [150.5, -33.5], [150.45, -34.15],
+    [148.5, -34.0], [145, -33.85], [140, -33.85],
+  ],
+  'S NSW': [[140, -33.85], [145, -33.85], [148.5, -34.0], [150.45, -34.15], [151.6, -34.2], [152, -38], [140, -38]],
+  Metro: [[150.5, -33.5], [151.25, -33.4], [151.6, -33.55], [151.6, -34.2], [150.45, -34.15]],
+}
+const ZONE_LABEL_AT: Record<LeadRegion, [number, number]> = {
+  'N NSW': [151.2, -30.3],
+  'W NSW': [145.2, -31.4],
+  'S NSW': [146.6, -35.1],
+  Metro: [150.95, -33.83],
+}
+const MAP_TOWNS: Array<[string, number, number]> = [
+  ['Newcastle', 151.78, -32.93], ['Tamworth', 150.93, -31.09], ['Coffs Hbr', 153.11, -30.3],
+  ['Dubbo', 148.6, -32.25], ['Orange', 149.1, -33.28], ['Broken Hill', 141.47, -31.95],
+  ['Wagga', 147.37, -35.11], ['Albury', 146.92, -36.08], ['Wollongong', 150.89, -34.42],
+  ['Moree', 149.84, -29.47], ['Griffith', 146.05, -34.29],
+]
+const toMap = (lon: number, lat: number): [number, number] => [(lon - 140.6) * 38, (-lat - 27.8) * 44]
+const points = (ring: Array<[number, number]>) =>
+  ring.map(([lon, lat]) => toMap(lon, lat).map((n) => n.toFixed(1)).join(',')).join(' ')
+
+function RegionMap({
+  leads,
+  filters,
+  onPick,
+}: {
+  leads: Lead[]
+  filters: Filters
+  onPick: (region: LeadRegion) => void
+}) {
+  const counts = useMemo(() => {
+    const c = Object.fromEntries(REGIONS.map((r) => [r, 0])) as Record<LeadRegion, number>
+    for (const l of leads) if (filters.category === 'all' || l.category === filters.category) c[l.region] += 1
+    return c
+  }, [leads, filters.category])
+  const max = Math.max(1, ...Object.values(counts))
+
+  return (
+    <AdminPanel title="Map" description="Darker regions hold more leads. Click a region to show only its leads.">
+      <svg viewBox="0 0 520 440" role="img" aria-label="Leads by NSW region" className="h-auto w-full">
+        <defs>
+          <clipPath id="leads-nsw">
+            <polygon points={points(NSW_OUTLINE)} />
+          </clipPath>
+        </defs>
+        <g clipPath="url(#leads-nsw)">
+          {(['W NSW', 'N NSW', 'S NSW', 'Metro'] as LeadRegion[]).map((region) => {
+            const share = counts[region] / max
+            const active = filters.region === region
+            return (
+              <polygon
+                key={region}
+                points={points(REGION_ZONES[region])}
+                onClick={() => onPick(region)}
+                className="cursor-pointer stroke-card transition-[fill] hover:brightness-110"
+                strokeWidth={2}
+                fill={
+                  active
+                    ? 'hsl(var(--primary))'
+                    : `color-mix(in srgb, hsl(var(--primary)) ${counts[region] ? Math.round(15 + share * 55) : 0}%, hsl(var(--muted)))`
+                }
+              >
+                <title>
+                  {REGION_LABEL[region]}: {formatNumber(counts[region])} leads
+                </title>
+              </polygon>
+            )
+          })}
+        </g>
+        <polygon points={points(NSW_OUTLINE)} fill="none" className="stroke-muted-foreground" strokeWidth={1} opacity={0.5} />
+        {MAP_TOWNS.map(([name, lon, lat]) => {
+          const [x, y] = toMap(lon, lat)
+          return (
+            <g key={name} className="pointer-events-none">
+              <circle cx={x} cy={y} r={2} className="fill-muted-foreground" />
+              <text x={x + 4} y={y + 3} className="fill-muted-foreground text-[9px]">
+                {name}
+              </text>
+            </g>
+          )
+        })}
+        {REGIONS.map((region) => {
+          const [x, y] = toMap(...ZONE_LABEL_AT[region])
+          const label = (lx: number, ly: number, size: number) => (
+            <g className="pointer-events-none font-heading font-bold" textAnchor="middle">
+              <text x={lx} y={ly} className="fill-foreground text-[15px]">
+                {region}
+              </text>
+              <text x={lx} y={ly + 26} className="fill-foreground" style={{ fontSize: size }}>
+                {formatNumber(counts[region])}
+              </text>
+            </g>
+          )
+          if (region === 'Metro') {
+            return (
+              <g key={region}>
+                <line x1={x + 8} y1={y} x2={x + 42} y2={y + 10} className="stroke-muted-foreground" />
+                {label(x + 68, y + 6, 22)}
+              </g>
+            )
+          }
+          return <g key={region}>{label(x, y - 10, 26)}</g>
+        })}
+      </svg>
+    </AdminPanel>
+  )
+}
 
 function RegionGrid({
   leads,
