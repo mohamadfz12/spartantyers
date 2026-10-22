@@ -107,9 +107,6 @@ export default withGuard(async (req, res) => {
   if (voiceMode === 'real' && fewest !== null && effective.dailyUsd < fewest) {
     warnings.push(`Voice calls are switched on but cannot start: the daily limit in force is ${usd(effective.dailyUsd)}, and a call needs a daily limit of at least ${usd(fewest)}. Raise the daily limit${dailyCap !== null && dailyCap < fewest ? ' (and the AI_DAILY_LIMIT_USD cap on the server)' : ''}.`)
   }
-  if (voiceMode === 'real' && fittedSeconds < configuredSeconds) {
-    warnings.push(`Calls are shortened to ${Math.floor(fittedSeconds / 60)} min ${fittedSeconds % 60} s (set to ${Math.round(configuredSeconds / 60)} min) to fit the server's time limit. Ten-minute calls need Vercel Pro with a longer maximum duration.`)
-  }
 
   ok(res, {
     chat: {
