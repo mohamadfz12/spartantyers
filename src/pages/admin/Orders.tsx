@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
   ChevronRight,
@@ -115,7 +116,9 @@ export default function Orders() {
   const query = useAdminQuery('admin-orders', (token) => api.admin.orders(token))
   const isMobile = useIsMobile()
 
-  const [search, setSearch] = useState('')
+  // The AI assistant's conversations link here with the order's reference.
+  const [params] = useSearchParams()
+  const [search, setSearch] = useState(() => (params.get('search') ?? '').slice(0, 100))
   const [statusFilter, setStatusFilter] = useState<'all' | Order['status']>('all')
   const [sort, setSort] = useState<SortState<SortKey>>({ key: 'date', direction: 'desc' })
   const [selectedId, setSelectedId] = useState<string | null>(null)

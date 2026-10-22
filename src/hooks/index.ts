@@ -460,3 +460,33 @@ export function useMounted(): boolean {
   useEffect(() => setMounted(true), [])
   return mounted
 }
+
+/**
+ * The part of the screen the customer can see, while `active`. On iPhones the on-screen keyboard
+ * covers the page without resizing it, so a full-screen sheet is sized to this instead. Null when
+ * it is the same as the page (no keyboard), so the sheet's own CSS applies.
+ */
+export function useVisibleViewport(active: boolean): { height: number; top: number } | null {
+  const [visible, setVisible] = useState<{ height: number; top: number } | null>(null)
+  useEffect(() => {
+    const viewport = typeof window !== 'undefined' ? window.visualViewport : null
+    if (!active || !viewport) return
+    const update = () => {
+      const same = Math.abs(viewport.height - window.innerHeight) < 2 && viewport.offsetTop < 1
+      setVisible((old) => {
+        if (same) return old === null ? old : null
+        const next = { height: Math.round(viewport.height), top: Math.round(viewport.offsetTop) }
+        return old && old.height === next.height && old.top === next.top ? old : next
+      })
+    }
+    update()
+    viewport.addEventListener('resize', update)
+    viewport.addEventListener('scroll', update)
+    return () => {
+      viewport.removeEventListener('resize', update)
+      viewport.removeEventListener('scroll', update)
+      setVisible(null)
+    }
+  }, [active])
+  return visible
+}

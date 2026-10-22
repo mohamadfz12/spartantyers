@@ -57,7 +57,9 @@ export default function OrderConfirmation() {
         title={
           order
             ? `Order ${order.reference} confirmed | ${site.name}`
-            : `Order ${reference} | ${site.name}`
+            : reference
+              ? `Order ${reference} | ${site.name}`
+              : `Find your order | ${site.name}`
         }
         description="Your Spartan Tyres order confirmation and receipt."
         noIndex
@@ -436,12 +438,15 @@ function Confirmed({ order, receiptUrl }: { order: Order; receiptUrl?: string })
  * ------------------------------------------------------------------ */
 
 function Lookup({
-  reference,
+  reference: knownReference,
   onFound,
 }: {
+  /** Empty on `/order`, where the customer types the reference themselves. */
   reference: string
   onFound: (order: Order) => void
 }) {
+  const [typedReference, setTypedReference] = useState('')
+  const reference = knownReference || typedReference.trim()
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -449,6 +454,11 @@ function Lookup({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     if (loading) return
+
+    if (!reference) {
+      setError('Please enter your order reference (it starts with SPT-).')
+      return
+    }
 
     if (!isValidEmail(email)) {
       setError('Please enter the email address used on the order.')
@@ -492,16 +502,45 @@ function Lookup({
       </header>
 
       <div className="mx-auto mt-8 max-w-md rounded-lg border border-border bg-card p-5 md:p-6">
-        <dl className="flex items-baseline justify-between gap-3 border-b border-border pb-4">
-          <dt className="font-heading text-xs font-bold uppercase tracking-brand text-muted-foreground">
-            Reference
-          </dt>
-          <dd className="font-mono text-base font-bold tracking-wider">
-            {reference || '—'}
-          </dd>
-        </dl>
+        {knownReference ? (
+          <dl className="flex items-baseline justify-between gap-3 border-b border-border pb-4">
+            <dt className="font-heading text-xs font-bold uppercase tracking-brand text-muted-foreground">
+              Reference
+            </dt>
+            <dd className="font-mono text-base font-bold tracking-wider">
+              {knownReference}
+            </dd>
+          </dl>
+        ) : null}
 
-        <form onSubmit={handleSubmit} noValidate className="mt-5">
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+          className={knownReference ? 'mt-5' : undefined}
+        >
+          {knownReference ? null : (
+            <Field
+              label="Order reference"
+              htmlFor="lookup-reference"
+              required
+              className="mb-5"
+            >
+              <Input
+                id="lookup-reference"
+                name="reference"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                placeholder="SPT-XXXX-XXXX"
+                value={typedReference}
+                onChange={(event) => {
+                  setTypedReference(event.target.value)
+                  if (error) setError(null)
+                }}
+                className="font-mono"
+              />
+            </Field>
+          )}
           <Field
             label="Email on the order"
             htmlFor="lookup-email"

@@ -81,7 +81,8 @@ export function Header() {
             : 'border-transparent bg-background py-3',
         )}
       >
-        <div className="shell flex items-center justify-between gap-4">
+        {/* Tighter gaps below 360px, where the logo and four buttons otherwise push the page wider than the screen. */}
+        <div className="shell flex items-center justify-between gap-2 px-2.5 min-[360px]:gap-4 min-[360px]:px-4 md:px-6 lg:px-8">
           <Link
             to="/"
             className="shrink-0 rounded-md transition-opacity hover:opacity-85"
@@ -181,7 +182,7 @@ export function Header() {
           </nav>
 
           {/* Actions */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center min-[360px]:gap-1">
             <button
               type="button"
               onClick={() => setSearchOpen(true)}

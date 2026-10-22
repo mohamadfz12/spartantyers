@@ -176,7 +176,7 @@ export function AxleSelector({
       {/* Button row — the accessible, unambiguous control. The diagram above is
           a richer way to hit the same targets, not the only way. */}
       <div
-        className="mt-5 grid grid-cols-3 gap-2 sm:gap-3"
+        className="mt-5 grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:gap-3"
         role="radiogroup"
         aria-label="Axle position"
       >
@@ -191,7 +191,7 @@ export function AxleSelector({
               aria-checked={active}
               onClick={() => onChange(position)}
               className={cn(
-                'group flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all duration-300 ease-brand sm:p-4',
+                'group flex min-w-0 flex-col items-center gap-2 rounded-lg border-2 p-2 transition-all duration-300 ease-brand min-[360px]:p-3 sm:p-4',
                 active
                   ? 'border-primary bg-primary/5 shadow-glow'
                   : 'border-border bg-card hover:border-primary/40 hover:-translate-y-0.5',

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import {
+  Bot,
   ExternalLink,
   LayoutDashboard,
   LogOut,
@@ -15,6 +16,7 @@ import { Logo, LogoMark } from '@/components/brand/Logo'
 import { Button, Sheet, SheetClose, SheetHeader, SheetTitle } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { useAdmin, useAdminSession } from '@/store/admin'
+import AiAssistant from './AiAssistant'
 import Dashboard from './Dashboard'
 import Enquiries from './Enquiries'
 import Leads from './Leads'
@@ -53,6 +55,7 @@ const NAV: NavItem[] = [
   { to: '/admin/orders', label: 'Orders', icon: Receipt },
   { to: '/admin/enquiries', label: 'Enquiries', icon: Mail },
   { to: '/admin/leads', label: 'Leads', icon: Target },
+  { to: '/admin/ai', label: 'AI assistant', icon: Bot },
 ]
 
 const TITLES: Record<string, string> = {
@@ -60,6 +63,7 @@ const TITLES: Record<string, string> = {
   '/admin/products': 'Products',
   '/admin/orders': 'Orders',
   '/admin/enquiries': 'Enquiries',
+  '/admin/ai': 'AI assistant',
 }
 
 export default function Admin() {
@@ -168,6 +172,7 @@ export default function Admin() {
               <Route path="orders" element={<Orders />} />
               <Route path="enquiries" element={<Enquiries />} />
               <Route path="leads" element={<Leads />} />
+              <Route path="ai" element={<AiAssistant />} />
               {/* Anything else inside /admin belongs at the dashboard. */}
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Routes>

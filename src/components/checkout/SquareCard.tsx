@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { ApiError, api } from '@/lib/api'
 import { site } from '@/config/site'
+import { assistantConversationForOrder } from '@/lib/ai/link'
 import { cn, isValidPostcode, money } from '@/lib/utils'
 import { Button, Field, Input } from '@/components/ui'
 
@@ -355,6 +356,7 @@ export function SquareCard({
   const charge = useCallback(
     async (sourceId: string, verificationToken?: string) => {
       setStatus('Processing your payment…')
+      const assistantChat = assistantConversationForOrder()
 
       const result = await api.createPayment({
         sourceId,
@@ -373,6 +375,8 @@ export function SquareCard({
         // Not an input to the price: the server refuses to charge anything
         // other than the total this button showed.
         expectedTotal: amount,
+        // Set only when the assistant's card put tyres in this cart, so staff see the chat with the order.
+        ...(assistantChat ? { conversationId: assistantChat } : {}),
       })
 
       onSuccess({

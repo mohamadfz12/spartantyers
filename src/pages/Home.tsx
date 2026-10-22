@@ -204,12 +204,12 @@ function Hero() {
             className="mx-auto aspect-square w-full max-w-[32rem] lg:max-w-none"
           />
 
-          {/* Spec callout anchored to the model */}
+          {/* Spec callout anchored to the model. Top right: the bottom right corner belongs to the fixed assistant launcher. */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.9, duration: 0.6 }}
-            className="pointer-events-none absolute bottom-2 right-0 hidden rounded-lg border border-white/10 bg-charcoal/80 p-3.5 backdrop-blur-md lg:block"
+            className="pointer-events-none absolute right-0 top-2 hidden rounded-lg border border-white/10 bg-charcoal/80 p-3.5 backdrop-blur-md lg:block"
           >
             <p className="font-heading text-[0.6rem] font-bold uppercase tracking-brand text-primary">
               Shown above
@@ -310,7 +310,7 @@ function AxlePicker() {
           </p>
         </Reveal>
 
-        <div className="mt-12 grid gap-10 lg:grid-cols-[1.25fr_1fr] lg:gap-14">
+        <div className="mt-12 grid grid-cols-1 gap-10 lg:grid-cols-[1.25fr_1fr] lg:gap-14">
           <Reveal direction="right">
             <AxleSelector value={axle} onChange={setAxle} />
           </Reveal>

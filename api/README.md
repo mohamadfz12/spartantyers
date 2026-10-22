@@ -15,16 +15,20 @@ collapsed into dynamic routes:
 
 | File | Serves |
 | --- | --- |
-| `api/admin/[action].ts` | `/api/admin/{login,stats,products,orders,enquiries}` |
+| `api/admin/[action].ts` | `/api/admin/{login,stats,products,orders,enquiries,ai-status,ai-settings,ai-conversations,ai-conversation}` |
 | `api/square/[action].ts` | `/api/square/{config,create-payment}` |
+| `api/ai/[action].ts` | `/api/ai/{chat,outcome,status,voice}` (the AI assistant, chat and voice calls; its code is in `api/_lib/ai/`) |
 
 Each dispatches on `req.query.action` to a handler in `api/_lib/handlers/`.
 Anything under a path segment beginning with `_` is excluded from routing, so
 those handlers do not become functions of their own. **No public URL changes** —
 `/api/admin/stats` is still `/api/admin/stats`.
 
-Current count: **9 routable files**. Adding a tenth is fine; a thirteenth will
-build successfully and then fail at the deploy step.
+Current count: **9 routable files** (`admin/[action]`, `ai/[action]`, `contact`,
+`inventory`, `newsletter`, `orders`, `promo/validate`, `services/fitting`,
+`square/[action]`). The Hobby plan allows twelve, so a thirteenth will build
+successfully and then fail at the deploy step. The whole AI is one function,
+`api/ai/[action].ts`.
 
 ## Conventions
 
@@ -57,12 +61,18 @@ build successfully and then fail at the deploy step.
 | `/api/contact` | POST | public | `KV_REST_API_*` *(optional)* | Stored in the dev-only in-memory store |
 | `/api/newsletter` | POST | public | `KV_REST_API_*` *(optional)* | Stored in the dev-only in-memory store |
 | `/api/orders` | GET | public (reference + email) | `KV_REST_API_*` *(optional)* | **404** with "order lookup unavailable on this deployment" |
-| `/api/chat` | POST | public | `ANTHROPIC_API_KEY` *(optional)* | Keyword-matching offline responder built from real site data |
+| `/api/ai/chat` | POST (streams NDJSON), GET (collect a saved answer) | same-origin only (`Origin` must be this site) | `AI_GATEWAY_URL`, `AI_GATEWAY_KEY`, `AI_MODEL`, `ADMIN_SESSION_SECRET`, a Postgres URL *(see `.env.example`)* | A `fallback` event (`not_configured`), never an error |
+| `/api/ai/outcome` | POST | same-origin only | as above | Saves nothing, answers `{ ok: true, saved: 0 }` |
+| `/api/ai/status` | GET | public (kept for about 15 s per visitor) | as above | `{ chat: { available: false }, voice: { available: false } }` |
+| `/api/ai/voice` | GET (voice status), POST (`start`, `tool`, `line`, `end`, `practice`) | same-origin only (POST) | `OPENAI_API_KEY` plus the settings above; `VOICE_*` *(optional)* | A refusal with a `reason` (`not_configured`, `off`, `busy`, `already`, `daily`, `monthly`, `unavailable`); never an error page |
 | `/api/admin/login` | POST | public (issues token) | `ADMIN_PASSWORD` **(required)**, `ADMIN_SESSION_SECRET` *(recommended)* | **503** "admin not configured" |
 | `/api/admin/stats` | GET | **Bearer** | `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `LOW_STOCK_THRESHOLD` *(optional)*, `KV_REST_API_*` | **503** if unconfigured, **401** if token invalid/expired |
 | `/api/admin/products` | GET, PATCH | **Bearer** | `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `KV_REST_API_*` | **503** / **401** as above |
 | `/api/admin/orders` | GET, PATCH | **Bearer** | `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `KV_REST_API_*` | **503** / **401** as above |
 | `/api/admin/enquiries` | GET | **Bearer** | `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, `KV_REST_API_*` | **503** / **401** as above |
+| `/api/admin/ai-status` | GET | **Bearer** | `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, the AI settings | **503** / **401** as above; reports the database as not connected |
+| `/api/admin/ai-settings` | GET, PATCH | **Bearer** | as above, and a Postgres URL | **503** / **401** as above |
+| `/api/admin/ai-conversations`, `/api/admin/ai-conversation` | GET | **Bearer** | as above, and a Postgres URL | **503** / **401** as above |
 
 ### Request / response detail
 
@@ -70,13 +80,15 @@ build successfully and then fail at the deploy step.
 | --- | --- | --- |
 | `GET /api/inventory` | — | `{ products: Product[], updatedAt: string }` |
 | `GET /api/square/config` | — | `{ applicationId, locationId, environment, afterpayEnabled, afterpayMaxOrder }` |
-| `POST /api/square/create-payment` | `{ sourceId, verificationToken?, idempotencyKey, fulfilment, fittingTyres, promoCode?, customer{name,email,phone,company?}, address?{line1,suburb,state,postcode}, lines[{id,quantity}], notes? }` | `{ ok: true, reference, orderId, paymentId, total, receiptUrl? }` |
+| `POST /api/square/create-payment` | `{ sourceId, verificationToken?, idempotencyKey, fulfilment, fittingTyres, promoCode?, customer{name,email,phone,company?}, address?{line1,suburb,state,postcode}, lines[{id,quantity}], notes?, conversationId? }` | `{ ok: true, reference, orderId, paymentId, total, receiptUrl? }` |
 | `POST /api/promo/validate` | `{ code, tyreCount? }` | `{ valid, code?, percentOff?, description?, reason? }` |
 | `POST /api/services/fitting` | `{ tyres }` | `{ tyres, perTyre, total }` |
 | `POST /api/contact` | `{ name, email, phone?, company?, enquiryType, message }` | `{ ok: true }` |
 | `POST /api/newsletter` | `{ email }` | `{ ok: true, alreadySubscribed? }` |
 | `GET /api/orders` | `?reference=…&email=…` | `{ order: Order }` |
-| `POST /api/chat` | `{ messages: [{ role: 'user'\|'assistant', content }] }` | `{ reply }` |
+| `POST /api/ai/chat` | `{ conversationId, message, page, turn?, outcomes? }` | NDJSON stream, one event per line (`src/lib/ai/protocol.ts`) |
+| `GET /api/ai/status` | none | `{ chat: { available }, voice: { available, practice, seconds } }` |
+| `POST /api/ai/voice` | `{ action: 'start', conversationId, page, sdp }` and the other actions in the header of `api/ai/[action].ts` | `{ call }`, or `{ error, reason? }` |
 | `POST /api/admin/login` | `{ password }` | `{ token, expiresAt }` |
 | `GET /api/admin/stats` | — | `{ revenue, orderCount, unitsSold, averageOrderValue, lowStock[], revenueByDay[], topProducts[] }` |
 | `GET /api/admin/products` | — | `{ products: Product[] }` |
@@ -84,6 +96,7 @@ build successfully and then fail at the deploy step.
 | `GET /api/admin/orders` | — | `{ orders: Order[] }` |
 | `PATCH /api/admin/orders` | `{ id, status }` | `{ order: Order }` |
 | `GET /api/admin/enquiries` | — | `{ enquiries[], subscribers[] }` |
+| `GET /api/admin/ai-status` | none | `{ chat, voice, limits, spend, database, warnings, settings }` |
 
 ## Environment variables
 
@@ -109,11 +122,16 @@ build successfully and then fail at the deploy step.
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `SQUARE_ENVIRONMENT` | `sandbox` | `production` switches the base URL to `https://connect.squareup.com`. |
-| `SQUARE_AFTERPAY_ENABLED` | enabled | Set to `false` to report `afterpayEnabled: false`. |
-| `ANTHROPIC_API_KEY` | — | Enables live `/api/chat` with `claude-haiku-5-5`. Absent ⇒ offline keyword responder. |
+| `SQUARE_AFTERPAY_ENABLED` | enabled | Set to `false` to report `afterpayEnabled: false`. The AI assistant reads the same rule (`afterpayEnabled()` in `_lib/square.ts`), so it only mentions Afterpay while checkout offers it. |
 | `PROMO_CODES` | built-in table | JSON array of `{code, percentOff, description, minTyres?}` or an object map. `percentOff` accepts `0.1` or `10`. |
 | `LOW_STOCK_THRESHOLD` | `24` | Stock at or below this appears in `admin/stats.lowStock`. |
 | `PUBLIC_SITE_URL` | — | Extra allowed CORS origin (for a custom domain). |
+| `AI_GATEWAY_URL`, `AI_GATEWAY_KEY`, `AI_MODEL` | none | The assistant's chat model (an OpenAI-compatible gateway). Without them the chat shows quick keyword answers. |
+| `OPENAI_API_KEY` | none | Voice calls (OpenAI Realtime). Without it there is no Call button. |
+| `DATABASE_URL` or `POSTGRES_URL` | none | The AI keeps its chats, calls and spending in Postgres, **even when the store above uses KV**. Without one on Vercel the AI is off (`not_configured`). |
+| `ADMIN_SESSION_SECRET` | none | Also required for the AI on Vercel: it keys the hash that identifies a visitor for the limits. Without it the AI is off. |
+| `VOICE_MAX_SECONDS`, `AI_FUNCTION_MAX_SECONDS` | `600`, `300` | Call length and the time the AI function is taken to have; see the README's voice section. |
+| `AI_STATUS_CACHE_SECONDS` | `15` | How long `/api/ai/status` keeps an answer per visitor. `0` turns it off. |
 | `VERCEL_URL`, `VERCEL_BRANCH_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_ENV` | set by Vercel | CORS allow-list. |
 
 ## Shared modules (`api/_lib/`)
@@ -126,7 +144,8 @@ build successfully and then fail at the deploy step.
 | `pricing.ts` | Authoritative order total. Mirrors `cartTotals()` in `src/store/cart.ts`. |
 | `promos.ts` | Promo table from `PROMO_CODES` or built-ins; `resolvePromo(code, tyreCount)`. |
 | `auth.ts` | Timing-safe password check, stateless 12-hour HMAC tokens, `requireAdmin` gate. |
-| `square.ts` | `POST /v2/payments` over `fetch`, `Square-Version: 2024-10-17`. |
+| `square.ts` | `POST /v2/payments` over `fetch`, `Square-Version: 2024-10-17`; `afterpayEnabled()`. |
+| `ai/` | The AI assistant: `engine.ts` (a chat turn), `tools.ts`, `rules.ts` (its instructions), `gateway.ts` (the model), `spend.ts` (limits), `voice.ts` and `voice-openai.ts` (calls), `admin.ts` (what staff read), `db.ts` (Postgres, or PGlite locally), `settings.ts`, `retention.ts`, `orders.ts`, `status-cache.ts`, `util.ts`. |
 | `ids.ts` | `crypto`-backed order ids and human-readable `SPT-XXXX-XXXX` references. |
 
 ## Security notes

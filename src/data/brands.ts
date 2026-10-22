@@ -1,5 +1,5 @@
-import { site } from '@/config/site'
-import { products } from './products'
+import { site } from '../config/site.js'
+import { products } from './products.js'
 
 export interface BrandEntry {
   name: string

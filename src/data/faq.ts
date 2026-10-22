@@ -1,5 +1,5 @@
 import type { FaqItem } from './types'
-import { allSizes, poaProducts, pricedProducts, products } from './products'
+import { allSizes, poaProducts, pricedProducts, products } from './products.js'
 
 /* ------------------------------------------------------------------ *
  * Frequently asked questions
