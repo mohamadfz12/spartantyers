@@ -165,6 +165,11 @@ def _related_domain(email_domain, lead):
     return any(t in label for t in tokens)
 
 
+# Numbers that belong to a directory, not to any business listed on it.
+DIRECTORY_NUMBERS = {
+    "0292902821",  # dlook.com.au's own line, printed on every business page
+}
+
 LOCAL_INTERSTATE_CODES = {
     "Murray": ("03",),
     "Far West": ("03", "08"),
@@ -189,6 +194,9 @@ def sanitise(rows):
         has_nsw_number = any(d[:2] in ("02", "04", "13", "18") for d in digits)
         keep = []
         for p, d in zip(r["phones"], digits):
+            if d in DIRECTORY_NUMBERS:
+                removed["shared"] += 1
+                continue
             shared = len(owners.get(d, ())) >= 3
             # Parts of NSW are on other states' area codes: the Murray towns
             # (Deniliquin, Moama, Finley, Barham…) and Wentworth are 03, the
