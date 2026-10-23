@@ -8,6 +8,7 @@
 
 import type { Order, Product } from '@/data/types'
 import type { StaffRole } from '@/lib/admin-roles'
+import type { LeadPlan, LeadPlanInput } from '@/lib/lead-plans'
 
 export class ApiError extends Error {
   status: number
@@ -485,7 +486,28 @@ export const api = {
         statuses: Record<string, LeadStatus>
         importedAt: string | null
         statusOptions: LeadStatusValue[]
+        /** The team's day plans, earliest day first. */
+        plans: LeadPlan[]
+        /** Active staff names, suggested for who does a day. */
+        people: string[]
       }>('/api/admin/leads', { headers: auth(token), timeoutMs: 45000 }),
+
+    /** Makes a day plan, or changes one when `id` is given. */
+    saveLeadPlan: (token: string, plan: LeadPlanInput & { id?: string }) =>
+      request<{ plan: LeadPlan }>('/api/admin/leads', {
+        method: plan.id ? 'PUT' : 'POST',
+        body: JSON.stringify(plan),
+        headers: { ...auth(token), 'Content-Type': 'application/json' },
+        // The server reads the whole lead list to check the towns.
+        timeoutMs: 30000,
+      }),
+
+    deleteLeadPlan: (token: string, id: string) =>
+      request<{ ok: true }>(`/api/admin/leads?plan=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: auth(token),
+        timeoutMs: 30000,
+      }),
 
     updateLead: (
       token: string,

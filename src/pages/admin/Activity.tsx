@@ -25,6 +25,7 @@ const AREAS: Record<string, string> = {
   auth: 'Sign-in',
   product: 'Products',
   order: 'Orders',
+  leads: 'Leads',
   stock: 'Inventory',
   ledger: 'Money',
   finance: 'Money',
