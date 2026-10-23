@@ -174,6 +174,26 @@ if (leadChecks.some(([got, want]) => got !== want)) {
   console.error('✗ leads endpoint did not behave as expected')
   process.exit(1)
 }
+// Day plans ride on the same function: refused for unknown towns, unknown ids and no token.
+const planUnknownTown = await call(admin, 'POST', { action: 'leads' }, { date: '2026-10-26', towns: ['Nowhere'] }, auth)
+console.log('plan unknown town   ', planUnknownTown.status, JSON.stringify(planUnknownTown.body).slice(0, 80))
+const planBadDate = await call(admin, 'POST', { action: 'leads' }, { date: '2026-02-31', towns: ['Nowhere'] }, auth)
+console.log('plan bad date       ', planBadDate.status)
+const planMissing = await call(admin, 'PUT', { action: 'leads' }, { id: 'no-such-plan', date: '2026-10-26', towns: ['Nowhere'] }, auth)
+console.log('plan unknown id     ', planMissing.status)
+const planDeleteMissing = await call(admin, 'DELETE', { action: 'leads', plan: 'no-such-plan' }, undefined, auth)
+console.log('plan delete, no id  ', planDeleteMissing.status)
+const planNoAuth = await call(admin, 'POST', { action: 'leads' }, { date: '2026-10-26', towns: ['Nowhere'] })
+console.log('plan without token  ', planNoAuth.status)
+const planChecks = [
+  [Array.isArray(leadsList.body?.plans), true], [Array.isArray(leadsList.body?.people), true],
+  [planUnknownTown.status, 400], [planBadDate.status, 400], [String(planBadDate.body?.error).includes('"date"'), true], [planMissing.status, 404],
+  [planDeleteMissing.status, 404], [planNoAuth.status, 401],
+]
+if (planChecks.some(([got, want]) => got !== want)) {
+  console.error('✗ day plans did not behave as expected')
+  process.exit(1)
+}
 // A price set in the admin must be what the website reads (and what checkout charges).
 const priceEdit = await call(admin, 'PATCH', { action: 'products' }, { id: priced.id, patch: { price: 512.34, discount: 10 } }, auth)
 const shop = await call(loaded['api/inventory.js'], 'GET')

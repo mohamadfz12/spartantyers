@@ -15,7 +15,7 @@
  *   GET    /api/admin/products   PATCH /api/admin/products
  *   GET    /api/admin/orders     PATCH /api/admin/orders
  *   GET    /api/admin/enquiries
- *   GET    /api/admin/leads       PATCH /api/admin/leads
+ *   GET    /api/admin/leads       PATCH | POST | PUT | DELETE /api/admin/leads   (sales progress; day plans)
  *   GET    /api/admin/ai-status
  *   GET    /api/admin/ai-settings   PATCH /api/admin/ai-settings
  *   GET    /api/admin/ai-conversations

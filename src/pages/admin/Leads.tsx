@@ -1,5 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
+  AlertTriangle,
+  CalendarDays,
+  CalendarPlus,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -8,10 +11,14 @@ import {
   ExternalLink,
   Mail,
   MapPin,
+  Pencil,
   Phone,
+  Plus,
   Search,
   Target,
+  Trash2,
   Users,
+  X,
 } from 'lucide-react'
 import { Seo } from '@/components/Seo'
 import {
@@ -21,8 +28,27 @@ import {
   AdminPanel,
 } from '@/components/admin/AdminStates'
 import { useAdminQuery } from '@/components/admin/useAdminQuery'
-import { Badge, Button, Input, Label, Select, Skeleton, Textarea } from '@/components/ui'
 import {
+  Badge,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Label,
+  Progress,
+  Select,
+  Skeleton,
+  Textarea,
+} from '@/components/ui'
+import { fieldSkin } from '@/components/ui/input'
+import { useEscapeKey, useOnClickOutside, useReducedMotion } from '@/hooks'
+import {
+  ApiError,
   api,
   type Lead,
   type LeadCategory,
@@ -31,6 +57,26 @@ import {
   type LeadStatusPatch,
   type LeadStatusValue,
 } from '@/lib/api'
+import {
+  PLAN_DAYS,
+  PLAN_LIMITS,
+  addDays,
+  dayLabel,
+  isDay,
+  isPlanDay,
+  leadsInTowns,
+  listNames,
+  nextMonday,
+  planProgress,
+  sortPlans,
+  sortTowns,
+  sydneyToday,
+  townClashes,
+  weekLabel,
+  weekStart,
+  type LeadPlan,
+  type LeadPlanInput,
+} from '@/lib/lead-plans'
 import { cn, formatDate, formatNumber } from '@/lib/utils'
 import { adminToken, handleAdminError } from '@/store/admin'
 import { toast } from '@/store/ui'
@@ -80,7 +126,8 @@ interface Filters {
   category: LeadCategory | 'all'
   region: LeadRegion | 'all'
   area: string
-  city: string
+  /** Towns ticked in the City / town box; empty means every town. */
+  cities: string[]
   size: string
   employees: string
   priority: string
@@ -94,7 +141,7 @@ const EMPTY_FILTERS: Filters = {
   category: 'all',
   region: 'all',
   area: '',
-  city: '',
+  cities: [],
   size: '',
   employees: '',
   priority: '',
@@ -104,6 +151,11 @@ const EMPTY_FILTERS: Filters = {
 }
 
 const NEW_STATUS: LeadStatus = { status: 'New', notes: '', updatedAt: '' }
+
+/** What the plan window opens with: a new plan, or one being changed (`id`). */
+interface PlanDraft extends LeadPlanInput {
+  id?: string
+}
 
 /* ------------------------------------------------------------------ *
  * Page
@@ -115,15 +167,150 @@ export default function Leads() {
   const [page, setPage] = useState(0)
   const [open, setOpen] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const reduced = useReducedMotion()
+
+  const today = sydneyToday()
+  /** The day plan being worked through; its towns are the town filter while it is open. */
+  const [planId, setPlanId] = useState<string | null>(null)
+  /** The Monday of the week shown in the work plan. */
+  const [weekOf, setWeekOf] = useState(() => weekStart(sydneyToday()))
+  const [draft, setDraft] = useState<PlanDraft | null>(null)
+  const [planDialogOpen, setPlanDialogOpen] = useState(false)
+  /** New on every opening, so the form inside always starts from its draft. */
+  const [draftKey, setDraftKey] = useState(0)
+  /** A save or delete is on its way: the plan window cannot be closed until it answers. */
+  const [planBusy, setPlanBusy] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
+  /** The current open plan, for answers that arrive after a re-render. */
+  const planIdRef = useRef(planId)
+  planIdRef.current = planId
+  /** The day whose column takes focus when the plan window closes and its opener has gone. */
+  const focusDayAfterClose = useRef<string | null>(null)
 
   const leads = query.data?.leads ?? []
   const statuses = query.data?.statuses ?? {}
   const statusOf = (key: string) => statuses[key] ?? NEW_STATUS
+  const plans = query.data?.plans ?? []
+  const people = query.data?.people ?? []
+  const activePlan = planId ? plans.find((plan) => plan.id === planId) ?? null : null
+
+  // Runs after the window has given focus back to the button that opened it. When that
+  // button no longer exists (its plan was deleted, or the day view replaced it), focus
+  // goes to the plan's day in the work plan instead of being lost.
+  useEffect(() => {
+    const day = focusDayAfterClose.current
+    if (planDialogOpen || !day) return
+    focusDayAfterClose.current = null
+    const frame = requestAnimationFrame(() => {
+      const active = document.activeElement
+      if (active && active !== document.body) return
+      const target =
+        document.querySelector<HTMLElement>(`[data-plan-day="${day}"]`) ??
+        document.getElementById('lead-work-plan-week')
+      target?.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [planDialogOpen])
 
   const update = (patch: Partial<Filters>) => {
     setFilters((current) => ({ ...current, ...patch }))
     setPage(0)
     setOpen(null)
+    // Changing where you look means you are no longer working through the day.
+    if ('cities' in patch || 'region' in patch || 'area' in patch || 'category' in patch) setPlanId(null)
+  }
+
+  /* ---- day plans -------------------------------------------------- */
+
+  function openPlan(plan: LeadPlan) {
+    if (plan.id === planId) {
+      closePlan()
+      return
+    }
+    setFilters((current) => ({ ...EMPTY_FILTERS, sort: current.sort, cities: plan.towns }))
+    setPlanId(plan.id)
+    setPage(0)
+    setOpen(null)
+    requestAnimationFrame(() =>
+      listRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }),
+    )
+  }
+
+  function closePlan() {
+    setFilters((current) => ({ ...EMPTY_FILTERS, sort: current.sort }))
+    setPlanId(null)
+    setPage(0)
+    setOpen(null)
+  }
+
+  function startPlan(next: PlanDraft) {
+    setDraft(next)
+    setDraftKey((n) => n + 1)
+    setPlanDialogOpen(true)
+  }
+
+  /**
+   * Saves the plan; returns a message to show in the window when it fails. A new plan
+   * for exactly the towns already ticked opens straight away: the list already shows
+   * its leads, and the day banner replaces the "Plan a day" bar, so it cannot be
+   * planned twice by accident.
+   */
+  async function savePlan(input: PlanDraft): Promise<string | null> {
+    const token = adminToken()
+    if (!token) return 'Your session has ended. Sign in again.'
+    setPlanBusy(true)
+    try {
+      const { plan } = await api.admin.saveLeadPlan(token, input)
+      query.patch((data) => ({
+        ...data,
+        plans: sortPlans([...data.plans.filter((p) => p.id !== plan.id), plan]),
+      }))
+      setWeekOf(weekStart(plan.date))
+      const sameTowns = sameList(plan.towns, filters.cities)
+      if (plan.id === planIdRef.current) {
+        setFilters((current) => ({ ...current, cities: plan.towns }))
+        setPage(0)
+      } else if (!input.id && !planIdRef.current && sameTowns) {
+        setFilters((current) => ({ ...current, cities: plan.towns }))
+        setPlanId(plan.id)
+        setPage(0)
+        setOpen(null)
+      }
+      focusDayAfterClose.current = plan.date
+      setPlanDialogOpen(false)
+      toast({
+        title: input.id ? 'Plan changed' : 'Day planned',
+        description: `${dayLabel(plan.date, 'long')}: ${listNames(plan.towns)}`,
+        variant: 'success',
+      })
+      return null
+    } catch (error) {
+      return handleAdminError(error).message
+    } finally {
+      setPlanBusy(false)
+    }
+  }
+
+  async function deletePlan(plan: LeadPlan): Promise<string | null> {
+    const token = adminToken()
+    if (!token) return 'Your session has ended. Sign in again.'
+    setPlanBusy(true)
+    try {
+      await api.admin.deleteLeadPlan(token, plan.id)
+    } catch (error) {
+      // Already gone (someone else deleted it): the result is the same.
+      if (!(error instanceof ApiError && error.status === 404)) {
+        setPlanBusy(false)
+        return handleAdminError(error).message
+      }
+    }
+    query.patch((data) => ({ ...data, plans: data.plans.filter((p) => p.id !== plan.id) }))
+    if (plan.id === planIdRef.current) closePlan()
+    focusDayAfterClose.current = plan.date
+    setPlanBusy(false)
+    setPlanDialogOpen(false)
+    toast({ title: 'Plan deleted', description: dayLabel(plan.date, 'long'), variant: 'success' })
+    return null
   }
 
   /* ---- filtering ------------------------------------------------- */
@@ -131,12 +318,13 @@ export default function Leads() {
   const filtered = useMemo(() => {
     const term = filters.search.trim().toLowerCase()
     const digits = term.replace(/\D/g, '')
+    const towns = new Set(filters.cities)
 
     const rows = leads.filter((lead) => {
       if (filters.category !== 'all' && lead.category !== filters.category) return false
       if (filters.region !== 'all' && lead.region !== filters.region) return false
       if (filters.area && lead.area !== filters.area) return false
-      if (filters.city && lead.city !== filters.city) return false
+      if (towns.size && !towns.has(lead.city)) return false
       if (filters.size && lead.size !== filters.size) return false
       if (filters.employees && lead.employees !== filters.employees) return false
       if (filters.priority && lead.priority !== filters.priority) return false
@@ -209,6 +397,8 @@ export default function Leads() {
     () => tally(scope.filter((l) => !filters.area || l.area === filters.area).map((l) => l.city)),
     [scope, filters.area],
   )
+  /** Every town on the list, for the plan window, which is not limited by the filters. */
+  const allTowns = useMemo(() => tally(leads.map((l) => l.city)), [leads])
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const visible = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -261,7 +451,7 @@ export default function Leads() {
   async function exportExcel() {
     setExporting(true)
     try {
-      await exportLeads(filtered, statusOf)
+      await exportLeads(filtered, statusOf, activePlan ? `Spartan-Tyres-Plan-${activePlan.date}` : undefined)
       toast({
         title: 'Excel file downloaded',
         description: `${formatNumber(filtered.length)} leads`,
@@ -298,6 +488,23 @@ export default function Leads() {
       {seo}
 
       <div className="flex flex-col gap-6">
+        {!query.loading && leads.length ? (
+          <WorkPlan
+            plans={plans}
+            leads={leads}
+            isDone={(lead) => statusOf(lead.key).status !== 'New'}
+            today={today}
+            weekOf={weekOf}
+            onWeek={setWeekOf}
+            activeId={planId}
+            onOpen={openPlan}
+            onAdd={(date) =>
+              // Towns ticked in the filter come along, so "tick towns, then + on a day" works too.
+              startPlan({ date, towns: activePlan ? [] : filters.cities, who: '', note: '' })
+            }
+          />
+        ) : null}
+
         {/* Summary */}
         {query.loading ? (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -315,136 +522,188 @@ export default function Leads() {
               leads={leads}
               filters={filters}
               onPick={(region) =>
-                update({ region: filters.region === region ? 'all' : region, area: '', city: '' })
+                update({ region: filters.region === region ? 'all' : region, area: '', cities: [] })
               }
             />
             <RegionGrid
               leads={leads}
               filters={filters}
-              onPick={(category, region) => update({ category, region, area: '', city: '' })}
+              onPick={(category, region) => update({ category, region, area: '', cities: [] })}
             />
           </div>
         ) : null}
 
-        <AdminPanel
-          title="NSW leads"
-          description={
-            query.data
-              ? `${formatNumber(filtered.length)} of ${formatNumber(leads.length)} leads${
-                  query.data.importedAt ? ` · list imported ${formatDate(query.data.importedAt)}` : ''
-                }. Open a lead for every phone number and email; set its status as you work through it.`
-              : 'Transport operators and truck tyre resellers across NSW.'
-          }
-          action={
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={exportExcel}
-              loading={exporting}
-              disabled={!filtered.length}
-            >
-              <Download className="mr-1.5 h-4 w-4" />
-              Export to Excel
-            </Button>
-          }
-          bodyClassName="p-0 md:p-0"
-        >
-          <FilterBar
-            filters={filters}
-            update={update}
-            areas={areas}
-            cities={cities}
-            activeFilters={activeFilters}
-            onClear={() => update(EMPTY_FILTERS)}
-          />
+        {/* overflow-visible: the town list may open past the bottom of a short list. */}
+        <div ref={listRef} className="scroll-mt-24">
+          <AdminPanel
+            title="NSW leads"
+            description={
+              query.data
+                ? `${formatNumber(filtered.length)} of ${formatNumber(leads.length)} leads${
+                    query.data.importedAt ? ` · list imported ${formatDate(query.data.importedAt)}` : ''
+                  }. Open a lead for every phone number and email; set its status as you work through it.`
+                : 'Transport operators and truck tyre resellers across NSW.'
+            }
+            action={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={exportExcel}
+                loading={exporting}
+                disabled={!filtered.length}
+              >
+                <Download className="mr-1.5 h-4 w-4" />
+                Export to Excel
+              </Button>
+            }
+            className="overflow-visible"
+            bodyClassName="p-0 md:p-0"
+          >
+            {activePlan ? (
+              <PlanBanner
+                plan={activePlan}
+                progress={planProgress(activePlan.towns, leads, (lead) => statusOf(lead.key).status !== 'New')}
+                onEdit={() =>
+                  startPlan({
+                    id: activePlan.id,
+                    date: activePlan.date,
+                    towns: activePlan.towns,
+                    who: activePlan.who,
+                    note: activePlan.note,
+                  })
+                }
+                onClose={closePlan}
+              />
+            ) : null}
 
-          {query.loading ? (
-            <div className="space-y-2 p-4 md:p-5">
-              {Array.from({ length: 8 }, (_, i) => (
-                <Skeleton key={i} className="h-12" />
-              ))}
-            </div>
-          ) : query.error ? (
-            <div className="p-4 md:p-5">
-              <AdminError message={query.error} onRetry={query.reload} />
-            </div>
-          ) : leads.length === 0 ? (
-            <AdminEmpty
-              title="No leads loaded yet"
-              icon={Target}
-              description="The lead list is loaded into the database from the research files on the office computer: run “npm run import:leads” in the project folder, then refresh this page."
-            />
-          ) : filtered.length === 0 ? (
-            <AdminEmpty
-              title="No leads match these filters"
-              icon={Search}
-              description="Loosen a filter or clear them all to see the full list."
-              action={
-                <Button size="sm" variant="outline" onClick={() => update(EMPTY_FILTERS)}>
-                  Clear filters
-                </Button>
+            <FilterBar
+              filters={filters}
+              update={update}
+              areas={areas}
+              cities={cities}
+              activeFilters={activeFilters}
+              onClear={() => update(EMPTY_FILTERS)}
+              planOpen={Boolean(activePlan)}
+              onPlan={() =>
+                startPlan({ date: nextMonday(today), towns: filters.cities, who: '', note: '' })
               }
             />
-          ) : (
-            <>
-              <p aria-live="polite" className="sr-only">
-                {formatNumber(filtered.length)} leads shown
-              </p>
 
-              <ul className="divide-y divide-border">
-                {visible.map((lead) => (
-                  <LeadRow
-                    key={lead.key}
-                    lead={lead}
-                    status={statusOf(lead.key)}
-                    expanded={open === lead.key}
-                    onToggle={() => setOpen((current) => (current === lead.key ? null : lead.key))}
-                    onStatus={(status) => saveStatus(lead, { status })}
-                    onNotes={(notes) => saveStatus(lead, { notes })}
-                    onResearch={(researchHours) => saveStatus(lead, { researchHours })}
-                  />
+            {query.loading ? (
+              <div className="space-y-2 p-4 md:p-5">
+                {Array.from({ length: 8 }, (_, i) => (
+                  <Skeleton key={i} className="h-12" />
                 ))}
-              </ul>
+              </div>
+            ) : query.error ? (
+              <div className="p-4 md:p-5">
+                <AdminError message={query.error} onRetry={query.reload} />
+              </div>
+            ) : leads.length === 0 ? (
+              <AdminEmpty
+                title="No leads loaded yet"
+                icon={Target}
+                description="The lead list is loaded into the database from the research files on the office computer: run “npm run import:leads” in the project folder, then refresh this page."
+              />
+            ) : filtered.length === 0 ? (
+              <AdminEmpty
+                title="No leads match these filters"
+                icon={Search}
+                description="Loosen a filter or clear them all to see the full list."
+                action={
+                  <Button size="sm" variant="outline" onClick={() => update(EMPTY_FILTERS)}>
+                    Clear filters
+                  </Button>
+                }
+              />
+            ) : (
+              <>
+                <p aria-live="polite" className="sr-only">
+                  {formatNumber(filtered.length)} leads shown
+                </p>
 
-              {pageCount > 1 ? (
-                <nav
-                  aria-label="Lead pages"
-                  className="flex items-center justify-between gap-3 border-t border-border p-4 md:px-5"
-                >
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page === 0}
-                    onClick={() => {
-                      setPage((p) => p - 1)
-                      setOpen(null)
-                    }}
+                {/* The card does not clip (see overflow-visible above), so the last row rounds itself. */}
+                <ul className="divide-y divide-border [&>li:last-child]:rounded-b-lg">
+                  {visible.map((lead) => (
+                    <LeadRow
+                      key={lead.key}
+                      lead={lead}
+                      status={statusOf(lead.key)}
+                      expanded={open === lead.key}
+                      onToggle={() => setOpen((current) => (current === lead.key ? null : lead.key))}
+                      onStatus={(status) => saveStatus(lead, { status })}
+                      onNotes={(notes) => saveStatus(lead, { notes })}
+                      onResearch={(researchHours) => saveStatus(lead, { researchHours })}
+                    />
+                  ))}
+                </ul>
+
+                {pageCount > 1 ? (
+                  <nav
+                    aria-label="Lead pages"
+                    className="flex items-center justify-between gap-3 border-t border-border p-4 md:px-5"
                   >
-                    <ChevronLeft className="mr-1 h-4 w-4" />
-                    Previous
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    Page {page + 1} of {pageCount} · leads {page * PAGE_SIZE + 1}–
-                    {Math.min((page + 1) * PAGE_SIZE, filtered.length)}
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page >= pageCount - 1}
-                    onClick={() => {
-                      setPage((p) => p + 1)
-                      setOpen(null)
-                    }}
-                  >
-                    Next
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </Button>
-                </nav>
-              ) : null}
-            </>
-          )}
-        </AdminPanel>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={page === 0}
+                      onClick={() => {
+                        setPage((p) => p - 1)
+                        setOpen(null)
+                      }}
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" />
+                      Previous
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Page {page + 1} of {pageCount} · leads {page * PAGE_SIZE + 1}–
+                      {Math.min((page + 1) * PAGE_SIZE, filtered.length)}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={page >= pageCount - 1}
+                      onClick={() => {
+                        setPage((p) => p + 1)
+                        setOpen(null)
+                      }}
+                    >
+                      Next
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </nav>
+                ) : null}
+              </>
+            )}
+          </AdminPanel>
+        </div>
       </div>
+
+      <Dialog
+        open={planDialogOpen}
+        onOpenChange={(next) => {
+          // Escape, the backdrop and × wait while a save or delete is on its way.
+          if (!next && planBusy) return
+          setPlanDialogOpen(next)
+        }}
+      >
+        {draft ? (
+          <DialogContent size="lg" hideClose={planBusy}>
+            <PlanForm
+              key={draftKey}
+              draft={draft}
+              towns={allTowns}
+              leads={leads}
+              plans={plans}
+              people={people}
+              today={today}
+              onCancel={() => setPlanDialogOpen(false)}
+              onSave={savePlan}
+              onDelete={deletePlan}
+            />
+          </DialogContent>
+        ) : null}
+      </Dialog>
     </>
   )
 }
@@ -700,6 +959,8 @@ function FilterBar({
   cities,
   activeFilters,
   onClear,
+  planOpen,
+  onPlan,
 }: {
   filters: Filters
   update: (patch: Partial<Filters>) => void
@@ -707,7 +968,12 @@ function FilterBar({
   cities: Array<[string, number]>
   activeFilters: boolean
   onClear: () => void
+  /** A day plan is open: its banner already lists the towns. */
+  planOpen: boolean
+  /** Opens the plan window for the ticked towns. */
+  onPlan: () => void
 }) {
+  const ticked = filters.cities.length
   return (
     <div className="space-y-3 border-b border-border p-4 md:px-5">
       <div className="flex flex-col gap-3 lg:flex-row">
@@ -735,7 +1001,7 @@ function FilterBar({
               key={category}
               type="button"
               aria-pressed={filters.category === category}
-              onClick={() => update({ category, area: '', city: '' })}
+              onClick={() => update({ category, area: '', cities: [] })}
               className={cn(
                 'rounded px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors',
                 filters.category === category
@@ -753,24 +1019,18 @@ function FilterBar({
         <FilterSelect
           label="Region"
           value={filters.region === 'all' ? '' : filters.region}
-          onChange={(v) => update({ region: (v || 'all') as Filters['region'], area: '', city: '' })}
+          onChange={(v) => update({ region: (v || 'all') as Filters['region'], area: '', cities: [] })}
           options={REGIONS.map((r) => [r, REGION_LABEL[r]])}
           all="All regions"
         />
         <FilterSelect
           label="Area"
           value={filters.area}
-          onChange={(v) => update({ area: v, city: '' })}
+          onChange={(v) => update({ area: v, cities: [] })}
           options={areas.map(([a, c]) => [a, `${a} (${c})`])}
           all="All areas"
         />
-        <FilterSelect
-          label="City / town"
-          value={filters.city}
-          onChange={(v) => update({ city: v })}
-          options={cities.map(([c, n]) => [c, `${c} (${n})`])}
-          all="All towns"
-        />
+        <TownFilter selected={filters.cities} options={cities} onChange={(next) => update({ cities: next })} />
         <FilterSelect
           label="Potential"
           value={filters.size}
@@ -811,6 +1071,30 @@ function FilterBar({
           all="Any status"
         />
       </div>
+
+      {ticked && !planOpen ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2.5">
+          <ul aria-label="Towns ticked" className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+            {filters.cities.map((town) => (
+              <li key={town}>
+                <button
+                  type="button"
+                  onClick={() => update({ cities: filters.cities.filter((t) => t !== town) })}
+                  aria-label={`Remove ${town}`}
+                  className="inline-flex max-w-full items-center gap-1 rounded-full border border-primary/40 bg-background px-2.5 py-0.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
+                >
+                  <span className="truncate">{town}</span>
+                  <X aria-hidden="true" className="h-3 w-3 shrink-0" />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <Button size="sm" onClick={onPlan} className="w-full sm:w-auto">
+            <CalendarPlus className="mr-1.5 h-4 w-4" />
+            Plan a day for {ticked === 1 ? 'this town' : `these ${ticked} towns`}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -876,6 +1160,734 @@ function FilterSelect({
         ))}
       </Select>
     </div>
+  )
+}
+
+/**
+ * The City / town filter: tick any number of towns. Every tick applies at
+ * once, so the list behind it updates as you go; Done only closes the list.
+ */
+function TownFilter({
+  selected,
+  options,
+  onChange,
+}: {
+  selected: string[]
+  options: Array<[string, number]>
+  onChange: (towns: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const rootRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const uid = useId()
+  const panelId = `${uid}-towns`
+
+  const close = useCallback(() => setOpen(false), [])
+  const closeAndFocus = useCallback(() => {
+    setOpen(false)
+    buttonRef.current?.focus()
+  }, [])
+  useOnClickOutside(rootRef, close, open)
+  useEscapeKey(closeAndFocus, open)
+
+  useEffect(() => {
+    if (!open) return
+    setSearch('')
+    // A phone keyboard would cover the list, so only a mouse/keyboard user starts in the search box.
+    if (window.matchMedia('(pointer: fine)').matches) searchRef.current?.focus()
+  }, [open])
+
+  const chosen = new Set(selected)
+  const term = search.trim().toLowerCase()
+  const shown = term ? options.filter(([town]) => town.toLowerCase().includes(term)) : options
+  const leadCount = options.reduce((sum, [town, count]) => (chosen.has(town) ? sum + count : sum), 0)
+  const toggle = (town: string) =>
+    onChange(chosen.has(town) ? selected.filter((t) => t !== town) : sortTowns([...selected, town]))
+  const tick = (town: string) => {
+    if (!chosen.has(town)) onChange(sortTowns([...selected, town]))
+  }
+  const allShownTicked = shown.every(([town]) => chosen.has(town))
+
+  return (
+    <div
+      ref={rootRef}
+      className="relative min-w-0"
+      onBlur={(event) => {
+        // Tabbing on past the list closes it. A click on a bare part of the list moves
+        // focus nowhere (relatedTarget is null) and must not close it.
+        const next = event.relatedTarget as Node | null
+        if (open && next && !rootRef.current?.contains(next)) setOpen(false)
+      }}
+    >
+      <Label
+        id={`${uid}-label`}
+        htmlFor="lead-filter-city-town"
+        className="mb-1 block text-[0.68rem] font-bold uppercase tracking-wide text-muted-foreground"
+      >
+        City / town
+      </Label>
+      <button
+        ref={buttonRef}
+        id="lead-filter-city-town"
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-labelledby={`${uid}-label ${uid}-value`}
+        onClick={() => setOpen((current) => !current)}
+        className={cn(
+          fieldSkin,
+          'flex h-9 items-center justify-between gap-2 py-0 text-left',
+          selected.length && 'border-primary',
+        )}
+      >
+        <span id={`${uid}-value`} className="truncate">
+          {selected.length === 0 ? 'All towns' : selected.length === 1 ? selected[0] : `${selected.length} towns`}
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
+        />
+      </button>
+
+      {open ? (
+        <div
+          id={panelId}
+          role="group"
+          aria-label="Choose towns"
+          className="absolute left-0 top-full z-30 mt-1 w-full min-w-[17rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-lift"
+        >
+          <div className="p-2">
+            <Label htmlFor={`${uid}-search`} className="sr-only">
+              Search towns
+            </Label>
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                ref={searchRef}
+                id={`${uid}-search`}
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => townSearchKeys(event, search, setSearch, shown, tick)}
+                placeholder="Search a town…"
+                autoComplete="off"
+                className="h-9 pl-9"
+              />
+            </div>
+          </div>
+
+          <div className="flex min-h-[1.75rem] items-center justify-between gap-2 px-3 pb-1.5 text-xs">
+            {term && shown.length ? (
+              <button
+                type="button"
+                onClick={() => onChange(sortTowns([...new Set([...selected, ...shown.map(([town]) => town)])]))}
+                disabled={allShownTicked}
+                className="font-semibold text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+              >
+                Tick all {shown.length} shown
+              </button>
+            ) : (
+              <span className="text-muted-foreground">Tick as many towns as you need</span>
+            )}
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              disabled={!selected.length}
+              className="font-semibold text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              Clear
+            </button>
+          </div>
+
+          {shown.length ? (
+            <ul className="max-h-64 overflow-y-auto overscroll-contain border-t border-border py-1">
+              {shown.map(([town, count]) => (
+                <li key={town}>
+                  <label
+                    className={cn(
+                      'flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-accent',
+                      chosen.has(town) && 'bg-primary/5 font-semibold',
+                    )}
+                  >
+                    <Checkbox checked={chosen.has(town)} onChange={() => toggle(town)} />
+                    <span className="min-w-0 flex-1 truncate">{town}</span>
+                    <span className="text-xs font-normal tabular-nums text-muted-foreground">{count}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="border-t border-border px-3 py-4 text-center text-xs text-muted-foreground">
+              No town matches “{search.trim()}”.
+            </p>
+          )}
+
+          <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2">
+            <span className="text-xs font-semibold" aria-live="polite">
+              {selected.length
+                ? `${selected.length} ${selected.length === 1 ? 'town' : 'towns'} ticked · ${formatNumber(leadCount)} ${leadCount === 1 ? 'lead' : 'leads'}`
+                : 'No town ticked: all towns shown'}
+            </span>
+            <Button size="sm" onClick={closeAndFocus}>
+              Done
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ *
+ * Work plan: the team's week, one column per day
+ * ------------------------------------------------------------------ */
+
+function WorkPlan({
+  plans,
+  leads,
+  isDone,
+  today,
+  weekOf,
+  onWeek,
+  activeId,
+  onOpen,
+  onAdd,
+}: {
+  plans: LeadPlan[]
+  leads: Lead[]
+  isDone: (lead: Lead) => boolean
+  today: string
+  /** The Monday of the week shown. */
+  weekOf: string
+  onWeek: (monday: string) => void
+  activeId: string | null
+  onOpen: (plan: LeadPlan) => void
+  onAdd: (day: string) => void
+}) {
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekOf, i)), [weekOf])
+  const byDay = useMemo(() => {
+    const map = new Map<string, LeadPlan[]>()
+    for (const plan of plans) {
+      if (plan.date < days[0] || plan.date > days[6]) continue
+      map.set(plan.date, [...(map.get(plan.date) ?? []), plan])
+    }
+    return map
+  }, [plans, days])
+
+  // Monday to Friday always; Saturday or Sunday only when something is planned on it.
+  const shown = days.filter((day, i) => i < 5 || byDay.has(day))
+  const thisWeek = weekStart(today)
+  const when =
+    weekOf === thisWeek
+      ? 'This week'
+      : weekOf === addDays(thisWeek, 7)
+        ? 'Next week'
+        : weekOf === addDays(thisWeek, -7)
+          ? 'Last week'
+          : null
+  const planned = days.reduce((sum, day) => sum + (byDay.get(day)?.length ?? 0), 0)
+
+  return (
+    <AdminPanel
+      title="Work plan"
+      description="The team's plan for the week. Tick towns in the lead list and press Plan a day, or press + on a day. Open a plan to work through its leads."
+      action={
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" variant="outline" aria-label="Previous week" onClick={() => onWeek(addDays(weekOf, -7))} className="px-2.5">
+            <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant={weekOf === thisWeek ? 'secondary' : 'outline'} onClick={() => onWeek(thisWeek)}>
+            This week
+          </Button>
+          <Button size="sm" variant="outline" aria-label="Next week" onClick={() => onWeek(addDays(weekOf, 7))} className="px-2.5">
+            <ChevronRight aria-hidden="true" className="h-4 w-4" />
+          </Button>
+        </div>
+      }
+    >
+      <p
+        id="lead-work-plan-week"
+        tabIndex={-1}
+        aria-live="polite"
+        className="mb-3 flex flex-wrap items-baseline gap-x-2 text-sm focus:outline-none"
+      >
+        <span className="font-heading font-bold">{weekLabel(weekOf)}</span>
+        {when ? <span className="text-muted-foreground">{when}</span> : null}
+        <span className="text-muted-foreground">
+          · {planned ? `${planned} ${planned === 1 ? 'plan' : 'plans'}` : 'nothing planned yet'}
+        </span>
+      </p>
+
+      <div className={cn('grid gap-3 sm:grid-cols-2', shown.length > 5 ? 'lg:grid-cols-4 2xl:grid-cols-7' : 'lg:grid-cols-5')}>
+        {shown.map((day) => {
+          const dayPlans = byDay.get(day) ?? []
+          const isToday = day === today
+          return (
+            <section
+              key={day}
+              aria-label={dayLabel(day, 'long')}
+              data-plan-day={day}
+              tabIndex={-1}
+              className={cn(
+                'flex min-w-0 flex-col gap-2 rounded-lg border p-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                isToday ? 'border-primary/60 bg-primary/5' : 'border-border bg-muted/20',
+              )}
+            >
+              <h3 className="flex items-center justify-between gap-2 font-heading text-xs font-bold uppercase tracking-wide">
+                <span className={cn(day < today && 'text-muted-foreground')}>{dayLabel(day)}</span>
+                {isToday ? (
+                  <Badge size="sm" variant="primary">
+                    Today
+                  </Badge>
+                ) : null}
+              </h3>
+
+              {dayPlans.map((plan) => {
+                const { total, done } = planProgress(plan.towns, leads, isDone)
+                const active = plan.id === activeId
+                return (
+                  <button
+                    key={plan.id}
+                    type="button"
+                    onClick={() => onOpen(plan)}
+                    aria-pressed={active}
+                    className={cn(
+                      'w-full rounded-md border bg-card p-2.5 text-left shadow-sm transition-colors hover:border-primary',
+                      active ? 'border-primary ring-2 ring-primary/30' : 'border-border',
+                    )}
+                  >
+                    {/* line-clamp sets its own display: adding `block` would switch the clamp off. */}
+                    <span className="line-clamp-3 break-words text-sm font-bold leading-snug" title={plan.towns.join(', ')}>
+                      {plan.towns.join(', ')}
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {formatNumber(total)} {total === 1 ? 'lead' : 'leads'}
+                      {plan.who ? ` · ${plan.who}` : ''}
+                    </span>
+                    {/* Spans, not <Progress>: a button may only hold phrasing content. */}
+                    <span aria-hidden="true" className="mt-2 block h-1.5 overflow-hidden rounded-full bg-muted">
+                      <span
+                        className="block h-full rounded-full bg-emerald-500"
+                        style={{ width: `${total ? Math.round((done / total) * 100) : 0}%` }}
+                      />
+                    </span>
+                    <span className="mt-1 block text-xs font-semibold">
+                      {done} of {total} done
+                    </span>
+                  </button>
+                )
+              })}
+
+              <button
+                type="button"
+                onClick={() => onAdd(day)}
+                className={cn(
+                  'flex items-center justify-center gap-1 rounded-md border border-dashed border-border text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary',
+                  dayPlans.length ? 'py-1.5' : 'min-h-[3rem] flex-1 py-3 sm:min-h-[6rem]',
+                )}
+              >
+                <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+                {dayPlans.length ? 'Add a plan' : 'Plan this day'}
+                <span className="sr-only">, {dayLabel(day, 'long')}</span>
+              </button>
+            </section>
+          )
+        })}
+      </div>
+    </AdminPanel>
+  )
+}
+
+/** The day being worked through, above the lead list. */
+function PlanBanner({
+  plan,
+  progress,
+  onEdit,
+  onClose,
+}: {
+  plan: LeadPlan
+  progress: { total: number; done: number }
+  onEdit: () => void
+  onClose: () => void
+}) {
+  const { total, done } = progress
+  return (
+    <div className="border-b border-border bg-primary/5 p-4 md:px-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-wide">
+            <CalendarDays aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
+            {dayLabel(plan.date, 'long')}
+          </p>
+          <p className="mt-1 break-words text-sm">
+            <span className="font-semibold">{plan.towns.join(', ')}</span>
+            {plan.who ? <span className="text-muted-foreground"> · {plan.who}</span> : null}
+          </p>
+          {plan.note ? (
+            <p className="mt-1 whitespace-pre-line break-words text-xs text-muted-foreground">Note: {plan.note}</p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={onEdit}>
+            <Pencil className="mr-1.5 h-3.5 w-3.5" />
+            Edit plan
+          </Button>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            <X className="mr-1.5 h-3.5 w-3.5" />
+            Close day
+          </Button>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <Progress
+          value={done}
+          max={Math.max(total, 1)}
+          label="Leads worked on"
+          className="h-2.5 flex-1"
+          barClassName="bg-emerald-500"
+        />
+        <span className="shrink-0 text-xs font-bold tabular-nums">
+          {done} of {total} done
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {total
+          ? 'A lead counts as done once its status is no longer “New”.'
+          : 'There are no leads in these towns any more. Edit the plan to choose other towns.'}
+      </p>
+    </div>
+  )
+}
+
+/** The plan window: make a day plan, or change or delete one. */
+function PlanForm({
+  draft,
+  towns,
+  leads,
+  plans,
+  people,
+  today,
+  onCancel,
+  onSave,
+  onDelete,
+}: {
+  draft: PlanDraft
+  /** Every town on the list, with its number of leads. */
+  towns: Array<[string, number]>
+  leads: Lead[]
+  plans: LeadPlan[]
+  people: string[]
+  today: string
+  onCancel: () => void
+  /** Returns a message to show when saving failed. */
+  onSave: (input: PlanDraft) => Promise<string | null>
+  onDelete: (plan: LeadPlan) => Promise<string | null>
+}) {
+  const uid = useId()
+  const [date, setDate] = useState(draft.date)
+  const [chosen, setChosen] = useState<string[]>(draft.towns)
+  const [who, setWho] = useState(draft.who)
+  const [note, setNote] = useState(draft.note)
+  const [search, setSearch] = useState('')
+  const [busy, setBusy] = useState<'save' | 'delete' | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [tried, setTried] = useState(false)
+
+  const keepRef = useRef<HTMLButtonElement>(null)
+  const deleteRef = useRef<HTMLButtonElement>(null)
+  const askedToDelete = useRef(false)
+
+  // The delete question replaces the button that asked it: keep keyboard focus on the
+  // safe answer while it shows, and back on "Delete plan" when it goes.
+  useEffect(() => {
+    if (confirmDelete) {
+      askedToDelete.current = true
+      keepRef.current?.focus()
+    } else if (askedToDelete.current) {
+      deleteRef.current?.focus()
+    }
+  }, [confirmDelete])
+
+  const existing = draft.id ? plans.find((plan) => plan.id === draft.id) ?? null : null
+  const dateOk = isPlanDay(date)
+  const picked = new Set(chosen)
+  const leadCount = useMemo(() => leadsInTowns(chosen, leads).length, [chosen, leads])
+  const clashes = dateOk ? townClashes(plans, date, chosen, draft.id) : []
+  const clashPlans = [...new Set(clashes.map((clash) => clash.plan))]
+  const tooMany = chosen.length > PLAN_LIMITS.towns
+  const term = search.trim().toLowerCase()
+  const shown = term ? towns.filter(([town]) => town.toLowerCase().includes(term)) : towns
+  const suggestions = useMemo(
+    () => sortTowns([...new Set([...people, ...plans.map((plan) => plan.who)].filter(Boolean))]),
+    [people, plans],
+  )
+
+  const toggle = (town: string) =>
+    setChosen((current) => (current.includes(town) ? current.filter((t) => t !== town) : sortTowns([...current, town])))
+  const tick = (town: string) =>
+    setChosen((current) => (current.includes(town) ? current : sortTowns([...current, town])))
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setTried(true)
+    if (!dateOk || chosen.length === 0 || tooMany) return
+    setBusy('save')
+    setError(null)
+    const failure = await onSave({ id: draft.id, date, towns: chosen, who: who.trim(), note: note.trim() })
+    // On success the window closes; only a failure needs the form back.
+    if (failure) {
+      setError(failure)
+      setBusy(null)
+    }
+  }
+
+  async function remove() {
+    if (!existing) return
+    setBusy('delete')
+    setError(null)
+    const failure = await onDelete(existing)
+    if (failure) {
+      setError(failure)
+      setBusy(null)
+      setConfirmDelete(false)
+    }
+  }
+
+  // Labels already wear the field-label type; the Towns legend copies it.
+  const fieldLabel = 'mb-1.5 block'
+  const optional = <span className="font-normal normal-case tracking-normal">(optional)</span>
+
+  return (
+    <form onSubmit={submit} noValidate>
+      <DialogHeader>
+        <DialogTitle>{draft.id ? 'Change plan' : 'Plan a day'}</DialogTitle>
+        <DialogDescription>
+          Choose the day and the towns. Every lead in those towns is part of the plan, and leads added to those towns later
+          join it by themselves.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-5 px-6 pb-6">
+        <div>
+          <Label htmlFor={`${uid}-date`} className={fieldLabel}>
+            Day
+          </Label>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Input
+              id={`${uid}-date`}
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              min={PLAN_DAYS.first}
+              max={PLAN_DAYS.last}
+              aria-invalid={tried && !dateOk}
+              aria-describedby={`${uid}-date-hint`}
+              className="w-auto min-w-[11rem]"
+            />
+            <span id={`${uid}-date-hint`} className={cn('text-sm font-semibold', tried && !dateOk && 'text-destructive')}>
+              {dateOk
+                ? dayLabel(date, 'long')
+                : tried
+                  ? isDay(date)
+                    ? `Choose a day from ${PLAN_DAYS.first.slice(0, 4)} to ${PLAN_DAYS.last.slice(0, 4)}.`
+                    : 'Choose a day.'
+                  : ''}
+              {dateOk && date < today ? <span className="ml-1 font-normal text-muted-foreground">(in the past)</span> : null}
+            </span>
+          </div>
+        </div>
+
+        <fieldset>
+          <legend className="mb-1.5 block font-heading text-xs font-bold uppercase tracking-brand text-muted-foreground">
+            Towns
+          </legend>
+          {chosen.length ? (
+            <ul aria-label="Towns in this plan" className="mb-2 flex flex-wrap gap-1.5">
+              {chosen.map((town) => (
+                <li key={town}>
+                  <button
+                    type="button"
+                    onClick={() => toggle(town)}
+                    aria-label={`Remove ${town}`}
+                    className="inline-flex max-w-full items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
+                  >
+                    <span className="truncate">{town}</span>
+                    <X aria-hidden="true" className="h-3 w-3 shrink-0" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p aria-live="polite" className={cn('mb-2 text-sm', tried && !chosen.length ? 'font-semibold text-destructive' : 'font-semibold')}>
+            {chosen.length
+              ? `${chosen.length} ${chosen.length === 1 ? 'town' : 'towns'} · ${formatNumber(leadCount)} ${leadCount === 1 ? 'lead' : 'leads'}`
+              : tried
+                ? 'Choose at least one town.'
+                : 'No town chosen yet. Tick the towns below.'}
+          </p>
+
+          <div className="overflow-hidden rounded-lg border border-border">
+            <div className="border-b border-border p-2">
+              <Label htmlFor={`${uid}-search`} className="sr-only">
+                Search towns
+              </Label>
+              <div className="relative">
+                <Search
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                />
+                <Input
+                  id={`${uid}-search`}
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  onKeyDown={(event) => townSearchKeys(event, search, setSearch, shown, tick)}
+                  placeholder="Search a town…"
+                  autoComplete="off"
+                  className="h-9 pl-9"
+                />
+              </div>
+            </div>
+            {shown.length ? (
+              <ul className="max-h-52 overflow-y-auto overscroll-contain py-1">
+                {shown.map(([town, count]) => (
+                  <li key={town}>
+                    <label
+                      className={cn(
+                        'flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-accent',
+                        picked.has(town) && 'bg-primary/5 font-semibold',
+                      )}
+                    >
+                      <Checkbox checked={picked.has(town)} onChange={() => toggle(town)} />
+                      <span className="min-w-0 flex-1 truncate">{town}</span>
+                      <span className="text-xs font-normal tabular-nums text-muted-foreground">{count}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-3 py-4 text-center text-xs text-muted-foreground">No town matches “{search.trim()}”.</p>
+            )}
+          </div>
+          {tooMany ? (
+            <p className="mt-1.5 text-xs font-semibold text-destructive">
+              A plan can hold at most {PLAN_LIMITS.towns} towns. Remove {chosen.length - PLAN_LIMITS.towns}.
+            </p>
+          ) : null}
+        </fieldset>
+
+        {clashPlans.length ? (
+          <div className="flex gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+            <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-semibold">Already planned on {dayLabel(date)}:</p>
+              <ul className="mt-1 space-y-0.5">
+                {clashPlans.map((plan) => (
+                  <li key={plan.id} className="break-words">
+                    {listNames(clashes.filter((clash) => clash.plan === plan).map((clash) => clash.town))}
+                    {plan.who ? ` (${plan.who})` : ''}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs">You can still save, for example when two people go together.</p>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div>
+            <Label htmlFor={`${uid}-who`} className={fieldLabel}>
+              Who will do it {optional}
+            </Label>
+            <Input
+              id={`${uid}-who`}
+              list={`${uid}-people`}
+              value={who}
+              onChange={(event) => setWho(event.target.value)}
+              maxLength={PLAN_LIMITS.who}
+              autoComplete="off"
+              placeholder="Name of the person doing the day"
+            />
+            <datalist id={`${uid}-people`}>
+              {suggestions.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </div>
+
+          <div>
+            <Label htmlFor={`${uid}-note`} className={fieldLabel}>
+              Note {optional}
+            </Label>
+            <Textarea
+              id={`${uid}-note`}
+              rows={3}
+              maxLength={PLAN_LIMITS.note}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="For example: which town to start in, who to see first"
+            />
+          </div>
+        </div>
+
+        {error ? (
+          <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </div>
+
+      <DialogFooter className="sm:items-center sm:justify-between">
+        {existing ? (
+          confirmDelete ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold">Delete this plan?</span>
+              <Button type="button" size="sm" variant="destructive" loading={busy === 'delete'} disabled={busy !== null} onClick={remove}>
+                Yes, delete
+              </Button>
+              <Button
+                ref={keepRef}
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy !== null}
+                onClick={() => setConfirmDelete(false)}
+              >
+                Keep it
+              </Button>
+            </div>
+          ) : (
+            <Button
+              ref={deleteRef}
+              type="button"
+              variant="ghost"
+              disabled={busy !== null}
+              onClick={() => setConfirmDelete(true)}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Delete plan
+            </Button>
+          )
+        ) : (
+          <span aria-hidden="true" className="hidden sm:block" />
+        )}
+        <div className="flex flex-col-reverse gap-3 sm:flex-row">
+          <Button type="button" variant="outline" disabled={busy !== null} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={busy === 'save'} disabled={busy !== null}>
+            {draft.id ? 'Save changes' : 'Save plan'}
+          </Button>
+        </div>
+      </DialogFooter>
+    </form>
   )
 }
 
@@ -983,7 +1995,7 @@ function LeadRow({
       </div>
 
       {expanded ? (
-        <div id={panelId} className="grid gap-5 px-4 pb-5 md:grid-cols-[1.4fr_1fr] md:px-5">
+        <div id={panelId} className="grid gap-5 px-4 pb-5 [overflow-wrap:anywhere] md:grid-cols-[1.4fr_1fr] md:px-5">
           <div className="space-y-4 text-sm">
             {lead.description ? <p className="leading-relaxed">{lead.description}</p> : null}
 
@@ -1243,6 +2255,38 @@ function hoursLabel(hours: number): string {
   return `${formatNumber(rounded)} ${rounded === 1 ? 'hr' : 'hrs'}`
 }
 
+/** The same names, in any order. */
+function sameList(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  const names = new Set(b)
+  return a.every((name) => names.has(name))
+}
+
+/**
+ * Keys for a town search box: Enter ticks the town when exactly one matches (and
+ * never submits the form around it); Escape first clears the search, and only a
+ * second Escape closes whatever the box sits in.
+ */
+function townSearchKeys(
+  event: React.KeyboardEvent<HTMLInputElement>,
+  search: string,
+  setSearch: (value: string) => void,
+  matches: Array<[string, number]>,
+  tick: (town: string) => void,
+) {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    if (matches.length === 1) {
+      tick(matches[0][0])
+      setSearch('')
+    }
+  } else if (event.key === 'Escape' && search) {
+    event.preventDefault()
+    event.stopPropagation()
+    setSearch('')
+  }
+}
+
 function tally(values: string[]): Array<[string, number]> {
   const counts = new Map<string, number>()
   for (const v of values) if (v) counts.set(v, (counts.get(v) ?? 0) + 1)
@@ -1253,7 +2297,7 @@ function tally(values: string[]): Array<[string, number]> {
  * Downloads exactly the filtered leads as a real .xlsx. The writer is loaded
  * only now, so the admin bundle does not carry it until someone exports.
  */
-async function exportLeads(rows: Lead[], statusOf: (key: string) => LeadStatus) {
+async function exportLeads(rows: Lead[], statusOf: (key: string) => LeadStatus, name?: string) {
   const { default: writeXlsxFile } = await import('write-excel-file')
   const col = (column: string, width: number, value: (l: Lead) => string, wrap = false) => ({
     column,
@@ -1297,7 +2341,7 @@ async function exportLeads(rows: Lead[], statusOf: (key: string) => LeadStatus) 
     .join('-')
   await writeXlsxFile(rows, {
     schema,
-    fileName: `Spartan-Tyres-NSW-Leads-${stamp}.xlsx`,
+    fileName: `${name ?? `Spartan-Tyres-NSW-Leads-${stamp}`}.xlsx`,
     sheet: 'Leads',
     stickyRowsCount: 1,
     getHeaderStyle: () => ({

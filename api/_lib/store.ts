@@ -147,8 +147,26 @@ export interface StoredLeadStatus {
   updatedAt: string
 }
 
+/**
+ * A day plan: the towns the team works on one day (see src/lib/lead-plans.ts).
+ * It names whole towns, never single leads, so it is untouched by re-imports.
+ */
+export interface StoredLeadPlan {
+  id: string
+  /** YYYY-MM-DD, Sydney calendar. */
+  date: string
+  towns: string[]
+  who: string
+  note: string
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  updatedBy: string
+}
+
 const KEY_LEADS = 'spartan:leads'
 const KEY_LEAD_STATUS = 'spartan:lead-status'
+const KEY_LEAD_PLANS = 'spartan:lead-plans'
 const KEY_META = 'spartan:meta'
 const KEY_ORDERS = 'spartan:orders'
 const KEY_ENQUIRIES = 'spartan:enquiries'
@@ -631,6 +649,27 @@ export async function setLeadStatus(
   else if (researchHours !== undefined) next.researchHours = researchHours
   await hashSet(KEY_LEAD_STATUS, key, next)
   return next
+}
+
+/** Every day plan, earliest day first. */
+export async function listLeadPlans(): Promise<StoredLeadPlan[]> {
+  return Object.values(await hashAll<StoredLeadPlan>(KEY_LEAD_PLANS)).sort(
+    (a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt),
+  )
+}
+
+export async function getLeadPlan(id: string): Promise<StoredLeadPlan | null> {
+  if (!id) return null
+  return hashGet<StoredLeadPlan>(KEY_LEAD_PLANS, id)
+}
+
+export async function saveLeadPlan(plan: StoredLeadPlan): Promise<StoredLeadPlan> {
+  await hashSet(KEY_LEAD_PLANS, plan.id, plan)
+  return plan
+}
+
+export async function deleteLeadPlan(id: string): Promise<void> {
+  await hashDelete(KEY_LEAD_PLANS, id)
 }
 
 /** Small bookkeeping values, e.g. when the leads were last imported. */
