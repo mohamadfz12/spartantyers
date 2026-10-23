@@ -4,6 +4,7 @@ Allow: /
 # The admin panel and order confirmations must never be indexed.
 Disallow: /admin
 Disallow: /admin/
+Disallow: /account
 Disallow: /order/
 Disallow: /checkout
 Disallow: /cart

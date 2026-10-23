@@ -14,6 +14,13 @@
  * payment of any amount is split across those tickets, most overdue first, and
  * a ticket is paid once its total is covered.
  *
+ * Customer accounts: a counter customer linked to a website account (accountId) is sold to at
+ * the account's prices (the till shows them; staff can still type any price), and a sale on
+ * account for that customer first takes credit from the account's limit, atomically (see
+ * accounts/repo.ts `reserveCredit`). A counter customer with no account behaves exactly as before
+ * and never touches the accounts database. A website pay-later order is a ticket on account too
+ * (`orderId`), so the balance, the account payments and this file's machinery are the same.
+ *
  * Every payment becomes a "payment" in the ledger (source 'pos'), so the
  * Payments and Balance pages include counter sales. Tyres sold come off the
  * website's stock with a movement in the stock log. Payments are recorded
@@ -22,19 +29,25 @@
 
 import { randomBytes, randomUUID } from 'node:crypto'
 import { gstInside } from '../../src/lib/admin-ledger.js'
+import { saleChannel, type SaleChannel } from '../../src/lib/account-pricing.js'
 import { site } from '../../src/config/site.js'
+import { creditAvailable, tillRefusal } from './accounts/pricing.js'
+import { addOutstanding, getAccount, markCreditMoving, releaseCredit, reserveCredit, type AccountRecord } from './accounts/repo.js'
+import { DbUnavailable } from './db.js'
 import { addDays, onTerminalPaid, recordCashInSquare, squareReady, squareReference, type ChargeLine } from './square-api.js'
 import { sydneyDate } from './audit.js'
 import { getProduct, mergeOverride } from './catalogue.js'
 import {
   claimOnce,
   getAccountPayment,
+  getOrder,
   getOverrides,
   getPosCustomer,
   getPosTicket,
   listPosTickets,
   saveAccountPayment,
   saveLedgerEntry,
+  saveOrder,
   savePosTicket,
   saveStockMove,
   setOverride,
@@ -103,6 +116,8 @@ export function cleanCustomer(input: Record<string, unknown>, existing: StoredPo
     id: existing?.id ?? randomUUID(),
     ...c,
     termsDays: terms,
+    // Only the account link itself may set this; a counter edit can neither add nor remove it.
+    ...(existing?.accountId ? { accountId: existing.accountId } : {}),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     createdBy: existing?.createdBy ?? by,
@@ -162,20 +177,108 @@ export function priceTicket(lines: unknown, discount: unknown) {
   return { lines: out, subtotal, discount: d, total: round2(subtotal - d) }
 }
 
+/* ------------------------------------------------------------------ *
+ * Customer accounts at the till
+ * ------------------------------------------------------------------ */
+
+/**
+ * The website account behind a counter customer; null for an ordinary counter customer, in which case
+ * the accounts database is never touched. Throws a clear error when the account cannot be read, so a
+ * credit decision is never made blind.
+ */
+async function accountOf(customer: StoredPosCustomer | null): Promise<AccountRecord | null> {
+  if (!customer?.accountId) return null
+  try {
+    return await getAccount(customer.accountId)
+  } catch (error) {
+    if (error instanceof DbUnavailable) {
+      throw new PosError('Customer accounts are unavailable right now, so this customer cannot be put on account. Try again shortly.', 503)
+    }
+    throw error
+  }
+}
+
+/** The sale label and account of a ticket. Best effort: a label never stops a sale being saved. */
+async function ticketLabels(customer: StoredPosCustomer | null, lines: StoredPosLine[]): Promise<{ channel: SaleChannel; accountId?: string }> {
+  const tyres = lines.filter((l) => l.source === 'tyre').reduce((n, l) => n + l.qty, 0)
+  try {
+    const account = await accountOf(customer)
+    if (account && account.posCustomerId === customer?.id) return { channel: saleChannel(account.level, tyres), accountId: account.id }
+  } catch (error) {
+    console.error('[pos] account label skipped:', (error as Error).message)
+  }
+  return { channel: saleChannel(null, tyres) }
+}
+
+const dollars = (n: number) => `$${n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+/**
+ * Takes credit for a sale on account to a customer linked to a website account, or does nothing for an
+ * ordinary counter customer. Returns what was taken, to give back if the sale then fails.
+ */
+async function reserveForSale(customer: StoredPosCustomer, total: number): Promise<{ accountId: string; amount: number } | null> {
+  const account = await accountOf(customer)
+  if (!account) return null
+  const label = customer.company || customer.name
+  if (account.posCustomerId !== customer.id) {
+    throw new PosError(`${label} is not linked to their website account properly, so cannot be put on account here. Ask the office to check the link.`, 409)
+  }
+  if (account.status !== 'active') throw new PosError(`${label} cannot buy on account: their website account is suspended.`, 409)
+  // Until an owner or manager sets pay later for this account, the till works as it always has for this
+  // customer (staff decide); what they owe is still kept in step.
+  if (!account.creditSetAt) {
+    await addOutstanding(account.id, total)
+    return { accountId: account.id, amount: total }
+  }
+  const refusal = tillRefusal(account)
+  if (refusal) throw new PosError(`${label} cannot buy on account: ${refusal}`, 409)
+  if ((await reserveCredit(account.id, total)) === null) {
+    const fresh = (await getAccount(account.id)) ?? account
+    const refused = tillRefusal(fresh)
+    throw new PosError(
+      refused
+        ? `${label} cannot buy on account: ${refused}`
+        : `This sale is over ${label}'s credit limit: ${dollars(creditAvailable(fresh))} available. An owner or manager can change the limit in Customer accounts.`,
+      409,
+    )
+  }
+  return { accountId: account.id, amount: total }
+}
+
+async function giveBack(reserved: { accountId: string; amount: number } | null) {
+  if (!reserved) return
+  try {
+    await releaseCredit(reserved.accountId, reserved.amount)
+  } catch (error) {
+    // The reconcile step repairs the figure from the tickets; say so loudly.
+    console.error(`[pos] credit not given back for ${reserved.accountId}:`, (error as Error).message)
+  }
+}
+
+/** A website pay-later order whose ticket is paid off is paid. Other orders' progress is left alone. */
+async function markOrderPaid(orderId: string, at: string) {
+  const order = await getOrder(orderId)
+  if (!order || order.accountPaidAt) return
+  await saveOrder({ ...order, accountPaidAt: at, ...(order.status === 'account' ? { status: 'paid' as const } : {}) })
+}
+
 const step = (by: string, what: string) => ({ at: new Date().toISOString(), by, what })
 
 export async function saveTicket(input: Record<string, unknown>, by: string): Promise<StoredPosTicket> {
   const priced = priceTicket(input.lines, input.discount)
   const customerId = input.customerId ? text(input.customerId, 120) : null
-  if (customerId && !(await getPosCustomer(customerId))) throw new PosError('Customer not found', 404)
+  const customer = customerId ? await getPosCustomer(customerId) : null
+  if (customerId && !customer) throw new PosError('Customer not found', 404)
   const note = text(input.note, 500)
   const now = new Date().toISOString()
+  const labels = await ticketLabels(customer, priced.lines)
 
   if (input.ref) {
     const was = await getPosTicket(text(input.ref, 20))
     if (!was) throw new PosError('Ticket not found', 404)
     if (was.status !== 'open') throw new PosError(`This ticket is already ${statusWord(was.status)}`, 409)
-    return savePosTicket({ ...was, ...priced, customerId, note, updatedAt: now })
+    const { accountId: _old, ...rest } = was
+    return savePosTicket({ ...rest, ...priced, customerId, note, ...labels, updatedAt: now })
   }
 
   return savePosTicket({
@@ -191,6 +294,7 @@ export async function saveTicket(input: Record<string, unknown>, by: string): Pr
     squarePaymentId: null,
     dueDate: null,
     stockApplied: false,
+    ...labels,
     history: [step(by, 'Created')],
     createdBy: by,
     createdAt: now,
@@ -290,8 +394,10 @@ export async function recordTicketPayment(
   if (!t || t.status !== 'open') return 'The ticket was already settled'
   const method = payment.kind === 'other' ? payment.methodLabel || 'Other' : METHOD_LABEL[payment.kind]
   const now = new Date().toISOString()
+  const { accountId: _old, ...base } = t
   const paid = await savePosTicket({
-    ...t,
+    ...base,
+    ...(await ticketLabels(t.customerId ? await getPosCustomer(t.customerId) : null, t.lines)),
     status: 'paid',
     amountPaid: t.total,
     payment: payment.kind,
@@ -341,7 +447,12 @@ export async function payTicketOther(ref: string, methodLabel: string, by: strin
   return { ticket: await getPosTicket(t.ref), detail }
 }
 
-/** Sell on account: the customer takes the goods now and pays by the due date. */
+/**
+ * Sell on account: the customer takes the goods now and pays by the due date. For a customer linked to
+ * a website account, the account must be active and allowed to pay later, and the sale first takes its
+ * credit in one guarded update (it is given back if anything below fails). Any other counter customer
+ * is sold to exactly as before.
+ */
 export async function chargeToAccount(ref: string, dueDays: unknown, by: string) {
   const t = await getPosTicket(ref)
   if (!t) throw new PosError('Ticket not found', 404)
@@ -350,20 +461,69 @@ export async function chargeToAccount(ref: string, dueDays: unknown, by: string)
   const customer = await getPosCustomer(t.customerId)
   if (!customer) throw new PosError('Customer not found', 404)
   const days = dueDays === undefined || dueDays === '' ? customer.termsDays : Math.max(0, Math.min(120, Math.round(Number(dueDays) || 0)))
-  if (!(await claimOnce(`pos-paid:${ref}`))) throw new PosError('This ticket was settled meanwhile', 409)
-  const dueDate = addDays(sydneyDate(), days)
+  const reserved = await reserveForSale(customer, t.total)
+  try {
+    if (!(await claimOnce(`pos-paid:${ref}`))) throw new PosError('This ticket was settled meanwhile', 409)
+    const dueDate = addDays(sydneyDate(), days)
+    const now = new Date().toISOString()
+    const { accountId: _old, ...base } = t
+    const saved = await savePosTicket({
+      ...base,
+      ...(await ticketLabels(customer, t.lines)),
+      status: 'account',
+      payment: 'account',
+      paymentMethod: 'On account',
+      dueDate,
+      updatedAt: now,
+      history: [...t.history, step(by, `On account, due ${dueDate}`)],
+    })
+    await takeStock(saved, by)
+    return { ticket: await getPosTicket(ref), dueDate }
+  } catch (error) {
+    await giveBack(reserved)
+    throw error
+  }
+}
+
+/**
+ * The till ticket behind a website pay-later order: already on account, so the customer's balance, the
+ * account payments and the ledger work on it like any other. Stock is taken by the order itself.
+ */
+export async function createOrderTicket(
+  input: { customerId: string; accountId: string; channel: SaleChannel; orderId: string; reference: string; dueDate: string; lines: StoredPosLine[]; discount: number },
+  by: string,
+): Promise<StoredPosTicket> {
+  const priced = priceTicket(input.lines, input.discount)
   const now = new Date().toISOString()
-  const saved = await savePosTicket({
-    ...t,
+  return savePosTicket({
+    ref: newRef('TK'),
     status: 'account',
+    customerId: input.customerId,
+    ...priced,
+    amountPaid: 0,
+    note: `Website order ${input.reference}`,
     payment: 'account',
     paymentMethod: 'On account',
-    dueDate,
+    squareOrderId: null,
+    squarePaymentId: null,
+    dueDate: input.dueDate,
+    stockApplied: true,
+    orderId: input.orderId,
+    accountId: input.accountId,
+    channel: input.channel,
+    history: [step(by, `On account (website order ${input.reference}), due ${input.dueDate}`)],
+    createdBy: by,
+    createdAt: now,
     updatedAt: now,
-    history: [...t.history, step(by, `On account, due ${dueDate}`)],
+    paidAt: null,
   })
-  await takeStock(saved, by)
-  return { ticket: await getPosTicket(ref), dueDate }
+}
+
+/** Cancels a ticket that carries a website order that was cancelled. Only an untouched one can be. */
+export async function voidOrderTicket(ref: string, by: string): Promise<StoredPosTicket | null> {
+  const t = await getPosTicket(ref)
+  if (!t || t.status !== 'account') return null
+  return savePosTicket({ ...t, status: 'void', updatedAt: new Date().toISOString(), history: [...t.history, step(by, 'Cancelled with its website order')] })
 }
 
 /* ------------------------------------------------------------------ *
@@ -440,12 +600,21 @@ export async function recordAccountPayment(ref: string, squarePaymentId: string 
   const p = await getAccountPayment(ref)
   if (!p || p.status !== 'pending') return 'Already recorded'
   const now = new Date().toISOString()
+  // A website account's figure is about to change: a repair reading the tickets meanwhile must wait.
+  const payer = await getPosCustomer(p.customerId).catch(() => null)
+  if (payer?.accountId) {
+    await markCreditMoving(payer.accountId).catch((error) =>
+      console.error(`[pos] credit move not marked for ${p.customerId}:`, (error as Error).message),
+    )
+  }
   await saveAccountPayment({ ...p, status: 'paid', paidAt: now, squarePaymentId })
+  let applied = 0
   for (const a of p.allocations) {
     const t = await getPosTicket(a.ticketRef)
     if (!t || t.status !== 'account') continue
     const amountPaid = round2(Math.min(t.total, t.amountPaid + a.amount))
     const settled = amountPaid >= t.total
+    applied = round2(applied + (amountPaid - t.amountPaid))
     await savePosTicket({
       ...t,
       amountPaid,
@@ -453,6 +622,20 @@ export async function recordAccountPayment(ref: string, squarePaymentId: string 
       updatedAt: now,
       history: [...t.history, step(by, `$${a.amount.toFixed(2)} paid (${p.methodLabel}, ${p.ref})${settled ? ': paid off' : ''}`)],
     })
+    if (settled && t.orderId) {
+      try {
+        await markOrderPaid(t.orderId, now)
+      } catch (error) {
+        console.error(`[pos] order ${t.orderId} not marked paid:`, (error as Error).message)
+      }
+    }
+  }
+  // What a website account owes goes down by what was just applied to its tickets.
+  try {
+    const customer = await getPosCustomer(p.customerId)
+    if (customer?.accountId) await releaseCredit(customer.accountId, applied)
+  } catch (error) {
+    console.error(`[pos] outstanding not reduced for ${p.customerId}:`, (error as Error).message)
   }
   await ledgerPayment(
     `pos-${ref}`,

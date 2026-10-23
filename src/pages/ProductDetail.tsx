@@ -30,6 +30,8 @@ import { deliveryZones, warrantyTerms } from '@/data/content'
 import { site } from '@/config/site'
 import { cn, formatDate, formatNumber, money, pluralise, specValue } from '@/lib/utils'
 import { useCart } from '@/store/cart'
+import { volumeUnit } from '@/lib/account-price-display'
+import { usePriceView, YourPrice } from '@/components/shop/YourPrice'
 import { requestQuote, toast, useRecentlyViewed, useRenderQuality } from '@/store/ui'
 import { productGallery, productPhotoFor, type GalleryShot } from '@/data/media'
 import {
@@ -90,10 +92,14 @@ function Detail({ product }: { product: Product }) {
 
   useEffect(() => record(product.id), [record, product.id])
 
+  // `price` is the public shelf price: it alone feeds the page title, description and structured data.
+  // `view` is what THIS visitor sees in the buy box (their own account price when it beats the shelf price).
   const price = effectivePrice(product)
-  const outOfStock = price != null && product.stock <= 0
-  const lowStock = price != null && product.stock > 0 && product.stock <= 5
-  const maxQuantity = price == null || outOfStock ? 200 : Math.max(product.stock, 1)
+  const view = usePriceView(product)
+  const unit = view.current ?? 0
+  const outOfStock = view.buyable && product.stock <= 0
+  const lowStock = view.buyable && product.stock > 0 && product.stock <= 5
+  const maxQuantity = !view.buyable || outOfStock ? 200 : Math.max(product.stock, 1)
 
   const band = priceBreakFor(quantity)
   const nextBreak = PRICE_BREAKS.find((entry) => quantity < entry.min) ?? null
@@ -388,7 +394,7 @@ function Detail({ product }: { product: Product }) {
 
           <p className="lede mt-5">{product.description}</p>
 
-          {price == null ? (
+          {!view.buyable ? (
             <PoaPanel
               product={product}
               quantity={quantity}
@@ -399,14 +405,20 @@ function Detail({ product }: { product: Product }) {
           /* Price */
           <div className="mt-6 rounded-lg border border-border bg-card p-5">
             <div className="flex flex-wrap items-end gap-3">
-              <span className="font-heading text-4xl font-black leading-none">
-                {money(price)}
-              </span>
-              {product.discountPrice != null && product.price != null ? (
-                <span className="text-lg text-muted-foreground line-through">
-                  {money(product.price)}
-                </span>
-              ) : null}
+              {view.yours ? (
+                <YourPrice view={view} priceClassName="text-4xl" retailClassName="text-lg" />
+              ) : (
+                <>
+                  <span className="font-heading text-4xl font-black leading-none">
+                    {money(unit)}
+                  </span>
+                  {product.discountPrice != null && product.price != null ? (
+                    <span className="text-lg text-muted-foreground line-through">
+                      {money(product.price)}
+                    </span>
+                  ) : null}
+                </>
+              )}
               <span className="pb-1 text-sm text-muted-foreground">
                 per tyre, inc. GST
               </span>
@@ -487,11 +499,15 @@ function Detail({ product }: { product: Product }) {
 
               <p className="mt-2 text-sm">
                 <span className="font-heading text-lg font-black">
-                  {money(band ? price * (1 - band.discount) : price)}
+                  {money(band ? (volumeUnit(view, band.discount) ?? unit) : unit)}
                 </span>{' '}
                 <span className="text-muted-foreground">
                   each at {quantity} {pluralise(quantity, 'tyre')}
-                  {band ? ` — ${band.label}, ${Math.round(band.discount * 100)}% off` : ''}
+                  {view.yours
+                    ? ': your account price, or the volume price when that is lower'
+                    : band
+                      ? ` — ${band.label}, ${Math.round(band.discount * 100)}% off`
+                      : ''}
                 </span>
               </p>
 
@@ -517,7 +533,7 @@ function Detail({ product }: { product: Product }) {
                           active ? 'text-primary' : 'text-foreground',
                         )}
                       >
-                        {money(price * (1 - entry.discount))}
+                        {money(volumeUnit(view, entry.discount) ?? unit)}
                       </p>
                       <p className="text-[0.65rem] text-muted-foreground">
                         {Math.round(entry.discount * 100)}% off
@@ -535,7 +551,7 @@ function Detail({ product }: { product: Product }) {
                   />
                   <span>
                     Add {nextBreak.min - quantity} more to reach {nextBreak.label} and
-                    pay {money(price * (1 - nextBreak.discount))} each. Volume
+                    pay {money(volumeUnit(view, nextBreak.discount) ?? unit)} each. Volume
                     discounts apply automatically in the cart.
                   </span>
                 </p>

@@ -562,7 +562,7 @@ run('start: opens the call with OpenAI using the server key, and gives the brows
   assert.deepEqual(sent.session.tools[0], { type: 'function', name: TOOLS[0].function.name, description: TOOLS[0].function.description, parameters: TOOLS[0].function.parameters })
   // The call rules, the chat's own rules and facts, the page, and what was typed before.
   const ins: string = sent.session.instructions
-  for (const part of [rules.IDENTITY, rules.SCOPE_RULES, rules.ACCURACY_RULES, rules.ORDER_RULES, rules.QUOTE_RULES, rules.PERSON_RULES, rules.PROMO_RULES, rules.DO_NOT_SAY_RULES, rules.LANGUAGE_RULES, rules.WEBSITE_RULES, rules.SAFETY_RULES, rules.buildFacts()]) {
+  for (const part of [rules.IDENTITY, rules.SCOPE_RULES, rules.ACCURACY_RULES, rules.ORDER_RULES, rules.QUOTE_RULES, rules.PERSON_RULES, rules.PROMO_RULES, rules.ACCOUNT_RULES, rules.DO_NOT_SAY_RULES, rules.LANGUAGE_RULES, rules.WEBSITE_RULES, rules.SAFETY_RULES, rules.buildFacts()]) {
     assert.ok(ins.includes(part), part.slice(0, 40))
   }
   assert.ok(ins.includes('live voice call'))

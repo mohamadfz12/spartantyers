@@ -17,11 +17,13 @@ import {
   readBody,
   withGuard,
 } from '../http.js'
-import { listOrders, updateOrderStatus, type StoredOrder } from '../store.js'
+import { cancelAccountOrder } from '../accounts/orders.js'
+import { getOrder, listOrders, updateOrderStatus, type StoredOrder } from '../store.js'
 
 const STATUSES: StoredOrder['status'][] = [
   'pending',
   'paid',
+  'account',
   'packing',
   'dispatched',
   'collected',
@@ -58,6 +60,34 @@ export default withGuard(async (req, res) => {
   if (!status || !isStatus(status)) {
     fail(res, 400, `"status" must be one of ${STATUSES.join(', ')}.`)
     return
+  }
+
+  // A pay-later order is paid at the till, in the customer's account, so their balance stays right:
+  // it is never marked paid (or pending) from here, and cancelling it cancels its ticket and frees the credit.
+  const existing = await getOrder(id)
+  if (existing?.payment === 'account') {
+    // Cancelling it voided its ticket and gave the credit back: shipping it now would send tyres nobody owes for.
+    if (existing.status === 'cancelled' && status !== 'cancelled') {
+      fail(res, 409, 'This order on account was cancelled, so nothing is owed for it. Ask the customer to place a new order.')
+      return
+    }
+    if (status === 'paid' || status === 'pending' || status === 'account') {
+      fail(
+        res,
+        409,
+        existing.accountPaidAt
+          ? 'This order was paid on the customer account.'
+          : "This order is on the customer's account. Take the payment in the till's customer account, so the balance stays right.",
+      )
+      return
+    }
+    if (status === 'cancelled') {
+      const blocked = await cancelAccountOrder(existing, actor.name)
+      if (blocked) {
+        fail(res, 409, blocked)
+        return
+      }
+    }
   }
 
   const order = await updateOrderStatus(id, status)

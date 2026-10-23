@@ -77,7 +77,7 @@ export default withGuard(async (req, res) => {
     if (order.status !== 'cancelled') {
       customer.orders += 1
       customer.tyres += order.lines.reduce((sum, line) => sum + line.quantity, 0)
-      customer.spent += order.paymentId ? order.total : (manual.get(order.id) ?? 0)
+      customer.spent += order.paymentId || order.accountPaidAt ? order.total : (manual.get(order.id) ?? 0)
     }
     byEmail.set(email, customer)
   }

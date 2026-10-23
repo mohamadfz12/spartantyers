@@ -1,8 +1,9 @@
 import { Link, useLocation } from 'react-router-dom'
 import { ArrowRight, Scale, X } from 'lucide-react'
-import { productById, effectivePrice } from '@/data/products'
+import { productById } from '@/data/products'
 import { MAX_COMPARE, useCompare } from '@/store/ui'
-import { pluralise, priceLabel } from '@/lib/utils'
+import { pluralise } from '@/lib/utils'
+import { InlinePrice } from './YourPrice'
 import { Button } from '@/components/ui'
 import { ProductThumb } from './ProductThumb'
 import { AnimatePresence, motion } from '@/components/motion'
@@ -70,7 +71,7 @@ export function CompareTray() {
                       {product.model}
                     </p>
                     <p className="font-mono text-[0.68rem] text-muted-foreground">
-                      {product.size} · {priceLabel(effectivePrice(product))}
+                      {product.size} · <InlinePrice product={product} />
                     </p>
                   </div>
                   <button

@@ -51,5 +51,7 @@ export default withGuard(async (req, res) => {
     return
   }
 
-  ok(res, { order })
+  // Internal links (the customer account and till ticket behind a pay-later order) are not for the web.
+  const { accountId: _account, posTicketRef: _ticket, ...visible } = order
+  ok(res, { order: visible })
 })

@@ -16,10 +16,23 @@
  *   5. total     = round2(subtotal - volume - promo + fitting)
  * Any divergence here shows up as a price mismatch between cart and receipt,
  * so keep the two in lockstep.
+ *
+ * CUSTOMER ACCOUNTS: with an `account`, each line may instead be priced by the
+ * account (its special price, or its agreed % off the RRP) when that beats the
+ * normal price after the volume break; see src/lib/account-pricing.ts, which
+ * holds the one rule the browser uses too. Without an account (a guest) the
+ * result is exactly what it always was: that module's arithmetic is the same.
  */
 
 import { site } from '../../src/config/site.js'
-import { effectivePrice, priceBreakFor, resolveProduct } from './catalogue.js'
+import {
+  accountUnitPrice,
+  priceCart,
+  type AccountPricing,
+  type PriceBasis,
+  type SaleChannel,
+} from '../../src/lib/account-pricing.js'
+import { effectivePrice, resolveProduct, type Product } from './catalogue.js'
 import { resolvePromo } from './promos.js'
 import type { StoredOverride } from './store.js'
 import { round2 } from './http.js'
@@ -41,6 +54,12 @@ export interface PricedLine {
   /** True when the item is out of stock but still orderable as a pre-order. */
   preOrder: boolean
   stock: number
+  /** Which price the line was charged at (see src/lib/account-pricing.ts). */
+  basis: PriceBasis
+  /** The shelf price per tyre; null for a price-on-application tyre sold at an account price. */
+  retailUnitPrice: number | null
+  /** What the account saved on this line against the shelf price (0 unless `basis` is 'account'). */
+  accountSaving: number
 }
 
 export interface PricingResult {
@@ -59,6 +78,10 @@ export interface PricingResult {
   total: number
   /** GST component — prices are GST inclusive. */
   gst: number
+  /** The sale label: wholesale (Wholesaler account), bulk (Bulk account or 20+ tyres), else retail. */
+  channel: SaleChannel
+  /** Total saved by the account's own prices against shelf prices (0 for a guest). */
+  accountSaving: number
   /** Human-readable rejection reasons. Non-empty means do not charge. */
   errors: string[]
   /** Non-fatal notices (pre-orders, promo not applied, fitting clamped). */
@@ -78,6 +101,7 @@ const MAX_QTY_PER_LINE = 500
 export function priceOrder(
   input: PricingInput,
   overrides: Record<string, StoredOverride>,
+  account: AccountPricing | null = null,
 ): PricingResult {
   const errors: string[] = []
   const warnings: string[] = []
@@ -100,7 +124,7 @@ export function priceOrder(
     )
   }
 
-  const lines: PricedLine[] = []
+  const accepted: Array<{ product: Product; quantity: number; preOrder: boolean }> = []
   const seen = new Set<string>()
 
   for (const entry of rawLines.slice(0, MAX_LINES)) {
@@ -140,10 +164,10 @@ export function priceOrder(
       continue
     }
 
-    // Price-on-application lines are quoted, not sold through the cart — and
-    // never at an implied $0.
-    const unitPrice = effectivePrice(product)
-    if (unitPrice == null) {
+    // Price-on-application lines are quoted, not sold through the cart, and
+    // never at an implied $0. The one exception: an account with its own
+    // special price for the tyre can buy it at that price.
+    if (effectivePrice(product) == null && accountUnitPrice(product, account) == null) {
       errors.push(
         `${product.brand} ${product.model} ${product.size} is price on application. Call ${site.phone.display} or request a quote from the product page.`,
       )
@@ -165,30 +189,10 @@ export function priceOrder(
       )
     }
 
-    lines.push({
-      id: product.id,
-      sku: product.sku,
-      name: `${product.brand} ${product.model}`,
-      size: product.size,
-      quantity: qty,
-      unitPrice,
-      lineTotal: round2(unitPrice * qty),
-      preOrder,
-      stock: product.stock,
-    })
+    accepted.push({ product, quantity: qty, preOrder })
   }
 
-  const itemCount = lines.reduce((sum, line) => sum + line.quantity, 0)
-  const subtotal = round2(
-    lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0),
-  )
-
-  /* ---- Volume break --------------------------------------------- */
-
-  const band = priceBreakFor(itemCount)
-  const volumeDiscountRate = band?.discount ?? 0
-  const volumeDiscount = round2(subtotal * volumeDiscountRate)
-  const afterVolume = subtotal - volumeDiscount
+  const itemCount = accepted.reduce((sum, line) => sum + line.quantity, 0)
 
   /* ---- Promo (applied to the post-volume amount) ---------------- */
 
@@ -207,8 +211,6 @@ export function priceOrder(
       warnings.push(resolved.reason ?? 'Promo code could not be applied.')
     }
   }
-
-  const promoDiscount = promoPercentOff ? round2(afterVolume * promoPercentOff) : 0
 
   /* ---- Fitting (pickup only) ------------------------------------ */
 
@@ -236,30 +238,60 @@ export function priceOrder(
     errors.push('Fitting tyre count must be a whole number of tyres.')
   }
 
-  const fittingTotal = round2(fittingTyres * site.commerce.fittingFeePerTyre)
+  /* ---- Prices, volume break, promo and total (one shared rule) --- */
 
-  /* ---- Total ---------------------------------------------------- */
+  const cart = priceCart(accepted, {
+    account,
+    fulfilment,
+    fittingTyres,
+    promoPercentOff,
+  })
 
-  const total = round2(afterVolume - promoDiscount + fittingTotal)
+  const lines: PricedLine[] = accepted.map(({ product, quantity, preOrder }, i) => {
+    const priced = cart.lines[i]!
+    return {
+      id: product.id,
+      sku: product.sku,
+      name: `${product.brand} ${product.model}`,
+      size: product.size,
+      quantity,
+      unitPrice: priced.unit,
+      lineTotal: priced.lineTotal,
+      preOrder,
+      stock: product.stock,
+      basis: priced.basis,
+      retailUnitPrice: priced.retailUnit,
+      accountSaving: priced.accountSaving,
+    }
+  })
 
-  if (!errors.length && total <= 0) {
+  // A promo only ever touches lines at the normal price: say so rather than quietly dropping it.
+  if (promoCode && lines.length && lines.every((line) => line.basis === 'account')) {
+    promoCode = undefined
+    promoPercentOff = 0
+    warnings.push('Promo codes do not apply to your account prices.')
+  }
+
+  if (!errors.length && cart.total <= 0) {
     errors.push('Order total must be greater than zero.')
   }
 
   return {
     lines,
-    itemCount,
-    subtotal,
-    volumeDiscount,
-    volumeDiscountRate,
-    volumeLabel: band?.label ?? null,
+    itemCount: cart.itemCount,
+    subtotal: cart.subtotal,
+    volumeDiscount: cart.volumeDiscount,
+    volumeDiscountRate: cart.volumeDiscountRate,
+    volumeLabel: cart.volumeLabel,
     promoCode,
-    promoDiscount,
+    promoDiscount: cart.promoDiscount,
     promoPercentOff,
     fittingTyres,
-    fittingTotal,
-    total,
-    gst: round2(total - total / (1 + site.commerce.gstRate)),
+    fittingTotal: cart.fittingTotal,
+    total: cart.total,
+    gst: cart.gst,
+    channel: cart.channel,
+    accountSaving: cart.accountSaving,
     errors,
     warnings,
   }

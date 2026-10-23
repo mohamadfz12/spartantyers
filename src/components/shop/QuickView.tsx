@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Info, MessageSquareQuote, ShoppingCart } from 'lucide-react'
 import type { Product } from '@/data/types'
-import { effectivePrice, PRICE_BREAKS, priceBreakFor } from '@/data/products'
+import { PRICE_BREAKS, priceBreakFor } from '@/data/products'
 import { site } from '@/config/site'
-import { money, pluralise } from '@/lib/utils'
+import { volumeUnit } from '@/lib/account-price-display'
+import { cn, money, pluralise } from '@/lib/utils'
+import { usePriceView, YourPrice } from './YourPrice'
 import { useCart } from '@/store/cart'
 import { requestQuote, toast } from '@/store/ui'
 import {
@@ -54,7 +56,8 @@ function Body({ product, onClose }: { product: Product; onClose: () => void }) {
   const add = useCart((state) => state.add)
   const [quantity, setQuantity] = useState(4)
 
-  const price = effectivePrice(product)
+  const view = usePriceView(product)
+  const price = view.current
   const outOfStock = price != null && product.stock <= 0
   const lowStock = price != null && product.stock > 0 && product.stock <= 5
   const band = priceBreakFor(quantity)
@@ -127,15 +130,21 @@ function Body({ product, onClose }: { product: Product; onClose: () => void }) {
 
           {price != null ? (
             <>
-              <div className="mt-4 flex items-baseline gap-2.5">
-                <span className="font-heading text-3xl font-black leading-none">
-                  {money(price)}
-                </span>
-                {product.discountPrice != null && product.price != null ? (
-                  <span className="text-base text-muted-foreground line-through">
-                    {money(product.price)}
-                  </span>
-                ) : null}
+              <div className={cn('mt-4 flex items-baseline gap-2.5', view.yours && 'flex-wrap gap-y-1')}>
+                {view.yours ? (
+                  <YourPrice view={view} priceClassName="text-3xl" retailClassName="text-base" />
+                ) : (
+                  <>
+                    <span className="font-heading text-3xl font-black leading-none">
+                      {money(price)}
+                    </span>
+                    {product.discountPrice != null && product.price != null ? (
+                      <span className="text-base text-muted-foreground line-through">
+                        {money(product.price)}
+                      </span>
+                    ) : null}
+                  </>
+                )}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">per tyre, inc. GST</p>
             </>
@@ -177,6 +186,14 @@ function Body({ product, onClose }: { product: Product; onClose: () => void }) {
                   This line is built to order, so it is priced per order rather
                   than listed. Tell us the quantity and we come back with price
                   and lead time, usually within one business day.
+                </>
+              ) : view.yours ? (
+                <>
+                  <strong className="font-semibold text-foreground">
+                    {money(volumeUnit(view, band?.discount ?? 0) ?? price)} each at {quantity}{' '}
+                    {pluralise(quantity, 'tyre')}
+                  </strong>{' '}
+                  is your account price, or the volume price when that is lower. They are never combined.
                 </>
               ) : band ? (
                 <>

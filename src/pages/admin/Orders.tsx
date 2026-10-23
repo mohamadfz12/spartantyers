@@ -43,6 +43,9 @@ import {
   type BadgeVariant,
 } from '@/components/ui'
 import { useIsMobile } from '@/hooks'
+import { ChannelBadge } from '@/components/admin/accounts/parts'
+import { CHANNEL_KEYS, CHANNEL_LABELS, orderChannelOf } from '@/lib/admin-accounts-ui'
+import type { SaleChannelKey } from '@/lib/admin-accounts-api'
 import { api } from '@/lib/api'
 import { cn, formatNumber, moneyExact } from '@/lib/utils'
 import type { Order } from '@/data/types'
@@ -73,6 +76,7 @@ type SortKey = 'date' | 'total'
 const STATUS_VARIANT: Record<Order['status'], BadgeVariant> = {
   pending: 'warning',
   paid: 'primary',
+  account: 'warning',
   packing: 'default',
   dispatched: 'success',
   collected: 'success',
@@ -82,6 +86,7 @@ const STATUS_VARIANT: Record<Order['status'], BadgeVariant> = {
 const STATUS_LABEL: Record<Order['status'], string> = {
   pending: 'Pending',
   paid: 'Paid',
+  account: 'On account',
   packing: 'Packing',
   dispatched: 'Dispatched',
   collected: 'Collected',
@@ -98,6 +103,10 @@ function allowedTransitions(order: Order): Order['status'][] {
     case 'pending':
       return ['paid', 'cancelled']
     case 'paid':
+      return ['packing', 'cancelled']
+    // Pay later: the goods go out as for a paid order. It becomes 'paid' by itself when the customer's
+    // balance is paid at the till, never from here.
+    case 'account':
       return ['packing', 'cancelled']
     case 'packing':
       return pickup ? ['collected', 'cancelled'] : ['dispatched', 'cancelled']
@@ -120,6 +129,7 @@ export default function Orders() {
   const [params] = useSearchParams()
   const [search, setSearch] = useState(() => (params.get('search') ?? '').slice(0, 100))
   const [statusFilter, setStatusFilter] = useState<'all' | Order['status']>('all')
+  const [channelFilter, setChannelFilter] = useState<'all' | SaleChannelKey>('all')
   const [sort, setSort] = useState<SortState<SortKey>>({ key: 'date', direction: 'desc' })
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [announcement, setAnnouncement] = useState('')
@@ -132,6 +142,7 @@ export default function Orders() {
 
     const filtered = orders.filter((order) => {
       if (statusFilter !== 'all' && order.status !== statusFilter) return false
+      if (channelFilter !== 'all' && orderChannelOf(order) !== channelFilter) return false
       if (!needle) return true
       return [order.reference, order.customer.email, order.customer.name]
         .join(' ')
@@ -147,7 +158,7 @@ export default function Orders() {
           : Date.parse(a.createdAt) - Date.parse(b.createdAt)
       return value * factor
     })
-  }, [orders, search, statusFilter, sort])
+  }, [orders, search, statusFilter, channelFilter, sort])
 
   const onSort = (key: SortKey, defaultDirection: SortDirection) =>
     setSort((current) => nextSort(current, key, defaultDirection))
@@ -204,7 +215,7 @@ export default function Orders() {
     )
   }
 
-  const filtering = statusFilter !== 'all' || search.trim().length > 0
+  const filtering = statusFilter !== 'all' || channelFilter !== 'all' || search.trim().length > 0
 
   return (
     <>
@@ -262,6 +273,21 @@ export default function Orders() {
               ))}
             </Select>
           </Field>
+
+          <Field label="Type" htmlFor="order-channel-filter" className="sm:w-40">
+            <Select
+              id="order-channel-filter"
+              value={channelFilter}
+              onChange={(event) => setChannelFilter(event.target.value as 'all' | SaleChannelKey)}
+            >
+              <option value="all">All types</option>
+              {CHANNEL_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {CHANNEL_LABELS[key]}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
 
         {query.loading ? (
@@ -291,6 +317,7 @@ export default function Orders() {
                   onClick={() => {
                     setSearch('')
                     setStatusFilter('all')
+                    setChannelFilter('all')
                   }}
                 >
                   <X aria-hidden="true" className="h-3.5 w-3.5" />
@@ -318,9 +345,12 @@ export default function Orders() {
                           {dateTime(order.createdAt)}
                         </p>
                       </div>
-                      <Badge variant={STATUS_VARIANT[order.status]} size="sm">
-                        {STATUS_LABEL[order.status]}
-                      </Badge>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant={STATUS_VARIANT[order.status]} size="sm">
+                          {STATUS_LABEL[order.status]}
+                        </Badge>
+                        <ChannelBadge channel={orderChannelOf(order)} />
+                      </div>
                     </div>
 
                     <p className="mt-3 truncate text-sm font-medium">
@@ -374,6 +404,7 @@ export default function Orders() {
                     defaultDirection="desc"
                     numeric
                   />
+                  <PlainHeader>Type</PlainHeader>
                   <PlainHeader>Status</PlainHeader>
                 </tr>
               </thead>
@@ -418,6 +449,9 @@ export default function Orders() {
                     </td>
                     <td className="whitespace-nowrap px-2.5 py-2 text-right text-xs font-semibold tabular-nums">
                       {moneyExact(order.total)}
+                    </td>
+                    <td className="px-2.5 py-2">
+                      <ChannelBadge channel={orderChannelOf(order)} />
                     </td>
                     <td className="px-2.5 py-2">
                       <Badge variant={STATUS_VARIANT[order.status]} size="sm">
@@ -643,6 +677,19 @@ function OrderDetail({
               </dt>
               <dd className="mt-0.5 break-all font-mono">{order.paymentId || '—'}</dd>
             </div>
+            {order.payment === 'account' ? (
+              <div className="sm:col-span-2">
+                <dt className="font-heading font-bold uppercase tracking-brand text-muted-foreground">
+                  Pay later, on the customer account
+                </dt>
+                <dd className="mt-0.5">
+                  {order.accountPaidAt
+                    ? `Paid off on the customer account.`
+                    : `Still owing${order.dueDate ? `, due ${order.dueDate}` : ''}. Take the payment in the till's customer account (Till, Customers).`}
+                  {order.posTicketRef ? <span className="ml-1 font-mono">{order.posTicketRef}</span> : null}
+                </dd>
+              </div>
+            ) : null}
           </dl>
 
           {order.notes ? (

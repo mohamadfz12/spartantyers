@@ -2,7 +2,7 @@ import { Check, TrendingDown } from 'lucide-react'
 import { PRICE_BREAKS } from '@/data/products'
 import { site } from '@/config/site'
 import { cn, money, pluralise } from '@/lib/utils'
-import { useCartTotals } from '@/store/cart'
+import { useCart, useCartTotals } from '@/store/cart'
 import { Badge, Progress } from '@/components/ui'
 
 /**
@@ -14,7 +14,17 @@ import { Badge, Progress } from '@/components/ui'
  */
 export function PriceBreakLadder({ className }: { className?: string }) {
   const totals = useCartTotals()
-  const { itemCount, subtotal, volumeLabel, nextBreak, tyresToNextBreak } = totals
+  const cartLines = useCart((s) => s.lines)
+  const { itemCount, volumeLabel, nextBreak, tyresToNextBreak } = totals
+  const hasAccountLines = totals.accountSaving > 0
+  // Tyres at the customer's account price do not take the volume break (each is charged the lower of the two),
+  // so the saving the next break would add is worked on the other tyres only. A guest has no such tyres.
+  const subtotal = hasAccountLines
+    ? cartLines.reduce(
+        (sum, line) => (totals.lineUnits[line.id]?.basis === 'account' ? sum : sum + line.price * line.quantity),
+        0,
+      )
+    : totals.subtotal
 
   return (
     <section
@@ -111,6 +121,9 @@ export function PriceBreakLadder({ className }: { className?: string }) {
       </ul>
 
       <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+        {hasAccountLines
+          ? 'Tyres at your account price are not discounted again: each tyre is charged the lower of your price and the volume price. '
+          : ''}
         Ordering {site.commerce.bulkThreshold} tyres or more? We can also arrange
         consolidated depot freight &mdash; call{' '}
         <a

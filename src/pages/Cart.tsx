@@ -19,8 +19,10 @@ import { FulfilmentPicker } from '@/components/checkout/FulfilmentPicker'
 import { OrderSummary } from '@/components/checkout/OrderSummary'
 import { PriceBreakLadder } from '@/components/checkout/PriceBreakLadder'
 import { PromoField } from '@/components/checkout/PromoField'
+import { TradeLoginLink } from '@/components/checkout/PayOnAccount'
 import { site } from '@/config/site'
 import { effectivePrice, productById } from '@/data/products'
+import { AccountUnit, accountLine } from '@/components/shop/YourPrice'
 import { cn, money, pluralise } from '@/lib/utils'
 import { useCart, useCartTotals } from '@/store/cart'
 
@@ -116,6 +118,8 @@ export default function Cart() {
                       </Link>
                     </Button>
 
+                    <TradeLoginLink className="text-xs" />
+
                     <ul className="space-y-2 text-xs leading-relaxed text-muted-foreground">
                       <li className="flex items-start gap-2">
                         <Truck aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
@@ -145,6 +149,7 @@ export default function Cart() {
 
 function CartLines() {
   const lines = useCart((s) => s.lines)
+  const totals = useCartTotals()
   const increment = useCart((s) => s.increment)
   const decrement = useCart((s) => s.decrement)
   const setQuantity = useCart((s) => s.setQuantity)
@@ -169,7 +174,8 @@ function CartLines() {
           const rrp = product && product.discountPrice != null ? product.price : null
           // The cart only ever holds priced lines (see the store's merge), so
           // the saved price is a safe fallback for a line that has just left.
-          const unit = (product && effectivePrice(product)) ?? line.price
+          const acct = accountLine(totals, line.id)
+          const unit = acct?.unit ?? (product && effectivePrice(product)) ?? line.price
           const lowStock =
             product && product.stock > 0 && line.quantity > product.stock
               ? product.stock
@@ -214,18 +220,29 @@ function CartLines() {
                         ) : null}
                       </p>
 
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        <span className="font-heading text-sm font-bold text-foreground">
-                          {money(unit)}
-                        </span>{' '}
-                        per tyre
-                        {rrp ? (
-                          <>
-                            {' '}
-                            <span className="line-through">{money(rrp)}</span>
-                          </>
-                        ) : null}
-                      </p>
+                      {acct ? (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          <AccountUnit
+                            unit={acct.unit}
+                            retail={acct.retail}
+                            className="font-heading text-sm font-bold text-foreground"
+                          />{' '}
+                          per tyre
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          <span className="font-heading text-sm font-bold text-foreground">
+                            {money(unit)}
+                          </span>{' '}
+                          per tyre
+                          {rrp ? (
+                            <>
+                              {' '}
+                              <span className="line-through">{money(rrp)}</span>
+                            </>
+                          ) : null}
+                        </p>
+                      )}
 
                       {preOrder ? (
                         <Badge variant="warning" size="sm" className="mt-2">

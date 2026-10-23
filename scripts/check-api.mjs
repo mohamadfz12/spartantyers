@@ -56,6 +56,8 @@ for (const name of DB_VARS) delete process.env[name]
 
 process.env.ADMIN_PASSWORD = 'test-password'
 process.env.ADMIN_SESSION_SECRET = 'test-secret-test-secret-test-secret'
+// Customer accounts (and the AI) keep their tables in Postgres; here that is PGlite, in memory.
+process.env.AI_DB_MEMORY = '1'
 
 const fns = []
 const walkFns = (d) => {
@@ -122,7 +124,7 @@ function call(fn, method, query = {}, body, headers = {}) {
       _s: 200, _h: {},
       status(c) { this._s = c; return this },
       setHeader(k, v) { this._h[k] = v },
-      json(b) { resolve({ status: this._s, body: b }) },
+      json(b) { resolve({ status: this._s, body: b, headers: this._h }) },
       end() { resolve({ status: this._s, body: null }) },
     }
     Promise.resolve(fn({ method, query, body, headers }, res)).catch((e) =>
@@ -490,6 +492,65 @@ delete process.env.SQUARE_LOCATION_ID
 
 if (opsFailures) {
   console.error(`\n✗ ${opsFailures} staff / inventory / money check(s) failed`)
+  process.exit(1)
+}
+
+/* ---- customer accounts, as Vercel would run them ---- */
+console.log('\n--- customer accounts ---')
+let acctFailures = 0
+const accountFn = loaded['api/account/[action].js']
+const acctHeaders = { origin: 'http://localhost:5173', host: 'localhost:5173', 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.50' }
+const customerCall = (action, method, body, extra = {}) => call(accountFn, method, { action }, body, { ...acctHeaders, ...extra })
+const cookieOf = (r) => (/^(spt_session=[^;]+)/.exec(r.headers?.['Set-Cookie'] ?? '') ?? [])[1] ?? ''
+const acctExpect = (label, result, want) => {
+  const good = result.status === want
+  if (!good) acctFailures++
+  console.log(`${good ? 'ok  ' : 'FAIL'} ${label.padEnd(44)} ${result.status}${good ? '' : ` (wanted ${want}) ${JSON.stringify(result.body).slice(0, 120)}`}`)
+  return result
+}
+const signedUp = acctExpect('customer sign-up', await customerCall('signup', 'POST', {
+  name: 'Check Customer', company: 'Check Co', email: 'check.customer@example.com', requestedLevel: 'bulk', password: 'check-password-123',
+}), 200)
+const sessionCookie = cookieOf(signedUp)
+if (!sessionCookie || !/HttpOnly/.test(signedUp.headers['Set-Cookie'])) { acctFailures++; console.log('FAIL sign-up did not set an httpOnly session cookie') }
+const meBefore = acctExpect('me, with the cookie', await customerCall('me', 'GET', undefined, { cookie: sessionCookie }), 200)
+if (meBefore.body?.account?.level !== 'customer' || meBefore.body?.account?.requestedLevel !== 'bulk') { acctFailures++; console.log('FAIL level / request wrong') }
+acctExpect('me, without the cookie', await customerCall('me', 'GET'), 401)
+acctExpect('me, with a staff token as the cookie', await customerCall('me', 'GET', undefined, { cookie: `spt_session=${auth.authorization.replace('Bearer ', '')}` }), 401)
+acctExpect('staff API, with the customer cookie', await call(admin, 'GET', { action: 'accounts' }, undefined, { authorization: `Bearer ${sessionCookie.replace('spt_session=', '')}` }), 401)
+acctExpect('sign-up from another origin', await customerCall('signup', 'POST', { name: 'X Y', email: 'x@example.com', password: 'check-password-123' }, { origin: 'https://evil.example.com' }), 403)
+acctExpect('logout', await customerCall('logout', 'POST', {}, { cookie: sessionCookie }), 200)
+acctExpect('login, wrong password', await customerCall('login', 'POST', { email: 'check.customer@example.com', password: 'nope-nope-nope' }), 401)
+const relog = acctExpect('login, right password', await customerCall('login', 'POST', { email: 'check.customer@example.com', password: 'check-password-123' }), 200)
+acctExpect('me after login', await customerCall('me', 'GET', undefined, { cookie: cookieOf(relog) }), 200)
+const salesMember = expect('add a Sales executive', await call(admin, 'POST', { action: 'staff' }, { name: 'Sal Sales', email: 'sal@example.com', role: 'sales', password: 'sales-pass-12345' }, auth), 200)
+const salLogin = await call(admin, 'POST', { action: 'login' }, { email: 'sal@example.com', password: 'sales-pass-12345' })
+const sal = bearer(salLogin.body?.token)
+acctExpect('sales: accounts list allowed', await call(admin, 'GET', { action: 'accounts' }, undefined, sal), 200)
+acctExpect('sales: pay later refused', await call(admin, 'POST', { action: 'account-credit' }, { id: meBefore.body.account.id, payLater: true, termsDays: 14, creditLimit: 100 }, sal), 403)
+acctExpect('sales: money pages refused', await call(admin, 'GET', { action: 'ledger' }, undefined, sal), 403)
+acctExpect('owner: pay later allowed', await call(admin, 'POST', { action: 'account-credit' }, { id: meBefore.body.account.id, payLater: true, termsDays: 14, creditLimit: 100 }, auth), 200)
+if (salesMember?.member?.role !== 'sales') acctFailures++
+// Account prices and pay later, end to end through the real functions.
+const acctId = meBefore.body.account.id
+const acctCookie = cookieOf(relog)
+acctExpect('prices, without the cookie', await customerCall('prices', 'GET'), 401)
+const specialFor = prods.body.products.find((x) => x.price != null && x.id !== priced.id)
+await call(admin, 'POST', { action: 'account-prices' }, { id: acctId, prices: [{ productId: specialFor.id, price: 11.11 }] }, auth)
+const myPrices = acctExpect('prices, with the cookie', await customerCall('prices', 'GET', undefined, { cookie: acctCookie }), 200)
+if (myPrices.body?.prices?.[specialFor.id]?.unit !== 11.11) { acctFailures++; console.log('FAIL the special price is not in /prices') }
+if (JSON.stringify(shop.body).includes('11.11')) { acctFailures++; console.log('FAIL an account price is in the public catalogue') }
+const orderBody = { idempotencyKey: 'check-order-key-0001', fulfilment: 'pickup', lines: [{ id: specialFor.id, quantity: 2 }], expectedTotal: 22.22 }
+const placed = acctExpect('pay later order, limit $100', await customerCall('order', 'POST', orderBody, { cookie: acctCookie }), 200)
+if (placed.body?.total !== 22.22 || placed.body?.outstanding !== 22.22 || placed.body?.status !== 'account') { acctFailures++; console.log('FAIL pay later order', JSON.stringify(placed.body)) }
+const placedAgain = acctExpect('same key again is the same order', await customerCall('order', 'POST', orderBody, { cookie: acctCookie }), 200)
+if (placedAgain.body?.reference !== placed.body?.reference) { acctFailures++; console.log('FAIL double click made a second order') }
+acctExpect('a second order, still within the limit', await customerCall('order', 'POST', { ...orderBody, idempotencyKey: 'check-order-key-0002', lines: [{ id: specialFor.id, quantity: 5 }], expectedTotal: 55.55 }, { cookie: acctCookie }), 200)
+acctExpect('over the credit limit, refused', await customerCall('order', 'POST', { ...orderBody, idempotencyKey: 'check-order-key-0003', lines: [{ id: specialFor.id, quantity: 6 }], expectedTotal: 66.66 }, { cookie: acctCookie }), 409)
+acctExpect('sales by channel (owner)', await call(admin, 'GET', { action: 'sales-by-channel' }, undefined, auth), 200)
+acctExpect('sales by channel (sales refused)', await call(admin, 'GET', { action: 'sales-by-channel' }, undefined, sal), 403)
+if (acctFailures || opsFailures) {
+  console.error(`\n✗ ${acctFailures} customer account check(s) failed`)
   process.exit(1)
 }
 

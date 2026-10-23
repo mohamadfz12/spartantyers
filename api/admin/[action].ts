@@ -29,6 +29,11 @@
  *   GET    /api/admin/activity
  *   GET    /api/admin/pos         POST /api/admin/pos      (the counter till)
  *   GET    /api/admin/square      POST /api/admin/square   (the Square account and Terminal)
+ *   GET    /api/admin/accounts | account                    (customer accounts, permission `trade`)
+ *   POST   /api/admin/account-create | account-update | account-level | account-request |
+ *          account-prices | account-invite | account-status | account-link-pos | account-reconcile  (`trade`);
+ *          account-credit (`credit`)
+ *   GET    /api/admin/sales-by-channel?from=&to=             (Retail / Bulk / Wholesale sales, permission `finance`)
  */
 
 import type { ApiRequest, ApiResponse } from '../_lib/http.js'
@@ -52,6 +57,8 @@ import customers from '../_lib/handlers/admin-customers.js'
 import activity from '../_lib/handlers/admin-activity.js'
 import pos from '../_lib/handlers/admin-pos.js'
 import square from '../_lib/handlers/admin-square.js'
+import { accountRoutes } from '../_lib/handlers/admin-accounts.js'
+import salesByChannel from '../_lib/handlers/admin-sales.js'
 
 type Handler = (req: ApiRequest, res: ApiResponse) => Promise<void> | void
 
@@ -75,6 +82,8 @@ const ROUTES: Record<string, Handler> = {
   activity,
   pos,
   square,
+  'sales-by-channel': salesByChannel,
+  ...accountRoutes,
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -83,7 +92,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const raw = req.query?.action
   const action = Array.isArray(raw) ? raw[0] : raw
 
-  const route = action ? ROUTES[action] : undefined
+  const route = action && Object.prototype.hasOwnProperty.call(ROUTES, action) ? ROUTES[action] : undefined
   if (!route) {
     // Never hint at which admin routes exist to an unauthenticated caller.
     fail(res, 404, 'Not found.')

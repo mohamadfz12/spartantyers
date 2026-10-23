@@ -5,8 +5,10 @@
  *   items                       -> { items, squareError }
  *   tickets[&status=]           -> { tickets }   (also re-checks unfinished Terminal charges)
  *   ticket&ref=                 -> { ticket }
- *   customers                   -> { customers }  (each with its balance)
- *   customer&id=                -> { customer, balance, tickets, payments }
+ *   customers                   -> { customers }  (each with its balance, and its website account's summary when it has one)
+ *   customer&id=                -> { customer, account, balance, tickets, payments }
+ *   account-items&customerId=   -> { account, prices }  the customer's website account and its unit price per tyre
+ *                                  (only where it beats the shop price); account is null for an ordinary counter customer
  *   account-preview&id=&amount=[&ticket=] -> what an account payment would pay off
  *   terminal                    -> { devices, squareReady }
  *   checkout&id=                -> { checkout }   (polled while a Terminal charge runs)
@@ -21,6 +23,9 @@ import { PAYMENT_METHODS } from '../../../src/lib/admin-ledger.js'
 import { can } from '../../../src/lib/admin-roles.js'
 import { audit } from '../audit.js'
 import { authorize, type Actor } from '../auth.js'
+import { accountPriceList } from '../../../src/lib/account-pricing.js'
+import { accountSummary, pricingContext } from '../accounts/pricing.js'
+import { getAccount, listAccounts, type AccountRecord } from '../accounts/repo.js'
 import { effectivePrice, mergeCatalogue } from '../catalogue.js'
 import { asString, fail, methodGuard, ok, readBody, withGuard, type ApiResponse } from '../http.js'
 import {
@@ -61,6 +66,7 @@ import {
   listPosCustomers,
   listPosTickets,
   savePosCustomer,
+  type StoredPosCustomer,
 } from '../store.js'
 
 /** Anything that can go on a ticket. `stock` is set for tyres only. */
@@ -172,7 +178,8 @@ async function read(query: Record<string, string | string[]>, res: ApiResponse) 
 
   if (view === 'customers') {
     const [customers, tickets] = await Promise.all([listPosCustomers(), listPosTickets()])
-    return ok(res, { customers: customers.map((c) => ({ ...c, balance: balanceOf(c.id, tickets) })) })
+    const accounts = await accountsOf(customers)
+    return ok(res, { customers: customers.map((c) => ({ ...c, balance: balanceOf(c.id, tickets), account: accounts.get(c.id) ?? null })) })
   }
 
   if (view === 'customer') {
@@ -181,10 +188,21 @@ async function read(query: Record<string, string | string[]>, res: ApiResponse) 
     const [tickets, payments] = await Promise.all([listPosTickets(), listAccountPayments()])
     return ok(res, {
       customer: c,
+      account: (await accountsOf([c])).get(c.id) ?? null,
       balance: balanceOf(c.id, tickets),
       tickets: tickets.filter((t) => t.customerId === c.id).map((t) => ({ ...t, customer: c })),
       payments: payments.filter((p) => p.customerId === c.id && p.status === 'paid').slice(0, 50),
     })
+  }
+
+  if (view === 'account-items') {
+    const customer = await getPosCustomer(q(query, 'customerId'))
+    if (!customer) return fail(res, 404, 'Customer not found')
+    const account = (await linkedAccounts([customer])).get(customer.id)
+    if (!account) return ok(res, { account: null, prices: {} })
+    // A suspended account is not sold to at its agreed prices; the till shows why.
+    const prices = account.status === 'active' ? accountPriceList(mergeCatalogue(await getOverrides()), await pricingContext(account)) : {}
+    return ok(res, { account: accountSummary(account), prices })
   }
 
   if (view === 'account-preview') {
@@ -263,6 +281,9 @@ async function act(body: Record<string, unknown>, actor: Actor, res: ApiResponse
     case 'customer-delete': {
       const c = await getPosCustomer(asString(body.id, 120) ?? '')
       if (!c) throw new PosError('Customer not found', 404)
+      if (c.accountId) {
+        throw new PosError(`${c.company || c.name} has a website account, so can't be deleted from the till. Suspend the account instead.`, 409)
+      }
       if ((await listPosTickets()).some((t) => t.customerId === c.id)) {
         throw new PosError(`${c.company || c.name} has tickets, so can't be deleted.`, 409)
       }
@@ -316,6 +337,32 @@ async function act(body: Record<string, unknown>, actor: Actor, res: ApiResponse
     }
   }
   return fail(res, 400, 'Unknown action.')
+}
+
+/**
+ * The website accounts behind these counter customers, by counter customer id (only a two-way link
+ * counts). Customers with no account never touch the accounts database; if it cannot be read the
+ * till simply shows them as ordinary counter customers.
+ */
+async function linkedAccounts(customers: StoredPosCustomer[]): Promise<Map<string, AccountRecord>> {
+  const out = new Map<string, AccountRecord>()
+  const wanted = customers.filter((c) => c.accountId)
+  if (!wanted.length) return out
+  try {
+    const found = wanted.length === 1 ? [await getAccount(wanted[0]!.accountId!)] : await listAccounts()
+    const byId = new Map(found.flatMap((a) => (a ? [[a.id, a] as const] : [])))
+    for (const c of wanted) {
+      const a = byId.get(c.accountId!)
+      if (a && a.posCustomerId === c.id) out.set(c.id, a)
+    }
+  } catch (error) {
+    console.error('[pos] accounts not read:', (error as Error).message)
+  }
+  return out
+}
+
+async function accountsOf(customers: StoredPosCustomer[]): Promise<Map<string, ReturnType<typeof accountSummary>>> {
+  return new Map([...(await linkedAccounts(customers))].map(([id, a]) => [id, accountSummary(a)]))
 }
 
 function otherMethod(raw: unknown): string {

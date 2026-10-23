@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Check, Scale, ShoppingCart, Trophy } from 'lucide-react'
 import {
   POSITION_LABELS,
-  effectivePrice,
   hasPrice,
   productById,
   products,
@@ -15,7 +14,10 @@ import { ProductThumb } from '@/components/shop/ProductThumb'
 import { Badge, Button, Rating } from '@/components/ui'
 import { Reveal } from '@/components/motion'
 import { useCatalogueVersion } from '@/lib/live-catalogue'
-import { cn, formatNumber, priceLabel } from '@/lib/utils'
+import { cn, formatNumber } from '@/lib/utils'
+import { isBuyable, priceView, type AccountPriceMap } from '@/lib/account-price-display'
+import { useAccountPriceMap } from '@/store/account-prices'
+import { InlinePrice } from '@/components/shop/YourPrice'
 import { useCart } from '@/store/cart'
 import { useAxle, useCompare } from '@/store/ui'
 
@@ -36,13 +38,13 @@ const fuelRank = (rating: string | null) => (rating ? FUEL.indexOf(rating) : nul
 
 interface Row {
   label: string
-  value: (p: Product) => string
-  metric?: (p: Product) => number | null
+  value: (p: Product) => ReactNode
+  metric?: (p: Product, prices: AccountPriceMap) => number | null
   better?: Better
 }
 
 const ROWS: Row[] = [
-  { label: 'Price per tyre', value: (p) => priceLabel(effectivePrice(p)), metric: (p) => effectivePrice(p), better: 'low' },
+  { label: 'Price per tyre', value: (p) => <InlinePrice product={p} />, metric: (p, prices) => priceView(p, prices).current, better: 'low' },
   { label: 'Tread depth', value: (p) => (p.treadDepthMm != null ? `${p.treadDepthMm}mm` : '—'), metric: (p) => p.treadDepthMm, better: 'high' },
   { label: 'Load per tyre', value: (p) => (p.maxLoadKg != null ? `${formatNumber(p.maxLoadKg)}kg` : '—'), metric: (p) => p.maxLoadKg, better: 'high' },
   { label: 'Top speed', value: (p) => (p.maxSpeedKmh != null ? `${p.maxSpeedKmh}km/h` : '—'), metric: (p) => p.maxSpeedKmh, better: 'high' },
@@ -61,10 +63,10 @@ const ROWS: Row[] = [
 ]
 
 /** Which side wins a row: 0, 1, or null for a tie / missing figure. */
-function winner(row: Row, a: Product, b: Product): 0 | 1 | null {
+function winner(row: Row, a: Product, b: Product, prices: AccountPriceMap): 0 | 1 | null {
   if (!row.metric || !row.better) return null
-  const x = row.metric(a)
-  const y = row.metric(b)
+  const x = row.metric(a, prices)
+  const y = row.metric(b, prices)
   if (x == null || y == null || x === y) return null
   const aWins = row.better === 'high' ? x > y : x < y
   return aWins ? 0 : 1
@@ -98,7 +100,8 @@ export function BrandCompare() {
 
   const pair = ids.map((id) => productById.get(id)).filter(Boolean) as Product[]
   const [a, b] = pair
-  const wins = a && b ? ROWS.map((row) => winner(row, a, b)) : []
+  const prices = useAccountPriceMap()
+  const wins = a && b ? ROWS.map((row) => winner(row, a, b, prices)) : []
   const score = [wins.filter((w) => w === 0).length, wins.filter((w) => w === 1).length]
 
   return (
@@ -173,7 +176,7 @@ export function BrandCompare() {
   )
 }
 
-function Cell({ value, win, align }: { value: string; win: boolean; align: 'left' | 'right' }) {
+function Cell({ value, win, align }: { value: ReactNode; win: boolean; align: 'left' | 'right' }) {
   return (
     <td className={cn('px-3 py-2.5 tabular-nums sm:px-6', align === 'right' ? 'text-right' : 'text-left', win && 'font-bold text-primary')}>
       <span className={cn('inline-flex items-center gap-1.5', align === 'right' && 'flex-row-reverse')}>
@@ -266,10 +269,11 @@ function CompareActions({ a, b }: { a: Product; b: Product }) {
   const navigate = useNavigate()
   const add = useCart((s) => s.add)
   const open = useCart((s) => s.open)
+  const prices = useAccountPriceMap()
   return (
     <div className="mt-5 grid gap-3 sm:grid-cols-3">
       {[a, b].map((p) =>
-        hasPrice(p) ? (
+        isBuyable(p, prices) ? (
           <Button
             key={p.id}
             variant="outline"
@@ -279,7 +283,7 @@ function CompareActions({ a, b }: { a: Product; b: Product }) {
             }}
           >
             <ShoppingCart aria-hidden="true" className="mr-2 h-4 w-4" />
-            Add {p.model} — {priceLabel(effectivePrice(p))}
+            Add {p.model} — <InlinePrice product={p} />
           </Button>
         ) : (
           <Button key={p.id} variant="outline" asChild>

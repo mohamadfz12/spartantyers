@@ -242,7 +242,7 @@ export default function Wholesale() {
                 id="wholesale-apply"
                 eyebrow="Trade account"
                 title="Apply for an account"
-                lede="Tell us what kind of business you run and roughly what you move. We will come back with trade pricing and set up the account facilities you need."
+                lede="Open a trade account online in a few minutes. Our team checks it and switches on your trade pricing. Prefer to talk first? Use the enquiry form below."
               />
 
               <dl className="mt-8 flex flex-col gap-5 text-sm">
@@ -284,51 +284,90 @@ export default function Wholesale() {
               </dl>
             </div>
 
-            <div className="min-w-0 rounded-lg border border-border bg-background p-6 md:p-8">
-              <EnquiryForm
-                enquiryType="Wholesale account"
-                companyRequired
-                phoneRequired
-                extras={[
-                  {
-                    id: 'businessType',
-                    label: 'Business type',
-                    kind: 'select',
-                    required: true,
-                    placeholder: 'Choose the closest match',
-                    options: [
-                      'Independent tyre shop',
-                      'Auto retailer',
-                      'Automotive workshop',
-                      'Truck or trailer dealership',
-                      'Transport operator reselling',
-                      'Other',
-                    ],
-                  },
-                  {
-                    id: 'monthlyVolume',
-                    label: 'Tyres per month',
-                    kind: 'select',
-                    placeholder: 'Choose a range',
-                    options: ['Under 10', '10–50', '50–150', 'More than 150', 'Not sure yet'],
-                  },
-                  {
-                    id: 'tradingName',
-                    label: 'Trading location',
-                    kind: 'text',
-                    placeholder: 'Suburb and state',
-                    hint: 'So we can confirm whether free metro delivery applies to you.',
-                  },
-                ]}
-                messageLabel="What you need from a trade account"
-                messagePlaceholder={
-                  'For example:\nThe fitments we move most, the sizes we struggle to source, and how you would like to order and pay.'
-                }
-                messageHint="The sizes you turn over most are the most useful thing you can tell us."
-                submitLabel="Apply for trade account"
-                successTitle="Application received"
-                successBody={`Thanks — your application is with our accounts team. We will come back with trade pricing and the next steps, usually within one business day. For anything urgent, call ${site.phone.display}.`}
-              />
+            <div className="flex min-w-0 flex-col gap-6">
+              <div className="rounded-lg border border-primary/40 bg-primary/[0.06] p-6 md:p-8">
+                <h3 className="font-heading text-lg font-bold uppercase tracking-tight text-foreground">
+                  Open a trade account online
+                </h3>
+                <ul className="mt-4 flex flex-col gap-3">
+                  {[
+                    'Takes a few minutes: your details, your business and a password.',
+                    'You can shop straight away as a Customer while our team checks your trade request.',
+                    'Once approved, your trade pricing and any account terms are set up for you.',
+                  ].map((item) => (
+                    <li key={item} className="flex gap-3">
+                      <CheckCircle2 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <span className="text-sm leading-relaxed text-muted-foreground">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+                  <Button asChild size="lg">
+                    <Link to="/account/signup?level=wholesaler">
+                      Open a trade account
+                      <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Link to="/account/login" className="link-underline text-sm font-semibold text-primary">
+                    Already have an account? Log in
+                  </Link>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-background p-6 md:p-8">
+                <h3 className="font-heading text-lg font-bold uppercase tracking-tight text-foreground">
+                  Talk to us first
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Not ready to open an account? Tell us about your business and what you move, and we will come back with trade pricing.
+                </p>
+                <div className="mt-6">
+                <EnquiryForm
+                  enquiryType="Wholesale account"
+                  companyRequired
+                  phoneRequired
+                  extras={[
+                    {
+                      id: 'businessType',
+                      label: 'Business type',
+                      kind: 'select',
+                      required: true,
+                      placeholder: 'Choose the closest match',
+                      options: [
+                        'Independent tyre shop',
+                        'Auto retailer',
+                        'Automotive workshop',
+                        'Truck or trailer dealership',
+                        'Transport operator reselling',
+                        'Other',
+                      ],
+                    },
+                    {
+                      id: 'monthlyVolume',
+                      label: 'Tyres per month',
+                      kind: 'select',
+                      placeholder: 'Choose a range',
+                      options: ['Under 10', '10–50', '50–150', 'More than 150', 'Not sure yet'],
+                    },
+                    {
+                      id: 'tradingName',
+                      label: 'Trading location',
+                      kind: 'text',
+                      placeholder: 'Suburb and state',
+                      hint: 'So we can confirm whether free metro delivery applies to you.',
+                    },
+                  ]}
+                  messageLabel="What you need from a trade account"
+                  messagePlaceholder={
+                    'For example:\nThe fitments we move most, the sizes we struggle to source, and how you would like to order and pay.'
+                  }
+                  messageHint="The sizes you turn over most are the most useful thing you can tell us."
+                  submitLabel="Send enquiry"
+                  successTitle="Enquiry received"
+                  successBody={`Thanks, your enquiry is with our accounts team. We will come back with trade pricing and the next steps, usually within one business day. For anything urgent, call ${site.phone.display}.`}
+                />
+                </div>
+              </div>
             </div>
           </div>
         </div>

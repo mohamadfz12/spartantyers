@@ -5,8 +5,8 @@
  * the team. (These replace the offline answers of the old chat widget.)
  *
  * Rules for the words in here: no promo code of any kind, nothing the business does not offer
- * (bank transfer, customer accounts, tracking emails, road-hazard cover, vehicle look-up, a best
- * price guarantee), no em dashes. tests/ai-ui.test.ts checks all three.
+ * (bank transfer, invoice downloads, tracking emails, road-hazard cover, vehicle look-up, a best
+ * price guarantee, anyone's trade price), no em dashes. tests/ai-ui.test.ts checks all three.
  *
  * React-free so the tests can run it.
  */

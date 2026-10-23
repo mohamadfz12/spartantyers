@@ -1,8 +1,9 @@
 import { create } from 'zustand'
-import { applyLiveCatalogue, effectivePrice, hasPrice, productById } from '@/data/products'
+import { applyLiveCatalogue, effectivePrice, productById } from '@/data/products'
 import { api } from '@/lib/api'
 import type { CartLine } from '@/data/types'
-import { useCart } from '@/store/cart'
+import { dropUnbuyableLines, useCart } from '@/store/cart'
+import { useAccountPrices } from '@/store/account-prices'
 
 /* ------------------------------------------------------------------ *
  * Live catalogue
@@ -47,6 +48,10 @@ export function refreshCatalogue(force = false): Promise<void> {
       repriceCart()
       useCatalogue.setState((s) => ({ version: s.version + 1 }))
     })
+    .then(() => {
+      // A signed-in customer's prices depend on the catalogue (a shelf price that moved can change which is lower).
+      void useAccountPrices.getState().reload()
+    })
     .catch(() => {
       // Keep the bundled prices; try again on the next focus.
       lastFetch = 0
@@ -57,17 +62,21 @@ export function refreshCatalogue(force = false): Promise<void> {
   return inFlight
 }
 
-/** Same rule as the cart's own rehydration: current price, and no POA lines. */
+/**
+ * Same rule as the cart's own rehydration: current price. A line that has become price on application stays
+ * (its saved price is kept) only until `dropUnbuyableLines` finds the visitor has no account price for it.
+ */
 function repriceCart() {
   useCart.setState((state) => {
     const lines = state.lines.flatMap((line): CartLine[] => {
       const product = productById.get(line.id)
-      if (!product || !hasPrice(product)) return []
-      return [{ ...line, price: effectivePrice(product) }]
+      if (!product) return []
+      return [{ ...line, price: effectivePrice(product) ?? line.price }]
     })
     const total = lines.reduce((sum, line) => sum + line.quantity, 0)
     return { lines, fittingTyres: Math.min(state.fittingTyres, total) }
   })
+  dropUnbuyableLines()
 }
 
 /** Starts the first fetch and refreshes when the visitor returns to the tab. */

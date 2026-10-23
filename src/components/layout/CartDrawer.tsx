@@ -16,6 +16,7 @@ import { useCart, useCartTotals } from '@/store/cart'
 import { Badge, Button, Progress, Sheet, SheetClose } from '@/components/ui'
 import { StaticWheel } from '@/components/three'
 import { ProductThumb } from '@/components/shop/ProductThumb'
+import { AccountUnit, accountLine } from '@/components/shop/YourPrice'
 import { AnimatePresence, motion } from '@/components/motion'
 
 /**
@@ -100,6 +101,11 @@ export function CartDrawer() {
                           <p className="mt-0.5 font-mono text-xs text-muted-foreground">
                             {line.size}
                           </p>
+                          {accountLine(totals, line.id) ? (
+                            <p className="mt-1 text-xs">
+                              <AccountUnit {...accountLine(totals, line.id)!} />
+                            </p>
+                          ) : null}
 
                           <div className="mt-2.5 flex items-center justify-between gap-2">
                             <div className="flex items-center rounded-md border border-border">
@@ -129,7 +135,7 @@ export function CartDrawer() {
 
                             <div className="flex items-center gap-2">
                               <span className="font-heading text-sm font-bold">
-                                {money(line.price * line.quantity)}
+                                {money((accountLine(totals, line.id)?.unit ?? line.price) * line.quantity)}
                               </span>
                               <button
                                 type="button"

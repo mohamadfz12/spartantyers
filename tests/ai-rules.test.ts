@@ -2,7 +2,8 @@
  * The assistant's shared protocol, its fixed safety answer and its instructions: ids and events,
  * the emergency patterns (danger answered, everyday tyre talk not), and the instruction text (a
  * stable prefix, no promo code, no claim the site makes but the business cannot keep, no dashes,
- * no prices). Nothing here touches a database or the network.
+ * no prices, and the one thing it may say about customer accounts: open one and sign in; see
+ * tests/ai-accounts.test.ts). Nothing here touches a database or the network.
  *   npx tsx --test tests/ai-rules.test.ts
  */
 import assert from 'node:assert/strict'

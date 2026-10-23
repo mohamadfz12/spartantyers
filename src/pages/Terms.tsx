@@ -106,8 +106,8 @@ export default function Terms() {
                   Every price shown on this site is in Australian dollars and is{' '}
                   <span className="font-semibold text-foreground">GST inclusive</span>, so the
                   figure in the cart is the figure you pay. A tax invoice showing the GST
-                  component separately is emailed with your order confirmation and can be
-                  downloaded again from your account at any time.
+                  component separately is emailed with your order confirmation, and customers
+                  with an account can view and print their tax invoices in My account at any time.
                 </PolicyText>
                 <PolicyList
                   items={[

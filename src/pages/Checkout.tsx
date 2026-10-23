@@ -12,6 +12,8 @@ import { Seo } from '@/components/Seo'
 import { Button, Field, Input, Select, Stepper, Textarea } from '@/components/ui'
 import { FulfilmentPicker } from '@/components/checkout/FulfilmentPicker'
 import { OrderSummary } from '@/components/checkout/OrderSummary'
+import { PayOnAccount, PricesGate, TradeLoginLink } from '@/components/checkout/PayOnAccount'
+import { accountLine } from '@/components/shop/YourPrice'
 import { SquareCard, type SquareCardResult } from '@/components/checkout/SquareCard'
 import { site } from '@/config/site'
 import type { Order } from '@/data/types'
@@ -22,7 +24,12 @@ import {
   isValidPostcode,
   money,
 } from '@/lib/utils'
-import { useCart, useCartTotals } from '@/store/cart'
+import { canPayOnAccount, type AccountOrderResult } from '@/lib/account-checkout'
+import { parseAuAddress } from '@/lib/account-address'
+import { useAccount } from '@/store/account'
+import { useAccountPricesPending, useCart, useCartTotals } from '@/store/cart'
+
+const NEWLINE = String.fromCharCode(10)
 
 const STEPS = ['Details', 'Delivery', 'Payment'] as const
 
@@ -68,6 +75,13 @@ export default function Checkout() {
   const clear = useCart((s) => s.clear)
   const totals = useCartTotals()
 
+  // Signed-in customers: prefilled details, their own prices, and (when allowed) pay on account.
+  const me = useAccount((s) => s.me)
+  const pricesPending = useAccountPricesPending()
+  const mayPayOnAccount = canPayOnAccount(me)
+  const [method, setMethod] = useState<'card' | 'account'>('card')
+  const payOnAccount = mayPayOnAccount && method === 'account'
+
   const [step, setStep] = useState(0)
   const [done, setDone] = useState(false)
 
@@ -95,6 +109,26 @@ export default function Checkout() {
 
   const headingRef = useRef<HTMLHeadingElement>(null)
 
+  /* ---- Prefill from the signed-in account ------------------------ */
+
+  // Fills only what is still empty, once per account, so anything the customer has typed (or changed for this
+  // order) is never overwritten. Nothing is saved back: edits here are for this order only.
+  const prefilledFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!me || prefilledFor.current === me.id) return
+    prefilledFor.current = me.id
+    setDetails((d) => ({
+      name: d.name || me.name,
+      email: d.email || me.email,
+      phone: d.phone || me.phone,
+      company: d.company || me.company,
+    }))
+    const parsed = parseAuAddress(me.address)
+    if (parsed) {
+      setAddress((a) => (a.line1 || a.suburb || a.state || a.postcode ? a : parsed))
+    }
+  }, [me])
+
   /* ---- Idempotency ---------------------------------------------- */
 
   /**
@@ -113,8 +147,10 @@ export default function Checkout() {
         fulfilment,
         fittingTyres,
         promo: promo?.code ?? null,
+        // A different total (another price, another account) is a different charge, so a different key.
+        total: totals.total,
       }),
-    [lines, fulfilment, fittingTyres, promo],
+    [lines, fulfilment, fittingTyres, promo, totals.total],
   )
 
   const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey)
@@ -147,7 +183,7 @@ export default function Checkout() {
     }
     if (!isValidEmail(details.email)) {
       errors.email =
-        'Please enter a valid email address — your receipt and tracking go there.'
+        'Please enter a valid email address. Your receipt goes there.'
     }
     if (!isValidAuPhone(details.phone)) {
       errors.phone =
@@ -216,7 +252,7 @@ export default function Checkout() {
           name: `${line.brand} ${line.model}`,
           size: line.size,
           quantity: line.quantity,
-          unitPrice: line.price,
+          unitPrice: accountLine(totals, line.id)?.unit ?? line.price,
         })),
         fittingTyres: fulfilment === 'pickup' ? fittingTyres : 0,
         subtotal: totals.subtotal,
@@ -252,6 +288,61 @@ export default function Checkout() {
     ],
   )
 
+  /** A pay-later order is placed: the server's reference, total and due date are the truth. */
+  const handleAccountPlaced = useCallback(
+    (result: AccountOrderResult) => {
+      const order: Order = {
+        id: result.orderId,
+        reference: result.reference,
+        createdAt: new Date().toISOString(),
+        status: 'account',
+        payment: 'account',
+        ...(result.dueDate ? { dueDate: result.dueDate } : {}),
+        fulfilment,
+        customer: {
+          name: details.name.trim() || me?.name || '',
+          email: me?.email ?? details.email.trim(),
+          phone: details.phone.trim() || me?.phone || '',
+          ...(details.company.trim() || me?.company ? { company: details.company.trim() || me?.company } : {}),
+        },
+        ...(fulfilment === 'delivery'
+          ? {
+              address: {
+                line1: address.line1.trim(),
+                suburb: address.suburb.trim(),
+                state: address.state,
+                postcode: address.postcode.trim(),
+              },
+            }
+          : {}),
+        lines: lines.map((line) => ({
+          sku: line.sku,
+          name: `${line.brand} ${line.model}`,
+          size: line.size,
+          quantity: line.quantity,
+          unitPrice: accountLine(totals, line.id)?.unit ?? line.price,
+        })),
+        fittingTyres: fulfilment === 'pickup' ? fittingTyres : 0,
+        subtotal: totals.subtotal,
+        fittingTotal: totals.fittingTotal,
+        discount: Math.round((totals.volumeDiscount + totals.promoDiscount) * 100) / 100,
+        total: result.total,
+        ...(promo ? { promoCode: promo.code } : {}),
+        ...(notes.trim() ? { notes: notes.trim() } : {}),
+      }
+
+      setDone(true)
+      clear()
+      // The credit used is now different: bring the account (and its owing figure) up to date.
+      void useAccount.getState().refresh()
+      navigate(`/order/${encodeURIComponent(result.reference)}`, {
+        state: { order },
+        replace: true,
+      })
+    },
+    [address, clear, details, fittingTyres, fulfilment, lines, me, navigate, notes, promo, totals],
+  )
+
   const paymentLines = useMemo(
     () => lines.map((line) => ({ id: line.id, quantity: line.quantity })),
     [lines],
@@ -279,6 +370,26 @@ export default function Checkout() {
         : undefined,
     [address, fulfilment],
   )
+
+  /** What the server needs for a pay-later order; the contact used for this order (if edited) travels in the notes. */
+  const accountOrder = useMemo(() => {
+    const contactChanged =
+      !!me &&
+      (details.name.trim() !== me.name.trim() || details.phone.trim() !== me.phone.trim() || details.company.trim() !== me.company.trim())
+    const contact = contactChanged
+      ? `Order contact: ${[details.name.trim(), details.phone.trim(), details.company.trim()].filter(Boolean).join(', ')}.`
+      : ''
+    const combined = [contact, notes.trim()].filter(Boolean).join(NEWLINE).slice(0, 1000)
+    return {
+      lines: lines.map((line) => ({ id: line.id, quantity: line.quantity })),
+      fulfilment,
+      fittingTyres,
+      ...(fulfilment === 'delivery' && deliveryAddress ? { address: deliveryAddress } : {}),
+      ...(combined ? { notes: combined } : {}),
+      // The total shown includes the promo, so the server must price with it too.
+      ...(promo ? { promoCode: promo.code } : {}),
+    }
+  }, [me, details, notes, lines, fulfilment, fittingTyres, deliveryAddress, promo])
 
   /* ---- Empty-cart guard ------------------------------------------ */
 
@@ -343,6 +454,8 @@ export default function Checkout() {
             </Button>
           </header>
 
+          <TradeLoginLink className="mt-4" />
+
           <Stepper
             steps={[...STEPS]}
             current={step}
@@ -372,7 +485,7 @@ export default function Checkout() {
                 {step === 0 ? (
                   <form onSubmit={handleStepSubmit} noValidate className="mt-5">
                     <p className="text-sm leading-relaxed text-muted-foreground">
-                      We use these to send your receipt and tracking, and to reach
+                      We use these to send your receipt, and to reach
                       you if anything about the order needs confirming.
                     </p>
 
@@ -603,19 +716,38 @@ export default function Checkout() {
                       onEditDelivery={() => setStep(1)}
                     />
 
-                    <div className="mt-6">
-                      <SquareCard
-                        amount={totals.total}
-                        idempotencyKey={idempotencyKey}
-                        customer={customer}
-                        fulfilment={fulfilment}
-                        fittingTyres={fittingTyres}
-                        promoCode={promo?.code}
-                        address={deliveryAddress}
-                        lines={paymentLines}
-                        notes={notes.trim() || undefined}
-                        onSuccess={handleSuccess}
+                    {mayPayOnAccount ? (
+                      <PaymentMethodChoice
+                        method={method}
+                        onChange={setMethod}
+                        disabled={pricesPending}
                       />
+                    ) : null}
+
+                    <div className="mt-6">
+                      {pricesPending ? (
+                        <PricesGate />
+                      ) : payOnAccount ? (
+                        <PayOnAccount
+                          amount={totals.total}
+                          idempotencyKey={idempotencyKey}
+                          order={accountOrder}
+                          onPlaced={handleAccountPlaced}
+                        />
+                      ) : (
+                        <SquareCard
+                          amount={totals.total}
+                          idempotencyKey={idempotencyKey}
+                          customer={customer}
+                          fulfilment={fulfilment}
+                          fittingTyres={fittingTyres}
+                          promoCode={promo?.code}
+                          address={deliveryAddress}
+                          lines={paymentLines}
+                          notes={notes.trim() || undefined}
+                          onSuccess={handleSuccess}
+                        />
+                      )}
                     </div>
 
                     <div className="mt-5">
@@ -632,7 +764,7 @@ export default function Checkout() {
                 ) : null}
               </section>
 
-              <TrustRow className="mt-6" />
+              <TrustRow className="mt-6" onAccount={method === 'account'} />
             </div>
 
             <aside className="lg:sticky lg:top-24">
@@ -721,6 +853,54 @@ function ReviewPanel({
   )
 }
 
+/** Card or, for an account that may pay later, "Pay on account". Two real radio buttons, so it works by keyboard and screen reader. */
+function PaymentMethodChoice({
+  method,
+  onChange,
+  disabled,
+}: {
+  method: 'card' | 'account'
+  onChange: (method: 'card' | 'account') => void
+  disabled?: boolean
+}) {
+  const options = [
+    { value: 'card', label: 'Pay by card', hint: 'Card or Afterpay, processed by Square.' },
+    { value: 'account', label: 'Pay on account', hint: 'Invoiced to your account at your prices.' },
+  ] as const
+  return (
+    <fieldset className="mt-6" disabled={disabled}>
+      <legend className="font-heading text-xs font-bold uppercase tracking-brand text-muted-foreground">
+        How would you like to pay?
+      </legend>
+      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+        {options.map((option) => (
+          <label
+            key={option.value}
+            className={cn(
+              'flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm transition-colors',
+              'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background',
+              method === option.value ? 'border-primary bg-primary/10' : 'border-border bg-background hover:border-primary/50',
+            )}
+          >
+            <input
+              type="radio"
+              name="payment-method"
+              value={option.value}
+              checked={method === option.value}
+              onChange={() => onChange(option.value)}
+              className="mt-1 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+            />
+            <span>
+              <span className="block font-semibold">{option.label}</span>
+              <span className="block text-xs text-muted-foreground">{option.hint}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
 function EditButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button
@@ -739,12 +919,15 @@ function EditButton({ onClick, label }: { onClick: () => void; label: string }) 
   )
 }
 
-function TrustRow({ className }: { className?: string }) {
+function TrustRow({ className, onAccount = false }: { className?: string; onAccount?: boolean }) {
   const items = [
     {
       icon: Receipt,
       title: 'GST included',
-      body: 'Every price on the site includes GST, and your tax invoice is emailed with the receipt.',
+      // An order on account sends no receipt: its tax invoice is in My account.
+      body: onAccount
+        ? 'Every price on the site includes GST, and your tax invoice is in My account to view and print.'
+        : 'Every price on the site includes GST, and your tax invoice is emailed with the receipt.',
     },
     {
       icon: BadgeCheck,

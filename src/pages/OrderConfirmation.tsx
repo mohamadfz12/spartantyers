@@ -18,6 +18,7 @@ import { Seo } from '@/components/Seo'
 import { Badge, Button, Field, Input } from '@/components/ui'
 import { ApiError, api } from '@/lib/api'
 import { site } from '@/config/site'
+import { formatDueDate } from '@/lib/account-checkout'
 import type { Order } from '@/data/types'
 import { useCopyToClipboard } from '@/hooks'
 import {
@@ -86,6 +87,9 @@ function Confirmed({ order, receiptUrl }: { order: Order; receiptUrl?: string })
   const { copied, copy } = useCopyToClipboard()
   const gst = Math.round((order.total - order.total / (1 + site.commerce.gstRate)) * 100) / 100
   const itemCount = order.lines.reduce((sum, line) => sum + line.quantity, 0)
+  // A pay-later order is invoiced to the customer's account: not paid yet, due on a date.
+  const onAccount = order.payment === 'account'
+  const dueText = onAccount && order.dueDate ? formatDueDate(order.dueDate) : null
 
   return (
     <>
@@ -99,14 +103,26 @@ function Confirmed({ order, receiptUrl }: { order: Order; receiptUrl?: string })
 
         <h1 className="display-3 mt-5">Order confirmed</h1>
         <p className="lede mt-3">
-          Thanks{order.customer.name ? `, ${order.customer.name.split(/\s+/)[0]}` : ''} —
-          your payment went through and your order is locked in.
+          Thanks{order.customer.name ? `, ${order.customer.name.split(/\s+/)[0]}` : ''} —{' '}
+          {onAccount
+            ? 'your order is on your account and locked in.'
+            : 'your payment went through and your order is locked in.'}
         </p>
 
-        <p className="mt-2 text-sm text-muted-foreground">
-          A confirmation has been sent to{' '}
-          <span className="font-semibold text-foreground">{order.customer.email}</span>
-        </p>
+        {onAccount ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            You can see it, with your statement and tax invoice, in{' '}
+            <Link to="/account" className="font-semibold text-primary underline-offset-4 hover:underline">
+              My account
+            </Link>
+            .
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">
+            A confirmation has been sent to{' '}
+            <span className="font-semibold text-foreground">{order.customer.email}</span>
+          </p>
+        )}
       </header>
 
       {/* Reference */}
@@ -141,7 +157,13 @@ function Confirmed({ order, receiptUrl }: { order: Order; receiptUrl?: string })
         </p>
 
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          <Badge variant="success">Paid</Badge>
+          {onAccount ? (
+            <Badge variant="primary" data-testid="confirm-on-account">
+              {dueText ? `On account, due ${dueText}` : 'On account'}
+            </Badge>
+          ) : (
+            <Badge variant="success">Paid</Badge>
+          )}
           <Badge variant="outline">
             {order.fulfilment === 'pickup' ? 'Warehouse pickup' : 'Delivery'}
           </Badge>
@@ -254,11 +276,19 @@ function Confirmed({ order, receiptUrl }: { order: Order; receiptUrl?: string })
 
         <ol className="mt-4 space-y-4">
           {[
-            {
-              icon: CreditCard,
-              title: 'Payment processed securely',
-              body: 'Your card payment has been processed securely by Square. We never see or store your card details.',
-            },
+            onAccount
+              ? {
+                  icon: CreditCard,
+                  title: 'Invoiced to your account',
+                  body: dueText
+                    ? `This order is on your account and is due on ${dueText}. Pay it from your statement in My account, or at the counter.`
+                    : 'This order is on your account. Pay it from your statement in My account, or at the counter.',
+                }
+              : {
+                  icon: CreditCard,
+                  title: 'Payment processed securely',
+                  body: 'Your card payment has been processed securely by Square. We never see or store your card details.',
+                },
             {
               icon: Package,
               title: `Packaged at our warehouse within ${site.commerce.dispatchWindow}`,
@@ -266,8 +296,8 @@ function Confirmed({ order, receiptUrl }: { order: Order; receiptUrl?: string })
             },
             {
               icon: Mail,
-              title: 'Tracking link by email',
-              body: `We email a tracking link to ${order.customer.email} as soon as your order leaves the warehouse.`,
+              title: 'Check your order any time',
+              body: `Use your order reference and email on the order page, or sign in to My account, to see where your order is up to. For anything urgent, call ${site.phone.display}.`,
             },
             {
               icon: PenLine,
@@ -370,7 +400,7 @@ function Confirmed({ order, receiptUrl }: { order: Order; receiptUrl?: string })
 
           <div className="flex justify-between gap-3 border-t border-border pt-3">
             <dt className="font-heading text-base font-bold uppercase tracking-wide">
-              Total paid
+              {onAccount ? 'Total on account' : 'Total paid'}
             </dt>
             <dd className="font-heading text-xl font-black tabular-nums">
               {money(order.total)}

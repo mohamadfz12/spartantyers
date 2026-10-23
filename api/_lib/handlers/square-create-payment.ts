@@ -22,9 +22,14 @@
  *
  * 4. STOCK IS A SIDE EFFECT. Decrementing stock must never fail the response;
  *    a paid order with stale stock is recoverable, a 500 after a charge is not.
+ *
+ * 5. CUSTOMER ACCOUNTS. A signed-in customer (the `spt_session` cookie) is priced at
+ *    their account's prices by the same `priceOrder()`; `expectedTotal` is checked
+ *    against that total, and the order records the account, the sale label and each
+ *    line's price basis. A guest, or any cookie that does not verify, is priced
+ *    exactly as before and is never an error.
  */
 
-import { randomUUID } from 'node:crypto'
 import { site } from '../../../src/config/site.js'
 import { isConversationId } from '../../../src/lib/ai/protocol.js'
 import {
@@ -38,20 +43,19 @@ import {
   safeMessage,
   withGuard,
 } from '../http.js'
+import { checkDeliveryAddress } from '../address.js'
 import { linkOrderInBackground } from '../ai/orders.js'
 import { newOrderId, newOrderReference } from '../ids.js'
+import { optionalSessionAccount } from '../accounts/checkout.js'
+import { pricingContext } from '../accounts/pricing.js'
 import { priceOrder, toCents } from '../pricing.js'
-import { resolveProduct } from '../catalogue.js'
+import { takeOnlineStock } from '../order-stock.js'
 import { createPayment, SquareError, getSquareConfig } from '../square.js'
 import {
   getOverrides,
   saveOrder,
-  saveStockMove,
-  setOverride,
   type StoredOrder,
 } from '../store.js'
-
-const AU_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT']
 
 interface PaymentBody {
   sourceId?: unknown
@@ -146,39 +150,12 @@ export default withGuard(async (req, res) => {
   let address: StoredOrder['address']
 
   if (fulfilment === 'delivery') {
-    if (!body.address || typeof body.address !== 'object') {
-      fail(res, 400, 'A delivery address is required for delivered orders.')
+    const checked = checkDeliveryAddress(body.address)
+    if (!checked.ok) {
+      fail(res, 400, checked.error)
       return
     }
-
-    const rawAddress = body.address as Record<string, unknown>
-
-    const line1 = asString(rawAddress.line1, 160)
-    const suburb = asString(rawAddress.suburb, 80)
-    const stateInput = asString(rawAddress.state, 40)
-    const postcode = asString(rawAddress.postcode, 10)
-
-    if (!line1) {
-      fail(res, 400, 'Please enter the street address for delivery.')
-      return
-    }
-    if (!suburb) {
-      fail(res, 400, 'Please enter the delivery suburb.')
-      return
-    }
-
-    const state = stateInput ? stateInput.toUpperCase() : ''
-    if (!AU_STATES.includes(state)) {
-      fail(res, 400, `State must be one of ${AU_STATES.join(', ')}.`)
-      return
-    }
-
-    if (!postcode || !/^\d{4}$/.test(postcode)) {
-      fail(res, 400, 'Postcode must be four digits.')
-      return
-    }
-
-    address = { line1, suburb, state, postcode }
+    address = checked.address
   }
 
   const notes = asString(body.notes, 1000) ?? undefined
@@ -186,6 +163,11 @@ export default withGuard(async (req, res) => {
   /* ---- Authoritative pricing ------------------------------------ */
 
   const overrides = await getOverrides()
+
+  // A signed-in customer account is priced at its own prices; a guest, or a session that has expired,
+  // is priced exactly as always (never an error).
+  const account = await optionalSessionAccount(req)
+  const accountPrices = account ? await pricingContext(account).catch(() => null) : null
 
   const pricing = priceOrder(
     {
@@ -195,6 +177,7 @@ export default withGuard(async (req, res) => {
       promoCode: body.promoCode,
     },
     overrides,
+    accountPrices,
   )
 
   if (pricing.errors.length) {
@@ -268,7 +251,10 @@ export default withGuard(async (req, res) => {
       size: line.size,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
+      basis: line.basis,
     })),
+    channel: pricing.channel,
+    ...(account && accountPrices ? { accountId: account.id } : {}),
     fittingTyres: pricing.fittingTyres,
     subtotal: pricing.subtotal,
     fittingTotal: pricing.fittingTotal,
@@ -292,33 +278,7 @@ export default withGuard(async (req, res) => {
 
   /* ---- Stock ---------------------------------------------------- */
 
-  for (const line of pricing.lines) {
-    try {
-      const product = resolveProduct(line.id, overrides)
-      if (!product) continue
-      const after = Math.max(0, product.stock - line.quantity)
-      await setOverride(line.id, { stock: after })
-      // The stockroom's history of this tyre; best-effort like the decrement.
-      await saveStockMove({
-        id: randomUUID(),
-        productId: line.id,
-        sku: line.sku,
-        type: 'sale',
-        change: after - product.stock,
-        before: product.stock,
-        after,
-        reason: 'Sold online',
-        note: '',
-        reference,
-        at: new Date().toISOString(),
-        by: 'Website checkout',
-      })
-    } catch (error) {
-      console.error(
-        `[create-payment] stock decrement failed for ${line.id}: ${safeMessage(error)}`,
-      )
-    }
-  }
+  await takeOnlineStock(pricing.lines, overrides, reference, 'Website checkout', 'create-payment')
 
   // The AI assistant's chat, if the customer used it: in the background with a short time limit,
   // so it never delays or affects the payment's answer.

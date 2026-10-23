@@ -266,9 +266,9 @@ export default function Shipping() {
               <PolicySection id="tracking" title="Tracking and delivery">
                 <PolicyList
                   items={[
-                    'An order confirmation email with a tracking number is sent when the order is placed.',
-                    'A second notification follows when the order is dispatched, with real-time tracking through the courier.',
-                    'You can check the status of any order through your account on this site at any time.',
+                    'An order confirmation email is sent when the order is placed.',
+                    `We do not issue courier tracking numbers at the moment. To find out where a delivery is, call ${site.phone.display} with your order reference.`,
+                    'You can check the status of any order with your order reference and email on the order page. Customers with an account can see all their orders, their statement and their tax invoices in My account.',
                     'A signature is required on every delivery. A commercial depot or business address is usually easier than a residential one, because someone is there to sign for it.',
                   ]}
                 />

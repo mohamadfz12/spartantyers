@@ -1,164 +1,47 @@
 /**
- * The AI's database: one tiny interface (`query`, `transaction`) over two engines.
- *
- *   Production   Neon Postgres over HTTP (`DATABASE_URL` or `POSTGRES_URL`, the same
- *                order `api/_lib/store.ts` uses).
- *   Local/tests  PGlite, real Postgres compiled to WebAssembly, in `./.data/ai-pglite`
- *                (or in memory when `AI_DB_MEMORY=1`). Never on Vercel: without a
- *                Postgres URL there the AI is simply "not configured".
- *
- * `transaction` takes a fixed list of statements because Neon's HTTP driver cannot
- * hold a transaction open between round trips. Each statement sees what the ones
- * before it wrote, and in READ COMMITTED a statement after a lock sees everything
- * committed before the lock was granted, which is what the spend lock relies on.
+ * The AI's database. The connection itself (Neon in production, PGlite locally and in tests) is
+ * shared with customer accounts and lives in `api/_lib/db.ts`; this file keeps the AI's names
+ * for it and the AI's own idempotent schema, so no AI file or test changes.
  */
-import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
+import {
+  closeDb,
+  dbConfigured,
+  DbUnavailable,
+  ensureSchema,
+  getDb,
+  num,
+  type Db,
+  type Schema,
+  type Statement,
+} from '../db.js'
 
-export interface Statement {
-  text: string
-  params?: unknown[]
-}
+export type { Statement }
+export { num }
 
-export interface AiDb {
-  /** Rows of one parameterised statement. */
-  query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>
-  /** Several statements, atomically, in order; the rows of each, in the same order. */
-  transaction(statements: Statement[]): Promise<Record<string, unknown>[][]>
-}
-
-/** Postgres connection string, in the same order as `api/_lib/store.ts`. */
-function postgresUrl(): string | null {
-  return process.env.DATABASE_URL || process.env.POSTGRES_URL || null
-}
+/** The AI's database handle: the same interface as the shared one. */
+export type AiDb = Db
 
 /** True when the AI has somewhere to keep its books on this deployment. */
-export function aiDbConfigured(): boolean {
-  return !!postgresUrl() || !process.env.VERCEL
-}
-
-/* ------------------------------------------------------------------ *
- * Neon (production)
- * ------------------------------------------------------------------ */
-
-let neonClient: { url: string; sql: NeonQueryFunction<false, false> } | null = null
-
-function neonDb(url: string): AiDb {
-  // Rebuilt only if the URL changes, which happens between test cases.
-  if (!neonClient || neonClient.url !== url) neonClient = { url, sql: neon(url) }
-  const sql = neonClient.sql
-  return {
-    async query<T>(text: string, params: unknown[] = []) {
-      return (await sql.query(text, params)) as T[]
-    },
-    async transaction(statements) {
-      const results = await sql.transaction((txn) =>
-        statements.map((s) => txn.query(s.text, s.params ?? [])),
-      )
-      return results as Record<string, unknown>[][]
-    },
-  }
-}
-
-/* ------------------------------------------------------------------ *
- * PGlite (local development and tests)
- * ------------------------------------------------------------------ */
-
-/** The slice of PGlite this file uses. */
-interface PgliteLike {
-  query<T>(text: string, params?: unknown[]): Promise<{ rows: T[] }>
-  transaction<T>(fn: (tx: PgliteLike) => Promise<T>): Promise<T>
-  close(): Promise<void>
-}
-
-/** Loads a module by a name the file tracer cannot see (see openPglite). */
-const loadModule = (name: string) => import(name)
-
-let pglite: Promise<PgliteLike> | null = null
-
-function openPglite(): Promise<PgliteLike> {
-  if (!pglite) {
-    pglite = (async () => {
-      // PGlite is a dev dependency and is never used on Vercel. The module name goes through a
-      // function parameter: Vercel's file tracer follows a literal or a constant specifier (it
-      // would add PGlite's ~10 MB to every function that imports this file), but it cannot
-      // follow a name it only learns when the function is called.
-      const { PGlite } = await loadModule('@electric-sql/pglite')
-      if (process.env.AI_DB_MEMORY === '1') return new PGlite() as PgliteLike
-      const { mkdirSync } = await import('node:fs')
-      mkdirSync('./.data', { recursive: true })
-      return new PGlite('./.data/ai-pglite') as PgliteLike
-    })()
-    pglite.catch(() => {
-      pglite = null
-    })
-  }
-  return pglite
-}
-
-function pgliteDb(): AiDb {
-  return {
-    async query<T>(text: string, params: unknown[] = []) {
-      return (await (await openPglite()).query<T>(text, params)).rows
-    },
-    async transaction(statements) {
-      const db = await openPglite()
-      return db.transaction(async (tx) => {
-        const out: Record<string, unknown>[][] = []
-        for (const s of statements) {
-          out.push((await tx.query<Record<string, unknown>>(s.text, s.params ?? [])).rows)
-        }
-        return out
-      })
-    },
-  }
-}
-
-/* ------------------------------------------------------------------ *
- * Public
- * ------------------------------------------------------------------ */
+export const aiDbConfigured = dbConfigured
 
 /** Thrown when the AI has no database on this deployment (callers answer "not configured"). */
-export class AiDbUnavailable extends Error {
+export class AiDbUnavailable extends DbUnavailable {
   constructor() {
     super('The AI database is not configured.')
     this.name = 'AiDbUnavailable'
   }
 }
 
-let schemaReady: { key: string; ready: Promise<void> } | null = null
-
 /** The AI database with its tables in place. */
-export async function getAiDb(): Promise<AiDb> {
-  const url = postgresUrl()
-  if (!url && process.env.VERCEL) throw new AiDbUnavailable()
-  const db = url ? neonDb(url) : pgliteDb()
-  const key = url ?? (process.env.AI_DB_MEMORY === '1' ? 'memory' : 'disk')
-  if (!schemaReady || schemaReady.key !== key) {
-    const ready = ensureAiSchema(db)
-    // A failed attempt must not be cached, or one network blip would poison
-    // this instance until its next cold start.
-    ready.catch(() => {
-      if (schemaReady?.ready === ready) schemaReady = null
-    })
-    schemaReady = { key, ready }
-  }
-  await schemaReady.ready
-  return db
+export function getAiDb(): Promise<AiDb> {
+  return getDb(AI_SCHEMA, () => new AiDbUnavailable())
 }
-
-/** Integer columns can arrive as numbers or strings (bigint sums); always read them through this. */
-export const num = (value: unknown): number => Number(value ?? 0)
 
 /**
- * Closes the local database and forgets the memoised schema check. For tests, which
+ * Closes the local database and forgets the memoised schema checks. For tests, which
  * want a fresh in-memory database; harmless in production (a no-op without PGlite).
  */
-export async function closeAiDb(): Promise<void> {
-  schemaReady = null
-  const open = pglite
-  pglite = null
-  if (open) await (await open.catch(() => null))?.close()
-}
+export const closeAiDb = closeDb
 
 /* ------------------------------------------------------------------ *
  * Schema
@@ -243,10 +126,9 @@ const SCHEMA: string[] = [
   `CREATE INDEX IF NOT EXISTS ai_calls_conversation_idx ON ai_calls (conversation_id)`,
 ]
 
+const AI_SCHEMA: Schema = { name: 'ai', statements: SCHEMA }
+
 /** Creates the AI tables if they are missing. Safe to call any number of times, from any number of instances. */
-export async function ensureAiSchema(db: AiDb): Promise<void> {
-  await db.transaction([
-    { text: `SELECT pg_advisory_xact_lock(hashtext('spartan-ai-schema'))` },
-    ...SCHEMA.map((text) => ({ text })),
-  ])
+export function ensureAiSchema(db: AiDb): Promise<void> {
+  return ensureSchema(db, AI_SCHEMA)
 }

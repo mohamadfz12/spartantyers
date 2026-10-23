@@ -81,6 +81,9 @@ export default function FleetSolutions() {
               </a>
             </Button>
             <Button asChild variant="outline" size="lg">
+              <Link to="/account/signup?level=bulk">Open a bulk account</Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
               <a href={site.phone.href}>
                 <Phone aria-hidden="true" className="h-4 w-4" />
                 {site.phone.display}
@@ -332,7 +335,13 @@ export default function FleetSolutions() {
                     Account facilities
                   </dt>
                   <dd className="mt-1.5 text-muted-foreground">
-                    Email{' '}
+                    <Link
+                      to="/account/signup?level=bulk"
+                      className="link-underline font-semibold text-primary"
+                    >
+                      Open a bulk account
+                    </Link>{' '}
+                    online, or email{' '}
                     <a
                       href={`mailto:${site.email.accounts}`}
                       className="link-underline break-all font-semibold text-primary"

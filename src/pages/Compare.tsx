@@ -2,9 +2,12 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, MessageSquareQuote, Plus, Scale, ShoppingCart, X } from 'lucide-react'
 import type { Product } from '@/data/types'
-import { effectivePrice, hasPrice, productById } from '@/data/products'
+import { hasPrice, productById } from '@/data/products'
 import { site } from '@/config/site'
 import { cn, formatNumber, money, priceLabel, specValue } from '@/lib/utils'
+import { isBuyable, priceView, type AccountPriceMap } from '@/lib/account-price-display'
+import { useAccountPriceMap } from '@/store/account-prices'
+import { InlinePrice, usePriceView, YourPrice } from '@/components/shop/YourPrice'
 import { useCart } from '@/store/cart'
 import { MAX_COMPARE, requestQuote, toast, useCompare } from '@/store/ui'
 import { Badge, Button, Rating } from '@/components/ui'
@@ -27,7 +30,7 @@ import { useCatalogueVersion } from '@/lib/live-catalogue'
 interface Row {
   label: string
   render: (product: Product) => React.ReactNode
-  metric?: (product: Product) => number | null
+  metric?: (product: Product, prices: AccountPriceMap) => number | null
   better?: 'high' | 'low'
   note?: string
 }
@@ -37,10 +40,10 @@ const ROWS: Row[] = [
     label: 'Price per tyre',
     render: (product) => (
       <span className="font-heading text-lg font-black">
-        {priceLabel(effectivePrice(product))}
+        <InlinePrice product={product} />
       </span>
     ),
-    metric: (product) => effectivePrice(product),
+    metric: (product, prices) => priceView(product, prices).current,
     better: 'low',
     note: 'Inc. GST, before volume breaks',
   },
@@ -142,6 +145,7 @@ export default function Compare() {
   const remove = useCompare((state) => state.remove)
   const clear = useCompare((state) => state.clear)
   const add = useCart((state) => state.add)
+  const prices = useAccountPriceMap()
 
   const catalogue = useCatalogueVersion()
   const selected = useMemo(
@@ -161,7 +165,7 @@ export default function Compare() {
     for (const row of ROWS) {
       if (!row.metric || !row.better) continue
       const values = selected
-        .map(row.metric)
+        .map((product) => row.metric!(product, prices))
         .filter((value): value is number => value != null)
       // A "best" needs at least two tyres that actually have the figure.
       if (values.length < 2) continue
@@ -172,7 +176,7 @@ export default function Compare() {
       map.set(row.label, best)
     }
     return map
-  }, [selected, catalogue])
+  }, [selected, catalogue, prices])
 
   const jsonLd = useMemo(
     () =>
@@ -185,7 +189,7 @@ export default function Compare() {
   )
 
   const handleAdd = (product: Product) => {
-    if (!hasPrice(product)) {
+    if (!isBuyable(product, prices)) {
       requestQuote(product)
       return
     }
@@ -300,18 +304,9 @@ export default function Compare() {
                         {product.size}
                       </p>
 
-                      <p className="mt-2 flex items-baseline gap-2">
-                        <span className="font-heading text-xl font-black">
-                          {priceLabel(effectivePrice(product))}
-                        </span>
-                        {product.discountPrice != null && product.price != null ? (
-                          <span className="text-xs text-muted-foreground line-through">
-                            {money(product.price)}
-                          </span>
-                        ) : null}
-                      </p>
+                      <HeadPrice product={product} />
 
-                      {hasPrice(product) ? (
+                      {isBuyable(product, prices) ? (
                         <Button
                           size="sm"
                           onClick={() => handleAdd(product)}
@@ -366,7 +361,7 @@ export default function Compare() {
                         const isBest =
                           best != null &&
                           row.metric != null &&
-                          row.metric(product) === best
+                          row.metric(product, prices) === best
 
                         return (
                           <td
@@ -482,7 +477,7 @@ function EmptyState({
               </p>
               <p className="truncate font-heading text-sm font-bold">{only.model}</p>
               <p className="font-mono text-xs text-muted-foreground">
-                {only.size} · {priceLabel(effectivePrice(only))}
+                {only.size} · <InlinePrice product={only} />
               </p>
             </div>
             <button
@@ -541,5 +536,24 @@ function Hint({ title, children }: { title: string; children: React.ReactNode })
         {children}
       </p>
     </li>
+  )
+}
+
+/** The price under a tyre's name in the comparison header (the customer's own price when it beats the shelf price). */
+function HeadPrice({ product }: { product: Product }) {
+  const view = usePriceView(product)
+  return (
+    <p className={cn('mt-2 flex items-baseline gap-2', view.yours && 'flex-wrap gap-y-1')}>
+      {view.yours ? (
+        <YourPrice view={view} priceClassName="text-xl" retailClassName="text-xs" />
+      ) : (
+        <>
+          <span className="font-heading text-xl font-black">{priceLabel(view.retail)}</span>
+          {product.discountPrice != null && product.price != null ? (
+            <span className="text-xs text-muted-foreground line-through">{money(product.price)}</span>
+          ) : null}
+        </>
+      )}
+    </p>
   )
 }

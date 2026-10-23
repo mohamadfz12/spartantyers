@@ -48,6 +48,7 @@ import { can } from '@/lib/admin-roles'
 import {
   api,
   type AccountPreview,
+  type PosAccountItems,
   type PosAccountPayment,
   type PosBalance,
   type PosCustomer,
@@ -55,6 +56,8 @@ import {
   type PosLine,
   type PosTicket,
 } from '@/lib/api'
+import { ChannelBadge } from '@/components/admin/accounts/parts'
+import { ticketChannelOf } from '@/lib/admin-accounts-ui'
 import { printTicket } from '@/lib/pos-print'
 import { cn, moneyExact } from '@/lib/utils'
 import { adminToken, handleAdminError, useAdminSession } from '@/store/admin'
@@ -85,6 +88,8 @@ const STATUS_TONE: Record<PosTicket['status'], 'warning' | 'success' | 'primary'
   account: 'primary',
   void: 'outline',
 }
+
+const LEVEL_LABEL = { customer: 'Customer', bulk: 'Bulk', wholesaler: 'Wholesaler' } as const
 
 const SOURCES = [
   ['all', 'All'],
@@ -124,6 +129,13 @@ const fromTicket = (t: PosTicket): Draft => ({
 })
 
 const who = (c: PosCustomer | null) => (c ? c.company || c.name : 'Walk-in')
+
+/** The customer's own unit price for a tyre when it beats the shop price, else null. */
+const accountUnit = (item: PosItem, prices?: PosAccountItems['prices']): number | null => {
+  if (item.source !== 'tyre' || item.price === null) return null
+  const own = prices?.[item.itemId]?.unit
+  return own !== undefined && own < item.price ? own : null
+}
 
 /** A GET against the till, with session handling. */
 async function posGet<T>(params: Record<string, string>): Promise<T> {
@@ -210,7 +222,7 @@ export default function Pos() {
  * Sell
  * ================================================================== */
 
-function ItemPicker({ items, note, onPick, disabled }: { items: PosItem[] | null; note: string; onPick: (i: PosItem) => void; disabled: boolean }) {
+function ItemPicker({ items, note, onPick, disabled, accountPrices }: { items: PosItem[] | null; note: string; onPick: (i: PosItem) => void; disabled: boolean; accountPrices?: PosAccountItems['prices'] }) {
   const [q, setQ] = useState('')
   const [src, setSrc] = useState<(typeof SOURCES)[number][0]>('all')
   const term = q.trim().toLowerCase()
@@ -266,7 +278,12 @@ function ItemPicker({ items, note, onPick, disabled }: { items: PosItem[] | null
                 {i.variation ? <span className="block text-xs text-muted-foreground">{i.variation}</span> : null}
               </span>
               <span className="mt-2 flex items-end justify-between gap-2">
-                <span className="font-heading text-base font-bold tabular-nums text-primary">{i.price === null ? 'Enter price' : moneyExact(i.price)}</span>
+                <span className="font-heading text-base font-bold tabular-nums text-primary">
+                  {i.price === null ? 'Enter price' : moneyExact(accountUnit(i, accountPrices) ?? i.price)}
+                  {accountUnit(i, accountPrices) !== null && i.price !== null ? (
+                    <span className="ml-1.5 text-xs font-normal text-muted-foreground line-through">{moneyExact(i.price)}</span>
+                  ) : null}
+                </span>
                 {i.source === 'tyre' && i.stock !== null ? (
                   <span className={cn('text-[0.6875rem]', i.stock > 0 ? 'text-muted-foreground' : 'font-semibold text-destructive')}>
                     {i.stock > 0 ? `${i.stock} in stock` : 'Out of stock'}
@@ -398,9 +415,30 @@ function SellTab({
   const [pay, setPay] = useState<'' | 'card' | 'cash' | 'other' | 'account' | 'account-pay'>('')
   const done = draft.status !== 'open'
 
+  // A counter customer linked to a website account is sold to at the account's prices, and can only
+  // pay later when the account allows it. An ordinary counter customer: nothing changes.
+  const [acct, setAcct] = useState<PosAccountItems | null>(null)
+  const accountId = draft.customer?.accountId
+  const customerKey = draft.customer?.id
+  useEffect(() => {
+    setAcct(null)
+    if (!accountId || !customerKey) return
+    let live = true
+    posGet<PosAccountItems>({ view: 'account-items', customerId: customerKey })
+      .then((r) => live && setAcct(r))
+      .catch(() => live && setAcct(null))
+    return () => {
+      live = false
+    }
+  }, [accountId, customerKey])
+  const account = acct?.account ?? null
+
   const subtotal = round2(draft.lines.reduce((a, l) => a + l.qty * l.price, 0))
   const discount = Math.min(round2(draft.discount), subtotal)
   const total = round2(subtotal - discount)
+  // No limit applies until an owner or manager sets pay later: the till then works as it always did.
+  const overCredit = Boolean(account && account.creditSet && account.available < total)
+  const cannotPayLater = account ? account.refusal ?? (overCredit ? `Over the credit limit: ${moneyExact(account.available)} available.` : null) : null
 
   const change = (patch: Partial<Draft>) => {
     setDraft({ ...draft, ...patch })
@@ -421,8 +459,12 @@ function SellTab({
   }
   const pick = (item: PosItem) => {
     if (item.price === null) return setPricing(item)
-    addItem(item, item.price)
+    addItem(item, accountUnit(item, acct?.prices) ?? item.price)
   }
+  // Tyre lines already on the ticket that cost more than this customer's own price.
+  const dearer = acct ? draft.lines.filter((l) => l.source === 'tyre' && acct.prices[l.itemId] && l.price > acct.prices[l.itemId]!.unit) : []
+  const applyAccountPrices = () =>
+    acct && change({ lines: draft.lines.map((l) => (l.source === 'tyre' && acct.prices[l.itemId] && l.price > acct.prices[l.itemId]!.unit ? { ...l, price: acct.prices[l.itemId]!.unit } : l)) })
   const addCustom = () => {
     const price = round2(Number(custom.price))
     if (!custom.name.trim() || custom.price === '' || !(price >= 0)) return
@@ -497,7 +539,7 @@ function SellTab({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.25fr_1fr]">
-      <ItemPicker items={items} note={itemsNote} onPick={pick} disabled={done} />
+      <ItemPicker items={items} note={itemsNote} onPick={pick} disabled={done} accountPrices={acct?.prices} />
 
       <AdminPanel
         title={draft.ref ?? 'New ticket'}
@@ -515,6 +557,37 @@ function SellTab({
         ) : (
           <CustomerPicker customer={draft.customer} onChange={(c) => change({ customer: c })} />
         )}
+
+        {account ? (
+          <div className="flex flex-col gap-1.5 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm" data-testid="pos-account">
+            <p className="flex flex-wrap items-center gap-2">
+              <Badge size="sm" variant="primary">
+                {LEVEL_LABEL[account.level]}
+              </Badge>
+              {account.status === 'suspended' ? (
+                <span className="font-semibold text-destructive">Account suspended: shop prices only.</span>
+              ) : (
+                <span>
+                  {account.discountPct ? `${account.discountPct}% agreed discount, ` : ''}agreed prices applied.
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {!account.creditSet
+                ? 'Pay later not set yet: sales on account work as before. An owner or manager can set a limit in Customer accounts.'
+                : account.payLater
+                  ? `Pay later: ${moneyExact(account.available)} of ${moneyExact(account.creditLimit)} available, ${account.termsDays} day terms.`
+                  : 'Pay later is switched off on this account.'}
+            </p>
+            {!done && dearer.length ? (
+              <div>
+                <Button size="sm" variant="outline" onClick={applyAccountPrices}>
+                  Use their prices on {dearer.length} line{dearer.length === 1 ? '' : 's'}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {draft.lines.length ? (
           <ul className="divide-y divide-border rounded-md border border-border">
@@ -672,11 +745,18 @@ function SellTab({
                 <CreditCard aria-hidden="true" className="h-5 w-5" />
                 Other
               </Button>
-              <Button size="lg" variant="outline" onClick={() => startPay('account')} disabled={!draft.lines.length} title="The customer pays later, by a due date">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => startPay('account')}
+                disabled={!draft.lines.length || Boolean(cannotPayLater)}
+                title={cannotPayLater ?? 'The customer pays later, by a due date'}
+              >
                 <FileText aria-hidden="true" className="h-5 w-5" />
                 On account
               </Button>
             </div>
+            {cannotPayLater ? <p className="text-xs text-muted-foreground">Pay later is off for this sale. {cannotPayLater}</p> : null}
           </div>
         )}
       </AdminPanel>
@@ -1183,7 +1263,12 @@ function TicketsTab({ onOpen }: { onOpen: (t: PosTicket) => void }) {
                 const owing = round2(t.total - t.amountPaid)
                 return (
                   <tr key={t.ref} className="hover:bg-muted/30">
-                    <td className={cn(td, 'font-mono text-xs')}>{t.ref}</td>
+                    <td className={td}>
+                      <span className="font-mono text-xs">{t.ref}</span>
+                      <div className="mt-1">
+                        <ChannelBadge channel={ticketChannelOf(t)} />
+                      </div>
+                    </td>
                     <td className={td}>{t.customer ? who(t.customer) : <span className="text-muted-foreground">Walk-in</span>}</td>
                     <td className={cn(td, 'max-w-xs text-xs')}>{t.lines.map((l) => `${l.qty} × ${l.name}`).join(', ').slice(0, 90)}</td>
                     <td className={cn(td, 'text-right font-semibold tabular-nums')}>{moneyExact(t.total)}</td>
@@ -1383,7 +1468,12 @@ function CustomerDetail({ id, onClose, onChanged, onNewTicket, onOpenTicket }: {
                     <tbody>
                       {d.tickets.map((t) => (
                         <tr key={t.ref} className="cursor-pointer hover:bg-muted/30" onClick={() => onOpenTicket(t)}>
-                          <td className={cn(td, 'font-mono text-xs')}>{t.ref}</td>
+                          <td className={td}>
+                            <span className="font-mono text-xs">{t.ref}</span>
+                            <div className="mt-1">
+                              <ChannelBadge channel={ticketChannelOf(t)} />
+                            </div>
+                          </td>
                           <td className={cn(td, 'text-xs')}>{stampLabel(t.paidAt || t.updatedAt)}</td>
                           <td className={cn(td, 'text-right tabular-nums')}>{moneyExact(t.total)}</td>
                           <td className={td}>

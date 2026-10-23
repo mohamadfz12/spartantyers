@@ -28,6 +28,7 @@ import {
   th,
   useAdminAction,
 } from '@/components/admin/AdminKit'
+import { SalesByType } from '@/components/admin/accounts/SalesByType'
 import { LedgerDialog } from '@/components/admin/LedgerDialog'
 import { PeriodPicker } from '@/components/admin/PeriodPicker'
 import { useAdminQuery } from '@/components/admin/useAdminQuery'
@@ -257,6 +258,8 @@ export default function Balance() {
               )}
             </AdminPanel>
           </div>
+
+          <SalesByType />
 
           <AdminPanel
             title="Expenses"

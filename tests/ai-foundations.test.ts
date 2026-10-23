@@ -804,7 +804,7 @@ describe('the helpers the AI files share live in one place', () => {
   test('PGlite is loaded through a function parameter, so the file tracer never follows it into a function', async () => {
     const { readFileSync } = await import('node:fs')
     const { join } = await import('node:path')
-    const source = readFileSync(join(import.meta.dirname, '..', 'api/_lib/ai/db.ts'), 'utf8')
+    const source = readFileSync(join(import.meta.dirname, '..', 'api/_lib/db.ts'), 'utf8')
     assert.match(source, /const loadModule = \(name: string\) => import\(name\)/)
     assert.match(source, /loadModule\('@electric-sql\/pglite'\)/)
     // No import() of a literal or of a constant holding the name (those are traced).

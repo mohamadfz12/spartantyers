@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Download, Mail, Phone, Search, Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { BadgeCheck, Download, Mail, Phone, Search, Users } from 'lucide-react'
 import { Seo } from '@/components/Seo'
 import {
   AdminEmpty,
@@ -11,6 +12,9 @@ import { Tile, exportSheet, selectClass, stampLabel, td, th } from '@/components
 import { useAdminQuery } from '@/components/admin/useAdminQuery'
 import { Badge, Button, Input, Label, Skeleton } from '@/components/ui'
 import { api, type Customer } from '@/lib/api'
+import { accountsApi } from '@/lib/admin-accounts-api'
+import { can } from '@/lib/admin-roles'
+import { useAdminSession } from '@/store/admin'
 import { cn, formatNumber, moneyExact } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ *
@@ -25,6 +29,16 @@ type SortKey = 'recent' | 'spent' | 'orders' | 'name'
 
 export default function Customers() {
   const query = useAdminQuery('admin-customers', (token) => api.admin.customers(token))
+  // Customers who also have a website account link to it (staff with the `trade` permission only).
+  const { user } = useAdminSession()
+  const canSeeAccounts = can(user.role, 'trade')
+  const accountList = useAdminQuery('admin-customers-accounts', (token) =>
+    canSeeAccounts ? accountsApi.list(token) : Promise.resolve(null),
+  )
+  const accountByEmail = useMemo(
+    () => new Map((accountList.data?.accounts ?? []).map((a) => [a.email.toLowerCase(), a.id])),
+    [accountList.data],
+  )
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<SortKey>('recent')
 
@@ -153,6 +167,15 @@ export default function Customers() {
                         <td className={td}>
                           <p className="font-semibold">{c.name || '—'}</p>
                           <p className="text-xs text-muted-foreground">{[c.company, c.suburb].filter(Boolean).join(' · ') || '—'}</p>
+                          {accountByEmail.get(c.email.toLowerCase()) ? (
+                            <Link
+                              to={`/admin/accounts/${accountByEmail.get(c.email.toLowerCase())}`}
+                              className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                            >
+                              <BadgeCheck aria-hidden="true" className="h-3 w-3" />
+                              Customer account
+                            </Link>
+                          ) : null}
                           {c.subscribed ? (
                             <Badge size="sm" variant="outline" className="mt-1">
                               Newsletter

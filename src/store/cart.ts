@@ -9,6 +9,9 @@ import {
   productById,
 } from '@/data/products'
 import type { CartLine, Product } from '@/data/types'
+import { accountUnitPrice, priceCart, type AccountPricing, type PriceBasis, type PricingProduct } from '@/lib/account-pricing'
+import { useAccount } from '@/store/account'
+import { useAccountPrices } from '@/store/account-prices'
 
 export type Fulfilment = 'delivery' | 'pickup'
 
@@ -54,8 +57,10 @@ export const useCart = create<CartState>()(
 
       add: (product, quantity = 1) =>
         set((state) => {
-          // Price-on-application lines go to a quote, never the cart.
-          if (!hasPrice(product)) return state
+          // Price-on-application lines go to a quote, never the cart, unless the signed-in
+          // customer has their own price for the tyre (then it is theirs to buy).
+          const accountUnit = useAccountPrices.getState().prices[product.id]?.unit
+          if (!hasPrice(product) && !(typeof accountUnit === 'number' && accountUnit > 0)) return state
           const existing = state.lines.find((line) => line.id === product.id)
           const lines = existing
             ? state.lines.map((line) =>
@@ -71,7 +76,7 @@ export const useCart = create<CartState>()(
                   brand: product.brand,
                   model: product.model,
                   size: product.size,
-                  price: effectivePrice(product),
+                  price: effectivePrice(product) ?? accountUnit ?? 0,
                   tread: product.tread,
                   quantity,
                 } satisfies CartLine,
@@ -144,12 +149,14 @@ export const useCart = create<CartState>()(
       // A saved cart carries the unit price and SKU from the day it was
       // filled. Re-read both from the catalogue on every load so the cart
       // never shows yesterday's price, and drop lines that have left the
-      // range or moved to price on application.
+      // range. A price-on-application line is kept for now (it may be a
+      // customer's own priced tyre); `dropUnbuyableLines` below removes it as
+      // soon as it is known the visitor has no account price for it.
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<CartState>
         const lines = (saved.lines ?? []).flatMap((line): CartLine[] => {
           const product = productById.get(line.id)
-          if (!product || !hasPrice(product)) return []
+          if (!product) return []
           return [
             {
               ...line,
@@ -158,7 +165,7 @@ export const useCart = create<CartState>()(
               model: product.model,
               size: product.size,
               tread: product.tread,
-              price: effectivePrice(product),
+              price: effectivePrice(product) ?? line.price,
             },
           ]
         })
@@ -197,14 +204,23 @@ export interface CartTotals {
   gst: number
   nextBreak: { min: number; discount: number; label: string } | null
   tyresToNextBreak: number
+  /** What a signed-in customer's own prices saved on this cart (0 for a guest). */
+  accountSaving: number
+  /** Per product: what each tyre costs this customer and why. Empty for a guest. */
+  lineUnits: Record<string, { unit: number; retailUnit: number | null; basis: PriceBasis }>
 }
 
-export function cartTotals(state: {
-  lines: CartLine[]
-  fulfilment: Fulfilment
-  fittingTyres: number
-  promo: Promo | null
-}): CartTotals {
+export function cartTotals(
+  state: {
+    lines: CartLine[]
+    fulfilment: Fulfilment
+    fittingTyres: number
+    promo: Promo | null
+  },
+  /** A signed-in customer's pricing context; null or omitted for a guest (then nothing below changes). */
+  account: AccountPricing | null = null,
+): CartTotals {
+  if (account) return accountCartTotals(state, account)
   const itemCount = state.lines.reduce((sum, line) => sum + line.quantity, 0)
   const subtotal = state.lines.reduce(
     (sum, line) => sum + line.price * line.quantity,
@@ -243,6 +259,49 @@ export function cartTotals(state: {
     gst: round(total - total / (1 + site.commerce.gstRate)),
     nextBreak: nextBreak ? { ...nextBreak } : null,
     tyresToNextBreak: nextBreak ? nextBreak.min - itemCount : 0,
+    accountSaving: 0,
+    lineUnits: {},
+  }
+}
+
+/**
+ * A signed-in customer's totals: the SHARED rule (src/lib/account-pricing.ts), the same function the server
+ * prices the order with, so the total equals the server's to the cent.
+ */
+function accountCartTotals(
+  state: { lines: CartLine[]; fulfilment: Fulfilment; fittingTyres: number; promo: Promo | null },
+  account: AccountPricing,
+): CartTotals {
+  const items = state.lines.flatMap((line) => {
+    const product: PricingProduct = productById.get(line.id) ?? { id: line.id, price: line.price }
+    // A line nobody can price (a quote-only tyre with no account price) is left out, as the server would refuse it.
+    if (effectivePrice(product as Product) == null && accountUnitPrice(product, account) == null) return []
+    return [{ product, quantity: line.quantity }]
+  })
+  const priced = priceCart(items, {
+    account,
+    fulfilment: state.fulfilment,
+    fittingTyres: state.fittingTyres,
+    promoPercentOff: state.promo?.percentOff ?? 0,
+  })
+  const nextBreak = PRICE_BREAKS.find((b) => priced.itemCount < b.min) ?? null
+  const lineUnits: CartTotals['lineUnits'] = {}
+  for (const line of priced.lines) lineUnits[line.id] = { unit: line.unit, retailUnit: line.retailUnit, basis: line.basis }
+  return {
+    itemCount: priced.itemCount,
+    lineCount: state.lines.length,
+    subtotal: priced.subtotal,
+    volumeDiscount: priced.volumeDiscount,
+    volumeDiscountRate: priced.volumeDiscountRate,
+    volumeLabel: priced.volumeLabel,
+    promoDiscount: priced.promoDiscount,
+    fittingTotal: priced.fittingTotal,
+    total: priced.total,
+    gst: priced.gst,
+    nextBreak: nextBreak ? { ...nextBreak } : null,
+    tyresToNextBreak: nextBreak ? nextBreak.min - priced.itemCount : 0,
+    accountSaving: priced.accountSaving,
+    lineUnits,
   }
 }
 
@@ -256,5 +315,41 @@ export function useCartTotals(): CartTotals {
   const fulfilment = useCart((s) => s.fulfilment)
   const fittingTyres = useCart((s) => s.fittingTyres)
   const promo = useCart((s) => s.promo)
-  return cartTotals({ lines, fulfilment, fittingTyres, promo })
+  const pricing = useAccountPrices((s) => s.pricing)
+  return cartTotals({ lines, fulfilment, fittingTyres, promo }, pricing)
 }
+
+/**
+ * True while a signed-in customer's prices are not known yet (or could not be loaded): the cart then shows
+ * shelf prices that the server will not charge, so checkout waits.
+ */
+export function useAccountPricesPending(): boolean {
+  const signedIn = useAccount((s) => s.me !== null)
+  const status = useAccountPrices((s) => s.status)
+  return signedIn && status !== 'ready'
+}
+
+/**
+ * A quote-only (price-on-application) tyre can be in the cart only for a customer with their own price for it.
+ * Once it is known who is signed in and what their prices are, drop any such line they cannot buy.
+ */
+export function dropUnbuyableLines(): void {
+  const account = useAccount.getState()
+  if (!account.ready) return
+  const prices = useAccountPrices.getState()
+  if (account.me && prices.status !== 'ready') return
+  const buyable = (id: string) => {
+    const product = productById.get(id)
+    return !!product && (hasPrice(product) || prices.prices[id] != null)
+  }
+  const { lines } = useCart.getState()
+  if (lines.every((line) => buyable(line.id))) return
+  useCart.setState((state) => {
+    const kept = state.lines.filter((line) => buyable(line.id))
+    const total = kept.reduce((sum, line) => sum + line.quantity, 0)
+    return { lines: kept, fittingTyres: Math.min(state.fittingTyres, total) }
+  })
+}
+
+useAccount.subscribe(dropUnbuyableLines)
+useAccountPrices.subscribe(dropUnbuyableLines)

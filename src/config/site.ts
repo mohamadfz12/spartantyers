@@ -8,6 +8,9 @@
 export const site = {
   name: 'Spartan Tyres',
   legalName: 'Spartan Tyres Pty Ltd',
+  // Must be the business's real ABN. Left empty until the business supplies it (never guess one);
+  // while empty, tax invoices and statements simply leave the ABN line out.
+  abn: '',
   shortName: 'Spartan',
   domain: 'spartantrucktyres.com.au',
   url: 'https://spartantrucktyres.com.au',

@@ -19,6 +19,7 @@ import { safeMessage } from '../http.js'
 import { getAiDb } from './db.js'
 import { metaOf } from './util.js'
 import {
+  ACCOUNT_RULES,
   ACCURACY_RULES,
   buildFacts,
   DO_NOT_SAY_RULES,
@@ -230,6 +231,7 @@ export async function voiceInstructions(today: string, page: string, conversatio
     QUOTE_RULES,
     PERSON_RULES,
     PROMO_RULES,
+    ACCOUNT_RULES,
     DO_NOT_SAY_RULES,
     LANGUAGE_RULES,
     WEBSITE_RULES,

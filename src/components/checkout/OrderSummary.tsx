@@ -5,6 +5,7 @@ import { cn, money, moneyExact, pluralise } from '@/lib/utils'
 import { useCart, useCartTotals } from '@/store/cart'
 import { Badge } from '@/components/ui'
 import { ProductThumb } from '@/components/shop/ProductThumb'
+import { AccountUnit, accountLine } from '@/components/shop/YourPrice'
 
 /**
  * The money panel, shared by the cart and every step of checkout.
@@ -113,11 +114,20 @@ export function OrderSummary({
                     {line.brand} {line.model}
                   </span>
                   <span className="block font-mono text-xs text-muted-foreground">
-                    {line.size} &middot; {line.quantity} &times; {money(line.price)}
+                    {accountLine(totals, line.id) ? (
+                      <>
+                        {line.size} &middot; {line.quantity} &times;{' '}
+                        <AccountUnit {...accountLine(totals, line.id)!} />
+                      </>
+                    ) : (
+                      <>
+                        {line.size} &middot; {line.quantity} &times; {money(line.price)}
+                      </>
+                    )}
                   </span>
                 </span>
                 <span className="shrink-0 font-heading text-sm font-bold tabular-nums">
-                  {money(line.price * line.quantity)}
+                  {money((accountLine(totals, line.id)?.unit ?? line.price) * line.quantity)}
                 </span>
               </li>
             ))}
@@ -131,6 +141,19 @@ export function OrderSummary({
             </dt>
             <dd className="font-medium tabular-nums">{money(totals.subtotal)}</dd>
           </div>
+
+          {totals.accountSaving > 0 ? (
+            <div className="flex items-baseline justify-between gap-3 text-primary">
+              <dt className="flex items-center gap-1.5">
+                <Tag aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                Your account prices
+              </dt>
+              <dd className="whitespace-nowrap font-semibold tabular-nums">
+                <span className="sr-only">Already taken off: </span>
+                {money(totals.accountSaving)} saved
+              </dd>
+            </div>
+          ) : null}
 
           {totals.volumeDiscount > 0 ? (
             <div className="flex items-baseline justify-between gap-3 text-primary">

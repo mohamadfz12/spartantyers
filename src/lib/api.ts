@@ -856,9 +856,37 @@ export interface PosCustomer {
   address: string
   notes: string
   termsDays: number
+  /** The website customer account this counter customer is the same person as. */
+  accountId?: string
   createdAt: string
   updatedAt: string
   balance?: PosBalance
+  /** Its website account's summary, when linked (customers and customer views). */
+  account?: PosAccountSummary | null
+}
+
+/** What the till shows of a counter customer's website account (no special prices, no contact details). */
+export interface PosAccountSummary {
+  id: string
+  level: 'customer' | 'bulk' | 'wholesaler'
+  status: 'active' | 'suspended'
+  discountPct: number
+  payLater: boolean
+  termsDays: number
+  creditLimit: number
+  outstanding: number
+  /** What is left of the credit limit. */
+  available: number
+  /** False until an owner or manager sets pay later: the till then works as before (no limit applied). */
+  creditSet: boolean
+  /** Null when the till may put a sale on account; otherwise the reason, in words for staff. */
+  refusal: string | null
+}
+
+/** `GET /api/admin/pos?view=account-items&customerId=`: the account and its unit price per tyre where it beats the shop price. */
+export interface PosAccountItems {
+  account: PosAccountSummary | null
+  prices: Record<string, { unit: number; basis: 'account' }>
 }
 
 export interface PosBalance {
@@ -883,6 +911,11 @@ export interface PosTicket {
   payment: 'card' | 'cash' | 'other' | 'account' | null
   paymentMethod: string
   dueDate: string | null
+  /** Retail, Bulk or Wholesale, from the customer's account level or 20 or more tyres. */
+  channel?: 'retail' | 'bulk' | 'wholesale'
+  accountId?: string
+  /** The website order this ticket carries (a pay-later order). */
+  orderId?: string
   history: Array<{ at: string; by: string; what: string }>
   createdBy: string
   createdAt: string

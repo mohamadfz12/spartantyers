@@ -12,14 +12,16 @@ import {
   X,
 } from 'lucide-react'
 import { nav, site } from '@/config/site'
-import { cn, priceLabel } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { useCart, useCartTotals } from '@/store/cart'
 import { useTheme } from '@/store/ui'
 import { useScrollDirection, useScrolledPast } from '@/hooks'
-import { products, effectivePrice } from '@/data/products'
+import { products } from '@/data/products'
 import { Logo } from '@/components/brand/Logo'
 import { Button, Dialog, DialogContent, Input, Sheet, SheetClose } from '@/components/ui'
 import { AnimatePresence, ScrollProgressBar, motion } from '@/components/motion'
+import { AccountMenu, AccountMobileLinks } from '@/components/account/AccountMenu'
+import { InlinePrice } from '@/components/shop/YourPrice'
 
 export function Header() {
   const condensed = useScrolledPast(40)
@@ -192,6 +194,8 @@ export function Header() {
 
             <ThemeToggle />
 
+            <AccountMenu />
+
             <button
               type="button"
               onClick={toggleCart}
@@ -338,6 +342,8 @@ function MobileNav({
           className="flex-1 overflow-y-auto p-4"
           aria-label="Mobile navigation"
         >
+          <AccountMobileLinks onNavigate={() => onOpenChange(false)} />
+
           <p className="mb-2 font-heading text-[0.65rem] font-bold uppercase tracking-brand text-muted-foreground">
             Shop
           </p>
@@ -535,7 +541,7 @@ function SearchDialog({
                       </p>
                     </div>
                     <span className="shrink-0 font-heading text-sm font-bold text-primary">
-                      {priceLabel(effectivePrice(product))}
+                      <InlinePrice product={product} />
                     </span>
                   </Link>
                 </li>

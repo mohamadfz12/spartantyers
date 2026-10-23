@@ -31,6 +31,7 @@
  */
 
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
+import type { PriceBasis, SaleChannel } from '../../src/lib/account-pricing.js'
 
 export interface StoredOrder {
   id: string
@@ -39,6 +40,12 @@ export interface StoredOrder {
   status:
     | 'pending'
     | 'paid'
+    /**
+     * Sold on the customer's account (pay later): goods go out as for a paid order, the money is still
+     * owed and is taken at the till as a customer-account payment. Moves to 'paid' when that ticket is
+     * paid off, or to packing / cancelled like any open order. Never 'paid' by hand.
+     */
+    | 'account'
     | 'packing'
     | 'dispatched'
     | 'collected'
@@ -62,6 +69,8 @@ export interface StoredOrder {
     size: string
     quantity: number
     unitPrice: number
+    /** Which price this line was charged at: retail, volume (a break applied) or account (the customer's own). */
+    basis?: PriceBasis
   }>
   fittingTyres: number
   subtotal: number
@@ -71,6 +80,18 @@ export interface StoredOrder {
   promoCode?: string
   paymentId?: string
   notes?: string
+  /** The customer account that placed the order (signed in at checkout), if any. */
+  accountId?: string
+  /** Retail / Bulk / Wholesale, for the sales reports. Older orders have none: see `orderChannel`. */
+  channel?: SaleChannel
+  /** 'account' for a pay-later order (no card payment id); card orders say nothing. */
+  payment?: 'card' | 'account'
+  /** YYYY-MM-DD (Sydney): when a pay-later order must be paid by. */
+  dueDate?: string
+  /** The till ticket that carries a pay-later order's balance. */
+  posTicketRef?: string
+  /** When the pay-later ticket was paid off. */
+  accountPaidAt?: string
 }
 
 export interface StoredEnquiry {
@@ -681,7 +702,7 @@ export async function getMeta<T>(field: string): Promise<T | null> {
  * Staff accounts
  * ------------------------------------------------------------------ */
 
-export type StaffRoleValue = 'owner' | 'manager' | 'staff'
+export type StaffRoleValue = 'owner' | 'manager' | 'sales' | 'staff'
 
 export interface StoredStaff {
   id: string
@@ -1007,6 +1028,8 @@ export interface StoredPosCustomer {
   notes: string
   /** Days to pay a sale on account, unless changed at the counter. */
   termsDays: number
+  /** The website customer account this counter customer is the same person as (see accounts/pos-link.ts). */
+  accountId?: string
   createdAt: string
   updatedAt: string
   createdBy: string
@@ -1048,6 +1071,11 @@ export interface StoredPosTicket {
   /** YYYY-MM-DD, for a sale on account. */
   dueDate: string | null
   stockApplied: boolean
+  /** The website order this ticket carries (a pay-later order placed by a customer account). */
+  orderId?: string
+  /** The customer account of the ticket's customer (when linked), and the sale label. */
+  accountId?: string
+  channel?: SaleChannel
   history: Array<{ at: string; by: string; what: string }>
   createdBy: string
   createdAt: string

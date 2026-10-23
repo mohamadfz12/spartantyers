@@ -114,7 +114,7 @@ export interface Order {
   id: string
   reference: string
   createdAt: string
-  status: 'pending' | 'paid' | 'packing' | 'dispatched' | 'collected' | 'cancelled'
+  status: 'pending' | 'paid' | 'account' | 'packing' | 'dispatched' | 'collected' | 'cancelled'
   fulfilment: 'delivery' | 'pickup'
   customer: {
     name: string
@@ -134,6 +134,7 @@ export interface Order {
     size: string
     quantity: number
     unitPrice: number
+    basis?: 'retail' | 'volume' | 'account'
   }>
   fittingTyres: number
   subtotal: number
@@ -143,4 +144,11 @@ export interface Order {
   promoCode?: string
   paymentId?: string
   notes?: string
+  accountId?: string
+  channel?: 'retail' | 'bulk' | 'wholesale'
+  payment?: 'card' | 'account'
+  /** YYYY-MM-DD: when a pay-later order must be paid by. */
+  dueDate?: string
+  posTicketRef?: string
+  accountPaidAt?: string
 }

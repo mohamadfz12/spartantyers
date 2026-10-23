@@ -10,9 +10,12 @@
  *
  * Two things are kept OUT of the instructions on purpose, and tests/ai-rules.test.ts proves it:
  *   - Promo codes. The assistant cannot leak what it was never told.
- *   - Things the site's text promises that do not exist (bank transfer at checkout, customer
- *     accounts, tracking-number emails, road hazard protection, vehicle lookup, a best price
- *     guarantee). The FAQ entries that say them are left out of the facts.
+ *   - Things the site's text promises that do not exist (bank transfer at checkout, tracking-number
+ *     emails, road hazard protection, vehicle lookup, a best price guarantee). The FAQ entries that
+ *     say them are left out of the facts. (Invoices were on this list until My account had them: a
+ *     signed in customer can now view and print their tax invoices there, so ACCOUNT_RULES may say so.)
+ *   - Any customer's own price. The assistant is anonymous and sees retail prices only; it may say
+ *     that customers can open an account and sign in to see their prices (ACCOUNT_RULES), nothing more.
  * There are no tyre prices or stock levels in the facts either: those come from the tools, live.
  */
 import { site } from '../../../src/config/site.js'
@@ -56,8 +59,14 @@ export const PROMO_RULES = `Promo codes and discounts:
 - The volume discounts in the facts are automatic and can be mentioned.`
 
 export const DO_NOT_SAY_RULES = `Things you must never say, even if the website's text seems to:
-- Bank transfer as a way to pay at checkout, customer accounts or logins, downloading invoices from an account, emails with tracking numbers, road hazard protection at checkout, looking up a vehicle by rego or plate, and any best price guarantee or price matching.
+- Bank transfer as a way to pay at checkout, emails with tracking numbers or courier tracking, road hazard protection at checkout, looking up a vehicle by rego or plate, and any best price guarantee or price matching.
 - For any of these questions, say the sales team can help and give the phone number ${site.phone.display} or the email ${site.email.sales}.`
+
+export const ACCOUNT_RULES = `Customer accounts:
+- Customers can open a customer account on the website and sign in at /account to see their own prices. Tyre shops, fleets and wholesalers can ask for a bulk or wholesale trade account when they sign up, and the ${site.name} team approves it.
+- You are not signed in as anyone and only know the public prices that the tools return. Never state, estimate, guess or hint at a trade price, an account discount or percentage, pay later terms, a credit limit, or anything about a customer's own account. If asked what a trade customer would pay, say their prices show once they are signed in to an approved account, and that the sales team can help, with the phone number ${site.phone.display}.
+- A signed in customer can see their orders, their statement and their tax invoices (to view and print) in My account at /account. Point a customer there for those, in a few words, and never say you can show, send or look up any of it yourself. Orders can also be checked with an order reference and email.
+- You cannot see, open or change any account, and you never ask for a password.`
 
 export const LANGUAGE_RULES = `Language:
 - Write only in English. If the customer writes in another language, answer in English only, without a single word of their language (not even a greeting), and say you can only help in English.`
@@ -85,6 +94,7 @@ export const RULES = [
   QUOTE_RULES,
   PERSON_RULES,
   PROMO_RULES,
+  ACCOUNT_RULES,
   DO_NOT_SAY_RULES,
   LANGUAGE_RULES,
   STYLE_RULES,
@@ -103,7 +113,6 @@ export const FAQ_LEFT_OUT = [
   'What payment methods do you accept?',
   'How does Afterpay work, and is there a limit?',
   'Can I pay by bank transfer or set up an account?',
-  'Are your prices GST inclusive, and will I get a tax invoice?',
   'What is road hazard protection?',
 ]
 
@@ -115,7 +124,7 @@ const WARRANTY_LEFT_OUT = ['Road hazard protection']
  * whole instruction text against this.
  */
 export const FORBIDDEN_CLAIMS =
-  /bank transfer|road[- ]hazard protection|tracking number|your account|an account\b|customer account|account on our site|through your account|download\w*\b.{0,50}\binvoice|invoices?\b.{0,50}\bdownload|best price|price match|rego\b|vehicle look-?up|plate look-?up/i
+  /bank transfer|road[- ]hazard protection|tracking number|best price|price match|rego\b|vehicle look-?up|plate look-?up/i
 
 const EM_DASH = new RegExp(`[ \\t]*${String.fromCharCode(0x2014)}[ \\t]*`, 'g')
 const EN_DASH = new RegExp(`[ \\t]*${String.fromCharCode(0x2013)}[ \\t]*`, 'g')

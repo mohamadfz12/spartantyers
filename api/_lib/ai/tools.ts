@@ -563,6 +563,7 @@ function show(t: Turn, card: Card, note: string) {
 const ORDER_STATUS: Record<StoredOrder['status'], string> = {
   pending: 'received, waiting for payment to be confirmed',
   paid: 'paid and waiting to be packed',
+  account: 'placed and waiting to be packed, with payment arranged with the accounts team',
   packing: 'being packed',
   dispatched: 'dispatched',
   collected: 'collected',

@@ -10,6 +10,7 @@ import { Toaster } from '@/components/ui'
 import { WheelSpinner } from '@/components/three'
 import { refreshCatalogue, startLiveCatalogue, useCatalogueVersion } from '@/lib/live-catalogue'
 import { applyTheme, useTheme } from '@/store/ui'
+import { useAccount } from '@/store/account'
 
 /* ------------------------------------------------------------------ *
  * Routes
@@ -43,6 +44,14 @@ const Cart = lazy(() => import('@/pages/Cart'))
 const Checkout = lazy(() => import('@/pages/Checkout'))
 const OrderConfirmation = lazy(() => import('@/pages/OrderConfirmation'))
 const Compare = lazy(() => import('@/pages/Compare'))
+const AccountLogin = lazy(() => import('@/pages/account/Login'))
+const AccountSignup = lazy(() => import('@/pages/account/Signup'))
+const AccountForgot = lazy(() => import('@/pages/account/Forgot'))
+const AccountSetPassword = lazy(() => import('@/pages/account/SetPassword'))
+const AccountDashboard = lazy(() => import('@/pages/account/Dashboard'))
+const AccountDetails = lazy(() => import('@/pages/account/Details'))
+const AccountOrders = lazy(() => import('@/pages/account/Orders'))
+const AccountStatement = lazy(() => import('@/pages/account/Statement'))
 const Admin = lazy(() => import('@/pages/admin/Admin'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
@@ -60,6 +69,10 @@ export default function App() {
   // routes when they arrive, so every page shows the live figures.
   useCatalogueVersion()
   useEffect(() => startLiveCatalogue(), [])
+  // Who is signed in (the session is an httpOnly cookie; this only asks the server).
+  useEffect(() => {
+    void useAccount.getState().refresh()
+  }, [])
   // Checkout always gets the latest prices before the Pay button is shown.
   useEffect(() => {
     if (location.pathname === '/checkout' || location.pathname === '/cart') void refreshCatalogue(true)
@@ -103,6 +116,14 @@ export default function App() {
               <Route path="/order" element={<OrderConfirmation />} />
               <Route path="/order/:reference" element={<OrderConfirmation />} />
               <Route path="/compare" element={<Compare />} />
+              <Route path="/account" element={<AccountDashboard />} />
+              <Route path="/account/login" element={<AccountLogin />} />
+              <Route path="/account/signup" element={<AccountSignup />} />
+              <Route path="/account/forgot" element={<AccountForgot />} />
+              <Route path="/account/set-password" element={<AccountSetPassword />} />
+              <Route path="/account/details" element={<AccountDetails />} />
+              <Route path="/account/orders" element={<AccountOrders />} />
+              <Route path="/account/statement" element={<AccountStatement />} />
               <Route path="/admin/*" element={<Admin />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

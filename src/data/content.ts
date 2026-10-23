@@ -216,7 +216,7 @@ export const wholesaleBenefits: IconCard[] = [
   },
   {
     title: 'Account facilities for regular buyers',
-    body: `Dedicated support, streamlined re-ordering and account facilities for regular trade customers. Email ${site.email.accounts} with your business details to get set up.`,
+    body: `Dedicated support, streamlined re-ordering and account facilities for regular trade customers. Open an account online, or email ${site.email.accounts} with your business details to get set up.`,
     icon: 'Handshake',
   },
   {

@@ -135,7 +135,7 @@ export default withGuard(async (req, res) => {
 
   if (has('role')) {
     const role = body.role ?? 'staff'
-    if (!isStaffRole(role)) return fail(res, 400, '"role" must be owner, manager or staff.')
+    if (!isStaffRole(role)) return fail(res, 400, '"role" must be owner, manager, sales or staff.')
     if (existing && existing.role !== role) endSessions = true
     next.role = role
   }

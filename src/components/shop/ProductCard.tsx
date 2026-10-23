@@ -13,8 +13,9 @@ import {
   Volume2,
 } from 'lucide-react'
 import type { Product } from '@/data/types'
-import { effectivePrice, hasPrice, POSITION_LABELS } from '@/data/products'
+import { POSITION_LABELS } from '@/data/products'
 import { cn, money, specValue } from '@/lib/utils'
+import { usePriceView, YourPrice } from '@/components/shop/YourPrice'
 import { useCart } from '@/store/cart'
 import { requestQuote, toast, useCompare } from '@/store/ui'
 import { Badge, Button, Rating, Tooltip } from '@/components/ui'
@@ -40,8 +41,10 @@ export function ProductCard({
   const compareIds = useCompare((s) => s.ids)
   const toggleCompare = useCompare((s) => s.toggle)
 
-  const priced = hasPrice(product)
-  const price = effectivePrice(product)
+  // One rule for the price: the signed-in customer's own price when it beats the shelf price.
+  const view = usePriceView(product)
+  const priced = view.buyable
+  const price = view.current
   const photo = productCardPhoto(product)
   const inCompare = compareIds.includes(product.id)
   const compareFull = compareIds.length >= 4 && !inCompare
@@ -289,15 +292,21 @@ export function ProductCard({
           <div className="flex items-end justify-between gap-2">
             {price != null ? (
               <div>
-                <div className="flex items-baseline gap-2">
-                  <span className="font-heading text-2xl font-black leading-none">
-                    {money(price)}
-                  </span>
-                  {product.discountPrice != null && product.price != null ? (
-                    <span className="text-sm text-muted-foreground line-through">
-                      {money(product.price)}
-                    </span>
-                  ) : null}
+                <div className={cn('flex items-baseline gap-2', view.yours && 'flex-wrap gap-y-1')}>
+                  {view.yours ? (
+                    <YourPrice view={view} priceClassName="text-2xl" />
+                  ) : (
+                    <>
+                      <span className="font-heading text-2xl font-black leading-none">
+                        {money(price)}
+                      </span>
+                      {product.discountPrice != null && product.price != null ? (
+                        <span className="text-sm text-muted-foreground line-through">
+                          {money(product.price)}
+                        </span>
+                      ) : null}
+                    </>
+                  )}
                 </div>
                 <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
                   per tyre, inc. GST

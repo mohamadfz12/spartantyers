@@ -9,10 +9,10 @@
  * file's functions, except the limits and `spentUsd()`, which are in dollars because the
  * admin settings are.
  */
-import { createHash } from 'node:crypto'
-import { isIPv6 } from 'node:net'
 import { monthStart, todaySydney } from './dates.js'
 import { AiDbUnavailable, getAiDb, num } from './db.js'
+import { DbUnavailable } from '../db.js'
+import { rateLimited as sharedRateLimited, visitorKeyConfigured } from '../rate.js'
 import { aiConfig, costOf, type PriceOf, type Usage } from './gateway.js'
 import { getAiSettings, type AiSettings } from './settings.js'
 import { cap } from './util.js'
@@ -23,51 +23,16 @@ const MICROS = 1_000_000
  * Visitors
  * ------------------------------------------------------------------ */
 
-/**
- * The network a visitor's address belongs to: the /24 for IPv4 and the /64 for IPv6 (the
- * block one home or phone is given), so moving to another address in it does not reset a
- * limit. IPv4 written as `::ffff:1.2.3.4` is read as IPv4.
- */
-export function networkOf(ip: string): string {
-  const v4 = /^(?:::ffff:)?(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/i.exec(ip)
-  if (v4) return `${v4[1]}.${v4[2]}.${v4[3]}.0/24`
-  if (!isIPv6(ip)) return ip
-  const [head, tail = ''] = ip.toLowerCase().split('::')
-  const left = head ? head.split(':') : []
-  const right = tail ? tail.split(':') : []
-  const groups = [
-    ...left,
-    ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'),
-    ...right,
-  ]
-  return `${groups
-    .slice(0, 4)
-    .map((g) => g.replace(/^0+(?=.)/, ''))
-    .join(':')}::/64`
-}
+export { hashIp, networkOf, visitorKeyConfigured } from '../rate.js'
 
-/** True on a deployment where the visitor key must come from the environment, never from source. */
-const requiresSecret = () => !!process.env.VERCEL || process.env.NODE_ENV === 'production'
-
-/** The key `hashIp` uses, or null when this deployment has none and must not guess one. */
-function visitorKey(): string | null {
-  const secret = process.env.ADMIN_SESSION_SECRET
-  if (secret) return secret
-  return requiresSecret() ? null : 'local-development-only-ai-salt'
-}
-
-/** False on Vercel without `ADMIN_SESSION_SECRET`: the AI stays off rather than hash with a known salt. */
-export const visitorKeyConfigured = (): boolean => visitorKey() !== null
-
-/**
- * A visitor's network as a short keyed hash: enough to count their requests, useless to
- * anyone else. Raw addresses are never stored. Empty for an unknown address.
- */
-export function hashIp(ip: string): string {
-  if (!ip || ip === 'unknown') return ''
-  const key = visitorKey()
-  if (!key) throw new Error('ADMIN_SESSION_SECRET is not configured.')
-  return createHash('sha256').update(`ai-ip:${key}:${networkOf(ip)}`).digest('base64url').slice(0, 22)
+/** The shared rate limiter, with the AI's own "database not configured" error so its callers answer as before. */
+export async function rateLimited(key: string, limit: number, windowSec: number): Promise<boolean> {
+  try {
+    return await sharedRateLimited(key, limit, windowSec)
+  } catch (error) {
+    if (error instanceof DbUnavailable && !(error instanceof AiDbUnavailable)) throw new AiDbUnavailable()
+    throw error
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -275,24 +240,6 @@ export async function settleMicros(id: string, micros: number, usage: Usage): Pr
 /* ------------------------------------------------------------------ *
  * Rate limits and reporting
  * ------------------------------------------------------------------ */
-
-/**
- * Counts a hit against `key` and says whether it is over `limit` within `windowSec`. One
- * statement, so two requests at the same moment cannot both read "under the limit". In
- * the database, not in memory, because Vercel runs many instances.
- */
-export async function rateLimited(key: string, limit: number, windowSec: number): Promise<boolean> {
-  const db = await getAiDb()
-  const rows = await db.query<{ count: number | string }>(
-    `INSERT INTO ai_rate (key, count, reset_at) VALUES ($1::text, 1, now() + make_interval(secs => $2::int))
-     ON CONFLICT (key) DO UPDATE SET
-       count = CASE WHEN ai_rate.reset_at < now() THEN 1 ELSE ai_rate.count + 1 END,
-       reset_at = CASE WHEN ai_rate.reset_at < now() THEN now() + make_interval(secs => $2::int) ELSE ai_rate.reset_at END
-     RETURNING count`,
-    [key, windowSec],
-  )
-  return num(rows[0]?.count) > limit
-}
 
 /** What the AI has spent today and this month (Sydney dates), in US dollars. */
 export async function spentUsd(day: string = todaySydney()): Promise<{ today: number; month: number }> {

@@ -236,6 +236,11 @@ export default withGuard(async (req, res) => {
     if (type === 'expense') return fail(res, 400, 'Expenses cannot be linked to a customer order.')
     const order = await getOrder(asString(orderRaw, 120) ?? '')
     if (!order) return fail(res, 404, 'That order no longer exists.')
+    // A pay-later order's money comes in through the till's customer account, which also keeps the
+    // customer's balance and credit right. A payment typed here would leave both wrong.
+    if (order.payment === 'account' && type === 'payment') {
+      return fail(res, 409, "This order is on the customer's account. Take the payment in the till's customer account, so the balance stays right.")
+    }
     orderId = order.id
   }
 

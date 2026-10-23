@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import {
+  BadgeCheck,
   Boxes,
   Bot,
   CreditCard,
@@ -26,6 +27,8 @@ import { Button, Sheet, SheetClose, SheetHeader, SheetTitle } from '@/components
 import { ROLE_LABELS, can, type Permission } from '@/lib/admin-roles'
 import { cn } from '@/lib/utils'
 import { useAdmin, useAdminSession } from '@/store/admin'
+import Accounts from './Accounts'
+import AccountsDetail from './AccountsDetail'
 import Activity from './Activity'
 import AiAssistant from './AiAssistant'
 import Balance from './Balance'
@@ -76,6 +79,7 @@ const NAV: NavItem[] = [
   { to: '/admin/products', label: 'Products', icon: Package, permission: 'products' },
   { to: '/admin/inventory', label: 'Inventory', icon: Boxes, permission: 'inventory' },
   { to: '/admin/customers', label: 'Customers', icon: Users, permission: 'customers' },
+  { to: '/admin/accounts', label: 'Customer accounts', icon: BadgeCheck, permission: 'trade' },
   { to: '/admin/payments', label: 'Payments', icon: CreditCard, permission: 'payments' },
   { to: '/admin/balance', label: 'Balance', icon: Wallet, permission: 'finance' },
   { to: '/admin/square', label: 'Square', icon: Smartphone, permission: 'payments' },
@@ -101,7 +105,8 @@ export default function Admin() {
 
   if (!authenticated) return <Login />
 
-  const title = TITLES[location.pathname.replace(/\/+$/, '') || '/admin'] ?? 'Admin'
+  const path = location.pathname.replace(/\/+$/, '') || '/admin'
+  const title = TITLES[path] ?? (path.startsWith('/admin/accounts/') ? 'Customer account' : 'Admin')
   const nav = NAV.filter((item) => can(user.role, item.permission))
   const gate = (permission: Permission, page: React.ReactNode) =>
     can(user.role, permission) ? page : <NoAccess />
@@ -201,6 +206,8 @@ export default function Admin() {
               <Route path="square" element={gate('payments', <SquarePage />)} />
               <Route path="inventory" element={gate('inventory', <Inventory />)} />
               <Route path="customers" element={gate('customers', <Customers />)} />
+              <Route path="accounts" element={gate('trade', <Accounts />)} />
+              <Route path="accounts/:id" element={gate('trade', <AccountsDetail />)} />
               <Route path="payments" element={gate('payments', <Payments />)} />
               <Route path="balance" element={gate('finance', <Balance />)} />
               <Route path="enquiries" element={gate('enquiries', <Enquiries />)} />

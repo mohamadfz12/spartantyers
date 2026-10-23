@@ -206,7 +206,7 @@ export function issueToken(now = Date.now(), staff?: Pick<StoredStaff, 'id' | 't
  * Accepts either a full `Authorization: Bearer <token>` header value or a bare
  * token. Returns null for anything malformed, mis-signed or expired.
  */
-function readToken(authHeader: string | undefined): TokenPayload | null {
+export function readToken(authHeader: string | undefined): TokenPayload | null {
   const secret = sessionSecret()
   if (!secret) return null
   if (!authHeader) return null
@@ -230,6 +230,11 @@ function readToken(authHeader: string | undefined): TokenPayload | null {
   } catch {
     return null
   }
+
+  // A staff token never carries a `typ`. Customer sessions do (`typ: 'customer'`, see
+  // accounts/session.ts), so even one signed with this very key is refused here: without `sub`
+  // a payload would otherwise read as the OWNER.
+  if (payload !== null && typeof payload === 'object' && 'typ' in payload) return null
 
   const { exp, sub, v } = (payload ?? {}) as Partial<TokenPayload>
   if (typeof exp !== 'number' || !Number.isFinite(exp)) return null

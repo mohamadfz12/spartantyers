@@ -60,7 +60,7 @@ export const faqs: FaqItem[] = [
     category: 'Delivery & Pickup',
     question: 'Can I track my order?',
     answer:
-      'Yes. You get an order confirmation email with a tracking number, a second notification when the order is dispatched, and real-time tracking through the courier. You can also check the status of any order through your account on our site.',
+      'You can check where any order is up to with your order reference and email on our order page, and customers with an account can see all their orders in My account. We do not issue courier tracking numbers at the moment, so for where a delivery is right now, call us with your order reference and we will find out.',
   },
   {
     category: 'Delivery & Pickup',
@@ -130,13 +130,13 @@ export const faqs: FaqItem[] = [
     category: 'Payment',
     question: 'Can I pay by bank transfer or set up an account?',
     answer:
-      'Bank transfer is available on any order - choose it at checkout and we will send the account details with your invoice. Goods are dispatched once the transfer clears, so allow an extra business day or two for the funds to land. For regular fleet and trade buyers wanting an account facility, email accounts@spartantrucktyres.com.au with your business details and volumes.',
+      'Bank transfer is available on any order - choose it at checkout and we will send the account details with your invoice. Goods are dispatched once the transfer clears, so allow an extra business day or two for the funds to land. You can also open an account yourself from the Log in page: a Customer account opens straight away, and Bulk and Wholesaler accounts are approved by our team, with prices agreed for your business. Regular trade buyers can ask us about pay later terms, or email accounts@spartantrucktyres.com.au with business details and volumes.',
   },
   {
     category: 'Payment',
     question: 'Are your prices GST inclusive, and will I get a tax invoice?',
     answer:
-      'Every price shown on the site is GST inclusive, so the figure in the cart is the figure you pay. A tax invoice showing the GST component separately is emailed with your order confirmation, and you can download it again from your account at any time. If you need the invoice reissued to a different entity name for your accounts, email sales@spartantrucktyres.com.au with the order number.',
+      'Every price shown on the site is GST inclusive, so the figure in the cart is the figure you pay. A tax invoice showing the GST component separately is emailed with your order confirmation, and customers with an account can also view and print their tax invoices in My account at any time. If you need the invoice reissued to a different entity name for your accounts, email sales@spartantrucktyres.com.au with the order number.',
   },
 
   /* ---- Warranty & Returns ---- */
